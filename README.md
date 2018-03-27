@@ -1,2 +1,2 @@
-# yifferXyz
-Code is messy :)
+# Yiffer.xyz
+Code is messy!!
