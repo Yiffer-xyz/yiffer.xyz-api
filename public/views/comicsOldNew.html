@@ -1,0 +1,18 @@
+
+<h1>Tittel!!</h1>
+<p ng-click="editMode = !editMode" style="text-align: center;" class="link-color">Toggle edit mode</p>
+
+<div class="ragListContainer" style="margin-top: 20px;">
+  <div ng-repeat="image in imageList track by $index" class="ragListThumb">
+    <a ng-href="{{'listRagImages/thumbs/' + image.id + '.jpg'}}" target="_blank">
+      <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}"/>
+    </a>
+    <p><b>{{image.rating}}</b></p>
+    <p>{{image.artist}}</p>
+    <p>{{image.added}}</p>
+    <div style="display: flex; flex-direction: row;" ng-show="editMode">
+      <input ng-model="image.newRating" style="width: 35px;"/>
+      <button ng-click="assignRating(image)">OK</button>
+    </div>
+  </div>
+</div>  

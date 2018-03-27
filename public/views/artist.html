@@ -1,0 +1,59 @@
+
+<p class="theme-p" style="position: absolute; top: 0; right: 0;">
+    <span class="link-color brightness-button" ng-click="setBrightColors(true)">Bright</span> | <span class="link-color brightness-button" ng-click="setBrightColors(false)">Dark</span>
+</p>
+
+<h1>Artist: {{artistName}}</h1>
+
+<span ng-if="!f404">
+<p style="font-size: 16px; color: #00bbff; text-align: center;"><a ng-href="/">&larr; back to index</a></p>
+
+<h2>Comics by this artist</h2>
+
+<div id="imagesDiv">
+<div class="artistThumbContainer" 
+     ng-repeat="comic in comicList" 
+     ng-class="{'dark-colors': !brightColors, 'thumb-container-bright-colors': brightColors}">
+    <a ng-href="/{{comic}}">
+        <img src="comics/{{comic}}/s.jpg"/">
+    </a>
+    <p class="comicNameP" style="text-align: center; padding: 6px 0;">{{comic}}</p>
+    <p></p>
+</div>
+</div>
+
+
+<h2 style="margin-top: 20px;">This artist's profiles elsewhere</h2>
+<div style="text-align: center;">
+<p ng-show="!showNoLinksMessage" ng-repeat="link in linkList">
+    <b>{{link.linkType}}</b>: <a href="{{link.linkUrl}}">{{link.linkUrl}}</a>
+</p>
+<p ng-show="showNoLinksMessage">There are no links for this artist</p>
+</div>
+
+
+
+<h2 style="margin-top: 20px;">Mod's favorite non-comic images by this artist</h2>
+
+<div id="imagesDiv" style="margin-bottom: 30px;">
+<div class="artist-fav-img-container" 
+     ng-repeat="modName in modFavoriteImages"
+     ng-class="{'dark-colors': !brightColors, 'thumb-container-bright-colors': brightColors}">
+        <img src="/mod-favorites/{{modName}}/{{artistName}}.jpg" ng-click="openImage(modName)" class="hover-cursor-pointer thumb-image-artist" style="align-self: center;">
+    <p class="comicNameP" style="text-align: center;">{{modName}}</p>
+    <p></p>
+</div>
+</div>
+
+
+
+<p ng-show="showNoImagesMessage">There are no favorite images for this artst</p>
+
+<footer class="footer"><a ng-href="/about">Info/ToS/ToU</a></footer>
+</span>
+
+<div ng-if="f404" style="text-align:center; font-size:20px; width:100%; margin:auto; margin-top:100px;">
+    No such artist :( <br/><br/>
+<p style="font-size: 16px; color: #00bbff; text-align: center;"><a ng-href="/">&larr; back to index</a></p>
+
+</div>

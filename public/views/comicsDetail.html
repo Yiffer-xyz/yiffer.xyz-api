@@ -1,0 +1,135 @@
+
+<p class="theme-p" style="position: absolute; top: 0; right: 0;">
+    <span class="link-color brightness-button" ng-click="setBrightColors(true)">Bright</span> | <span class="link-color brightness-button" ng-click="setBrightColors(false)">Dark</span>
+</p>
+
+<h1>{{comicName}}</h1>
+<span ng-if="!f404">
+<h2>by <a ng-href="/artist/{{artist}}">{{artist}}</a></h2>
+
+<div class="comic-link-div" ng-show="showComicLink">
+    <p>This comic is part of a series:</p>
+    <p ng-show="prevComicName">Previous: <a ng-href="/{{prevComicName}}">{{prevComicName}}</a></p>
+    <p ng-show="nextComicName">Next: <a ng-href="/{{nextComicName}}">{{nextComicName}}</a></p>
+</div>
+
+<p ng-if="donator && loggedin" style="text-align:center; margin-bottom:5px; margin-top:5px;">
+    <form ng-if="donator && loggedin" method="get" action="{{'../' + someFolderName + '/' + comicName + '.zip'}}" style="text-align: center;">
+
+        <button ng-if="donator && loggedin" type="submit" class="comic-vote-or-login comic-vote-or-login-bigger-text">Download comic</button>
+    </form>
+</p>
+
+<p class="detail-login-p">{{loggedin ? 'Logged in as ' + username + '.' : 'You must log in to vote! '}}
+<a ng-click="openLoginModal()">{{loggedin ? 'Log out' : 'Log in'}}</a></p>
+
+<p style="text-align:center; margin-bottom:5px; margin-top:5px;">
+    <button ng-show="loggedin" ng-click="comicVote()" class="comic-vote-or-login comic-vote-or-login-bigger-text">
+        {{yourRating > 0 ? 'Your rating: '+yourRating : 'Vote'}}
+    </button>
+</p>
+
+
+
+
+
+
+<p style="text-align: center;">Keywords: {{keywords.join(', ')}}
+(<span ng-click="initKeywordSuggestions()" class="link-color">Suggest new/removal!</span>)
+</p>
+
+<span ng-show="showKeywordSuggestions" style="display: flex; justify-content: center; flex-wrap: wrap;">
+  <select ng-model="keywordToAdd" ng-options="keyw for keyw in addKeywordList" style="margin-right: 3px;">
+    <option value="">-ADD keyword-</option>
+  </select>
+  <button ng-click="sendKeywordAddition(keywordToAdd)" class="resize-button" ng-class="{'green-butt': keywordToAdd, 'disabled-butt': !keywordToAdd}" style="margin-right: 25px;">Send</button>
+
+  <select ng-model="keywordToRemove" ng-options="kw for kw in keywords" style="margin-right: 3px;">
+    <option value="">-REMOVE keyword-</option>
+  </select>
+  <button ng-click="sendKeywordRemoval(keywordToRemove)" class="resize-button" ng-class="{'green-butt': keywordToRemove, 'disabled-butt': !keywordToRemove}">Send</button>
+</span>
+
+<p style="text-align: center;" ng-show="showWaitingMessage">Waiting...</p>
+<p style="text-align: center; color: #3B3738; background-color: #7bfca0" ng-show="suggestKeywordSuccessMessage.length > 0">{{suggestKeywordSuccessMessage}}</p>
+<p style="text-align: center; color: #3B3738; background-color: #ff638c" ng-show="suggestKeywordErrorMessage.length > 0"  >{{suggestKeywordErrorMessage}}</p>
+
+
+<p style="font-size: 16px; color: #00bbff; text-align: center; margin-top: 10px;"><a ng-href="/">&larr; back to index</a></p>
+
+<!-- LOGIN -->
+<div class="modal-overlay" id="modal-overlay"></div><!-- the overlay element -->
+<div class="modal" id="modal-1">
+    <div class="modal-content">
+        <h3>{{modalLogin ? 'Log in' : 'Register'}}</h3>
+        <div class="form-content">
+
+            <p class="modal-error" ng-show="showModalErrorMessage">{{modalErrorMessage}}</p>
+
+            <form id="loginForm" autocomplete="off">
+            <span class="input input-nice removeFromThis" id="usernameInputContainer">
+                <input class="input-field input-field-nice" type="text" ng-model="modalUsername" id="inputUsername" autocomplete="off" autocorrect="off" autocapitalize="off"/>
+                <label class="input-label input-label-nice" for="inputUsername" id="inputLabelUsername">
+                    <span class="input-label-content input-label-content-nice">Username</span>
+                </label>
+            </span> <br/>
+            <span class="input input-nice input-password removeFromThis" id="passwordInputContainer">
+                <input class="input-field input-field-nice" type="password" ng-model="modalPassword" id="inputPassword" autocomplete="off" />
+                <label class="input-label input-label-nice" for="inputPassword" id="inputLabelPassword">
+                    <span class="input-label-content input-label-content-nice">Password</span>
+                </label>
+            </span>
+            <br/>
+            <button type="submit" class="input-button-primary" ng-click="fireLoginOrRegister()">{{modalLogin ? 'Log in' : 'Register'}}</button>
+            <button class="input-button-faded" ng-click="modalLogin = !modalLogin">{{modalLogin ? 'Register' : 'Log in'}}</button>
+            <!-- ex- ng-click="switchLoginRegister()" TODO remove -->
+            </form>
+            <button class="modal-close input-button-faded" id="closeLoginModalButton">Close</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="modal-2">
+    <div class="modal-content">
+        <h3>{{comicName}}</h3>
+        <p class="dont-show-if-mobile">type a number → <span ng-class="{'enter-glow': enterGlow}">enter</span> &nbsp;&nbsp;&nbsp; or &nbsp;&nbsp;&nbsp; click</p>
+        <p ng-show="yourRating > 0" ng-click="sendVote(0)" class="link-color">delete vote</p>
+        
+        <div class="flex-votenumbers">
+            <div ng-repeat="i in [1,2,3,4,5,6,7,8,9,10]" class="vote-number-div" ng-class="{'vote-active': colorVoteSquares >= i}" ng-click="sendVote(i)" ng-mouseover="voteModalMouseover(i)" ng-mouseleave="voteModalMouseout()">
+                {{i}}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div style="text-align: center; margin-bottom: 10px; margin-top: 10px;">
+    <button class="resize-button" ng-click="resizeAllImages('comic-image-fit-height')">Fit screen H</button>
+    <button class="resize-button" ng-click="resizeAllImages('comic-image-fit-width')">Fit screen W</button>
+    <button class="resize-button" ng-click="resizeAllImages('comic-image-thumb')">Thumb</button>
+    <button class="resize-button" ng-click="resizeAllImages('comic-image-big')">Big</button>
+</div>
+
+<div ng-repeat="im in images" class="comic-detail-image-container">
+    <img ng-src="{{im.src}}" class="comic-detail-image comic-image-fit-height" ng-click="resizeImage($event)" id="image-{{$index}}" data-size="fill"/> <!-- TODO: get some id on dat shit -->
+</div>
+
+<p class="detail-login-p">{{loggedin ? 'Logged in as ' + username + '.' : 'You must log in to vote! '}}
+<a ng-click="openLoginModal()">{{loggedin ? 'Log out' : 'Log in'}}</a></p>
+<p style="text-align:center; margin-bottom:5px; margin-top:5px;">
+    <button ng-show="loggedin" ng-click="comicVote()" class="comic-vote-or-login comic-vote-or-login-bigger-text">
+        {{yourRating > 0 ? 'Your rating: '+yourRating : 'Vote'}}
+    </button>
+</p>
+
+<p style="font-size: 16px; color: #00bbff; text-align: center; margin-bottom: 20px;"><a ng-href="/">&larr; back to index</a></p>
+
+<footer class="footer"><a ng-href="/about">Info/ToS/ToU</a></footer>
+</span>
+
+<div ng-if="f404" style="text-align:center; font-size:20px; width:100%; margin:auto; margin-top:100px;">
+    No comic with this name :(<br/><br/>
+<p style="font-size: 16px; color: #00bbff; text-align: center;"><a ng-href="/">&larr; back to index</a></p>
+
+</div>
