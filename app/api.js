@@ -272,6 +272,7 @@ module.exports = app.get('/getComicRating', function (req, res) {
  
 
 module.exports = app.post('/addVote', function (req, res) {
+  if (!req.session || !req.session.user) { return res.json({error: 'Not logged in'}) }
   var username = req.session.user.username
   var number   = parseInt(req.body.vote)
   var comicId  = req.body.comicId
