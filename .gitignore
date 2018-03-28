@@ -1,0 +1,12 @@
+.tmp/
+config/
+meta_tools/
+node_modules/
+package.json
+*.txt
+public/021njnwjfusjkfn89c23nfsnfkas/
+public/mod-favorites/
+public/listRagImages/
+public/images/
+public/comics/
+public/js/angular-files/
