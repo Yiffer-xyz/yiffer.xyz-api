@@ -69,14 +69,8 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
   function loadTagsAddedToComic () {
-    $http({
-      url: '/api/getOneComicTags',
-      method: 'GET',
-      params: {comicName: $scope.selectedComic}
-    })
-    .success(function (res) {
-      $scope.selectedComicTags = res
-    })
+    $http.get('/api/comics/' + $scope.selectedComic)
+    .success((res) => { $scope.selectedComicTags = res.keywords })
   }
 
   $scope.keyPressed = function (event) {
@@ -87,14 +81,11 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
   $scope.sendTagsToDelete = function () {
     $http({
-      url: '/admin/removeTagsFromComic',
-      method: 'POST',
-      data: {
-        comicName: $scope.selectedComic,
-        tags: $scope.tagsToDelete
-      }
+      url: '/api/keywords',
+      method: 'DELETE',
+      data: { comicName: $scope.selectedComic, tagsToDelete: $scope.tagsToDelete }
     })
-    .success (function (res) {
+    .success((res) => {
       if (res == 'ok') {
         $scope.tagSentMessage = 'Success!'
         $scope.tagSentMessageColor = '#7bfca0'
