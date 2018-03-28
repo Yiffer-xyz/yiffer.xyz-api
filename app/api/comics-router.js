@@ -11,6 +11,7 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/comics/:name', getComicByName)
   app.post('/api/comics', createComic)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
+  app.put ('/api/comics/:name', updateComicDetailsByName)
 
 
   function getComicList (req, res, next) {
@@ -131,6 +132,28 @@ module.exports = function (app, mysqlPool) {
             })
           })
         })
+      })
+    })
+  }
+
+
+  function updateComicDetailsByName (req, res, next) {
+    let comicId = req.body.comicId
+    let updatedCat = req.body.cat
+    let updatedTag = req.body.tag
+    let updatedFinished = req.body.finished
+    let updatedArtistId = req.body.artistId
+
+    if (!comicId || !updatedCat || !updatedTag || !updatedFinished || !updatedArtist) {
+      return returnError('Missing fields', res, null, null)
+    }
+
+    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = ?'
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtist], (err, results) => {
+        if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+        res.json({ message: 'Successfully updated comic' })
+        connection.release()
       })
     })
   }

@@ -1062,6 +1062,7 @@ app.get('/pendingKeywordSuggestions', (req, res) => {
     connection.query(query, (err, rows) => {
       if (err) { return returnError(500, 'Database query error', res, connection, err) }
       res.json(rows)
+      connection.release()
     })
   })
 })

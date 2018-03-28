@@ -110,12 +110,9 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
     $scope.showTagSentMessage = true
 
     $http({
-      url: '/admin/addTagsToComic',
+      url: '/api/keywords/addToComic',
       method: 'POST',
-      data: {
-        comicName: $scope.selectedComic,
-        tags: $scope.addedTags
-      }
+      data: { comicId: $scope.selectedComic.id, tags: $scope.selectedTags }
     })
     .success (function (res) {
       if (res == 'ok') {
@@ -140,13 +137,11 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   $scope.sendNewTag = function () {
     $scope.showNewTagSentMessage = true
     $http({
-      url: '/admin/createTag',
+      url: '/api/keywords',
       method: 'POST',
-      data: {
-        tagName: $scope.newTagName.toLowerCase(),
-        tagDescription: $scope.newTagDescription
-      }
-    }).success (function (res) {
+      data: { KeywordName: $scope.newTagName.toLowerCase(), keywordDescription: $scope.newTagDescription }
+    })
+    .success (function (res) {
       if (res == 'ok') {
         $scope.newTagSentMessage = 'Success! Reload window to use the new tag.'
         $scope.newTagSentMessageColor = '#7bfca0'
@@ -256,23 +251,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
   $scope.correctComic = function () {
-    $scope.correctComicResponseMessage = 'Waiting... '
-    $http({
-      url: '/api/correctComic',
-      method: 'POST',
-      data: {
-        comicName: $scope.selectedCorrectComic,
-        tag: $scope.correctComicTag,
-        cat: $scope.correctComicCat
-      }
-    }).success(function (res) {
-      $scope.correctComicResponseMessage = res
-      $scope.correctComicTag = undefined
-      $scope.correctComicCat = undefined
-      $scope.selectedCorrectComic = undefined
-
-      setTimeout(function(){$scope.correctComicResponseMessage = ''}, 3000)
-    })
+    this needs some work
   }
 
   $scope.showUntaggedComics = function () {
@@ -286,13 +265,13 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
   $scope.approveKeyword = function (suggestedKeyword, verdict) {
     $http({
-      url: '/keywordSuggestionResponse',
+      url: '/api/keywords/suggestions/responses',
       method: 'POST',
       data: {
         comicId: suggestedKeyword.comicId,
-        keyword: suggestedKeyword.keyword,
+        keywordName: suggestedKeyword.keyword,
         extension: suggestedKeyword.extension,
-        approval: verdict
+        verdict: verdict
       }
     }).success(function (res) {
       if (!res.error) {
@@ -310,7 +289,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
   function getKeywordSuggestions () {
-    $http.get('/api/pendingKeywordSuggestions').success((res) => {
+    $http.get('/api/keywords/suggestions/pending').success((res) => {
       $scope.suggestedKeywords = res
     })
   }
@@ -321,7 +300,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
   function getTaggingHighscores () {
-    $http.get('/api/getTaggingHighscores')
+    $http.get('/api/modPanel/modTaggingHighscores')
       .success(function (res) {
         $scope.taggingHighScores = res
       })
@@ -329,26 +308,11 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
   function getFavImageHighscores () {
     $http.get('/api/getModNames')
-      .success(function (res) {
-        var modNames = res
-
-        for (var mod of modNames) {
-          $http({
-            url: '/api/getModFavImageCount',
-            method: 'GET',
-            params: {modName: mod}
-          }).success(function (res) {
-            $scope.favImageHighscores.push({'username': res.modName, 'count': res.count})
-            $scope.favImageHighscores.sort(function (a, b) {
-              return b.count - a.count
-            })
-          })
-        }
-      })
+    this needs a fix
   }
 
   function getUntaggedComics () {
-    $http.get('/api/getUntaggedComics')
+    $http.get('/api/modPanel/untaggedComics')
       .success(function (res) {
         $scope.comicNames = res
         sortComicNames()
@@ -405,21 +369,11 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
   function setComicsNotInDatabase () {
-    $http({url: '/api/allComicNamesInFolder', method: 'GET'})
-    .success(function (res) {
-      $scope.comicNamesNotInDatabase = getListDifference(res, $scope.comicNames)
+    $http.get('/api/modPanel/comicsReadyForAdding')
+    .success((res) => {
+      $scope.comicNamesNotInDatabase = res
     })
   }
-
-  function getListDifference (biggerList, smallerList) {
-    var returnList = []
-    for (var x of biggerList) {
-      if (smallerList.indexOf(x) < 0) {
-        returnList.push(x)
-      }
-    }
-    return returnList
-  } 
 
 
 
@@ -440,39 +394,33 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
   function getTagsAsList() {
-    $http({
-      url: '/api/comicTagsAsList',
-      method: 'GET'
-    }).success(function (res) {
+    $http.get('/api/keywords')
+    .success((res) => {
+      this trenger aa behandle list med objects {keyword: <>, description: <>}
       $scope.allTags = res
       sortAllTags()
     })
   }
 
   function getTagsAsDictionary () {
-    $http({
-      url: '/api/comicTagsWithDescription',
-      method: 'GET'
-    }).success(function (res) {
+    $http.get('/api/keywords')
+    .success((res) => {
       tagDescriptions = res
     })
   }
 
   function getAllComicNames () {
-    $http({
-      url: '/api/allComicNamesAsList',
-      method: 'GET'
-    }).success(function (res) {
+    this maa behandle liste med objects, ikke bare liste med navn
+    $http.get('/api/comics')
+    .success((res) => {
        $scope.comicNames = res
        sortComicNames()
     })
   }
 
   function getAllArtistNames () {
-    $http({
-      url: '/api/allArtists',
-      method: 'GET'
-    }).success(function (res) {
+    $http.get('/api/comics')
+    .success((res) => {
        $scope.allArtists = res
     })
   }

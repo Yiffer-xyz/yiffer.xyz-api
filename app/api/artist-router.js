@@ -2,9 +2,24 @@ let fs = require('fs')
 let authorizedUsers = require('../../config/autorized-users.json')
 
 module.exports = function (app, mysqlPool) {
+  app.get ('/api/artists', getAllArtists)
   app.get ('/api/artists/:name', getArtistByName)
   app.post('/api/artists/', createArtist)
   app.post('/api/artistLink', addArtistLinks)
+
+
+  function getAllArtists (req, res, next) {
+    let query = 'SELECT Name FROM Artist'
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(query, (err, results) => {
+        if (err) { return returnError('Database query error: ' + err.toString(), res, connection, err) }
+        let allArtistList = []
+        for (var artist of results) { allArtistList.push(artist.Name) } // todo get query results as list?
+        res.json(allArtistList)
+        connection.release()
+      })
+    })
+  }
 
 
   function getArtistByName (req, res, next) {
