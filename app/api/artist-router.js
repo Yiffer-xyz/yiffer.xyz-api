@@ -115,14 +115,14 @@ function returnError (errorMessage, res, mysqlConnection, err) {
 }
 
 
-function authorizeAdmin (req) { // todo remove
+function authorizeAdmin (req) {
   if (!req.session || !req.session.user) { return false }
   if (authorizedUsers.admins.indexOf(req.session.user.username) === -1) { return false }
   return true
 }
 
 
-function authorizeMod (req) { // todo remove
+function authorizeMod (req) { 
   if (!req.session || !req.session.user) { return false }
   if (authorizedUsers.mods.indexOf(req.session.user.username) === -1) { return false }
   return true

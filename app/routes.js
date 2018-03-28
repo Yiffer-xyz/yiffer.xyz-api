@@ -1,6 +1,5 @@
 var api = require('./api')
 
-// todo move this one level up
 let mysql = require('mysql')
 let mysqlSettings = require('../config/db-config.json')
 let mysqlPool = mysql.createPool(mysqlSettings)
