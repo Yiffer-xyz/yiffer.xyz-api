@@ -11,7 +11,7 @@ module.exports = function (app, mysqlPool) {
 
 
   function getAllKeywords (req, res, next) {
-    let query = 'SELECT KeywordName as keyword, Description as description FROM Keyword'
+    let query = 'SELECT KeywordName, Description FROM Keyword'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res,  connection, err) }
@@ -26,7 +26,7 @@ module.exports = function (app, mysqlPool) {
 		if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
 
 		let comicId = req.body.comicId
-		let keywordDeleteList = req.body.tagsToDelete
+		let keywordDeleteList = req.body.keywordsToDelete
 
 		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, Keyword) IN ('+ '(?, ?), '.repeat(keywordDeleteList.length)
 		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
@@ -48,8 +48,8 @@ module.exports = function (app, mysqlPool) {
   function addKeywordsToComic (req, res, next) {
     if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
 
-    let comicId = req.body.ComicId
-    let keywordAddList = req.body.keywordsAddList
+    let comicId = req.body.comicId
+    let keywordAddList = req.body.keywordAddList
 
     let insertQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES ' + '(?, ?), '.repeat(keywordAddList.length)
     insertQuery = insertQuery.substring(0, insertQuery.length-2) + ')'
@@ -125,7 +125,7 @@ module.exports = function (app, mysqlPool) {
   function getPendingKeywordSuggestions (req, res, next) {
     if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
 
-    let query = 'SELECT Name, ComicId, Extension, User, Keyword FROM KeywordSuggestion INNER JOIN Comic ON (Id=ComicId) WHERE Processed = 0'
+    let query = 'SELECT Name as ComicName, ComicId, Extension, User, Keyword FROM KeywordSuggestion INNER JOIN Comic ON (Id=ComicId) WHERE Processed = 0'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database query error:' + err.toString(), res, connection, err) }

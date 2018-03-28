@@ -142,15 +142,15 @@ module.exports = function (app, mysqlPool) {
     let updatedCat = req.body.cat
     let updatedTag = req.body.tag
     let updatedFinished = req.body.finished
-    let updatedArtistId = req.body.artistId
+    let updatedArtistName = req.body.artistName
 
-    if (!comicId || !updatedCat || !updatedTag || !updatedFinished || !updatedArtist) {
+    if (!comicId || !updatedCat || !updatedTag || !updatedFinished || !updatedArtistName) {
       return returnError('Missing fields', res, null, null)
     }
 
-    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = ?'
+    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Id FROM Artist WHERE Name = ?)'
     mysqlPool.getConnection((err, connection) => {
-      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtist], (err, results) => {
+      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtistName], (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
         res.json({ message: 'Successfully updated comic' })
         connection.release()

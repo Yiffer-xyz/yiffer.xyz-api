@@ -1,7 +1,5 @@
 angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPanelController', ['$scope', '$http', '$cookies', 'Upload', function ($scope, $http, $cookies, Upload) {
 
- ////////////////////////////////////////////////////////// new
-
   $scope.brightColors = true
 
   $scope.comicNames = []

@@ -1,0 +1,139 @@
+<p class="theme-p" style="position: absolute; top: 0; right: 0;">
+    <span class="link-color brightness-button" ng-click="setBrightColors(true)">Bright</span> | <span class="link-color brightness-button" ng-click="setBrightColors(false)">Dark</span>
+</p>
+
+<h1>Mod panel</h1>
+
+<div ng-show="!loggedin">
+	<p>You have to log in to view the mod panel</p>
+	<input ng-model="loginInput.username" type="text">
+	<input ng-model="loginInput.password" type="text">
+	<button ng-click="login(loginInput.username, loginInput.password)" class="button-neutral">Log in</button>
+</p>
+
+<div ng-show="loggedin">
+	<h2>Tag suggestions</h2>
+	<p ng-show="responseMessages.kwSuggestions.visible" ng-class="{'mod-panel-error': responseMessages.kwSuggestions.error, 'mod-panel-success': !responseMessages.kwSuggestions.error}">{{responseMessages.kwSuggestions.message}}</p>
+
+	<table class="mod-panel-table">
+		<tr>
+			<th>Comic Name</th>
+			<th>Suggested Keyword</th>
+			<th>Suggester</th>
+			<th>Action</th>
+		</tr>
+		<tr ng-repeat="suggestedKeyword in suggestedKeywords">
+			<td> <a ng-href="/{{suggestedKeyword.ComicName}}" target="_blank">{{suggestedKeyword.ComicName}}</a> </td>
+			<td> {{suggestedKeyword.Extension ? 'ADD' : 'DELETE'}} <b>{{suggestedKeyword.Keyword}}</b> </td>
+			<td> {{suggestedKeyword.User}} </td>
+			<td> 
+				<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, true)" class="button-green">
+					Approve suggestion ({{suggestedKeyword.Extension ? 'add the keyword' : 'delete the keyword'}})
+				</button> 
+				<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, false)" class="button-red">
+					Reject suggestion
+				</button> 
+			</td>
+		</tr>
+	</table>
+
+	
+	<h2>Add pages</h2>
+	<p>Image file may have any name and must be .png or .jpg</p>
+	<p ng-show="responseMessages.newComicPage.visible" ng-class="{'mod-panel-error': responseMessages.newComicPage.error, 'mod-panel-success': !responseMessages.newComicPage.error}">{{responseMessages.newComicPage.message}}</p>
+
+	<div class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Select comic</p>
+			<select ng-model="newComicPage.comic" ng-options="comic.name for comic in allComicsList"></select>
+		</div>
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Select file</p>
+
+			<form>
+				<div ngf-select ng-model="newComicPage.file" name="uploadNewPageFile" ngf-pattern="'image/*'" ngf-accept="'image/*'" ngf-max-size="100MB" class="button-neutral">Select file</div>
+			</form>
+		</div>
+
+		<button ng-show="newComicPage.file && newComicPage.comicName" ng-click="uploadNewPage(newComicPage.comicName, newComicPage.file)" class="button-neutral">
+			Submit {{newComicPage.file.name}}
+		</button>
+	</div>
+
+
+	<h2>Add comic keywords</h2>
+	<p ng-show="responseMessages.addKeywords.visible" ng-class="{'mod-panel-error': responseMessages.addKeywords.error, 'mod-panel-success': !responseMessages.addKeywords.error}">{{responseMessages.addKeywords.message}}</p>
+
+	<div class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Select comic</p>
+			<select ng-model="keywordAdding.comic" ng-options="comic.name for comic in allComicsList"></select>
+			<a ng-href="/{{keywordAdding.comic.Name}}" target="_blank" ng-show="keywordAdding.comic">Go to comic</a>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<select ng-model="currentlySelectedKeyword" ng-keypress="keywordKeyPressed($event)" ng-options="keyword.KeywordName for keyword in allKeywordsList" size="12"></select>
+			<button ng-click="addSelectedKeyword(currentlySelectedKeyword)" class="button-neutral">&rarr;</button>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Tags you're adding</p>
+
+			<ul>
+				<li ng-repeat="keyword in keywordAdding.keywordsToAdd" ng-click="removeObjectFromArray(keywordAdding.keywordsToAdd, keyword)" class="cursor-pointer">{{keyword.KeywordName}}</li>
+			</ul>
+
+			<p ng-show="keywordAdding.keywordsToAdd.length > 0">Click kw to remove</p>
+			<button ng-click="sendAddedKeywords()" ng-show="keywordAdding.keywordsToAdd.length > 0" class="button-green">Add keywords</button>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Tags already added</p>
+
+			<ul>
+				<li ng-repeat="keyword in keywordAdding.existingKeywords" ng-click="toggleKeywordDeletion(keyword)" class="cursor-pointer" ng-style="(objectArrayIndexOf(keywordAdding.keywordsToDelete, keyword) >= 0) ? {'text-decoration': 'line-through'} : {'text-decoration': 'none'}">{{keyword.KeywordName}}</li>
+			</ul>
+
+			<p ng-show="keywordAdding.existingKeywords.length > 0">Click kw to remove</p>
+			<button ng-click="sendDeleteKeywords()" ng-show="keywordAdding.keywordsToDelete.length > 0" class="button-red">Delete keywords</button>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+		</div>
+	</div>
+
+
+	<h2>Add keyword</h2>
+	<p ng-show="responseMessages.createKeyword.visible" ng-class="{'mod-panel-error': responseMessages.createKeyword.error, 'mod-panel-success': !responseMessages.createKeyword.error}">{{responseMessages.createKeyword.message}}</p>
+
+	<div class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>New keyword name</p>
+			<input type="text" ng-model="newKeywordName"/>
+		</div>
+
+		<button ng-click="createKeyword(newKeywordName.toLowerCase())" class="button-green">Send</button>
+	</div>
+
+
+	<h2>Correct a comic</h2>
+	<p ng-show="responseMessages.correctComic.visible" ng-class="{'mod-panel-error': responseMessages.correctComic.error, 'mod-panel-success': !responseMessages.correctComic.error}">{{responseMessages.correctComic.message}}</p>
+
+	<div class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Select comic</p>
+			<select ng-model="correctComic.comic" ng-options="comic.name for comic in allComicsList"></select>
+			<a ng-href="/{{correctComic.comic.Name}}" target="_blank" ng-show="correctComic.comic">Go to comic</a>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<div>Tag <select ng-model="correctComic.tag" ng-options="['Furry', 'MLP', 'Pokemon', 'Warcraft', 'Other']"></select></div>
+			<div>Cat <select ng-model="correctComic.cat" ng-options="['M', 'F', 'MM', 'MF', 'FF', 'MF+', 'I']"></select></div>
+			<div>Finished <select ng-model="correctComic.finished" ng-options="[1, 0]"></select></div>
+			<div>Artist <select ng-model="correctComic.artistName" ng-options="allArtistsList"></select></div>
+		</div>
+
+		<button ng-click="sendCorrectComic()" class="button-green">Send</button>
+	</div>
+
+</div>
