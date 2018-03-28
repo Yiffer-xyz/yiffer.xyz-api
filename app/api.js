@@ -575,61 +575,17 @@ function addImageToComic (req, res) {
     })
   })
 }
+
+
 function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
   if (err) {console.log(err)}
   if (res) { res.json({ error: errorMessage }) }
   if (mysqlConnection) { mysqlConnection.release() }
 }
 
+
 app.post('/addImageToComic', multipartyMiddelware, addImageToComic)
 
-// app.post('/addImageToComic', multipartyMiddelware, function (req, res) {
-//   if (!authorizeAdmin(req)) { return res.end('I like your curiosity, but no.') }
-
-//   var file = req.files.file.path
-//   var comicName = req.body.comicName
-//   var comicFolderPath = '/../public/comics/' + req.body.comicName
-
-//   fs.readdir(__dirname + comicFolderPath, function (err, files) {
-//     if (err) {return res.end('Error (#L12): Something went wrong when reading directory.')}
-//     var numberOfComicImages = files.length - 1
-//     var newImagePath = comicFolderPath + '/' + appendZeroFirstIfSingleNumber(numberOfComicImages+1) + file.substring(file.length-4)
-
-//     fs.readFile(file, function (err2, data) {
-//       if (err2) {console.log(err2); return res.end('Error (#L13): Something went wrong when reading file.')}
-
-//       fs.writeFile(__dirname + newImagePath, data, function (err3) {
-//         if (err3) {console.log(err3); return res.end('Error (#L14): Something went wrong when trying to write the image file to disc.')}
-//         console.log('Wrote file: ' + newImagePath)
-
-//         if (file.substring(file.length-4) != '.jpg') {
-//           PythonShell.run('process_new_comic_page.py', {mode: 'text', args: [req.body.comicName], scriptPath: '/home/rag/mnet/app/'}, function (err, results) {
-//             if (err) {console.log(err + '#X3123')}
-//             console.log('Processed new .png comic page!')
-//           })
-//         }
-//         else {
-//           console.log('New page was .jpg so no need to process it.')
-//         }
-
-//         var query = 'UPDATE Comic SET NumberOfPages = ?, Updated = NOW() WHERE Name = ?'
-//         mysqlPool.getConnection(function (err4, connection) {
-//           if (err4) {return res.end('Error (#L19): Something went wrong.')}
-        
-//           connection.query(query, [numberOfComicImages+1, comicName], function (err5, results, fields) {
-//             if (err5) {
-//               return connection.release()
-//             }
-
-//             res.end('Success!!')
-//             connection.release()
-//             zipComic(comicName, false)
-//           })
-//         })
-//       })
-//     })
-//   })
-// })
 
 function zipComic (comicName, isNewComic) {
   var zipFilePath = __dirname + '/../public/021njnwjfusjkfn89c23nfsnfkas/' + comicName + '.zip'
