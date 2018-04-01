@@ -108,8 +108,7 @@
 
 	<div class="mod-panel-flexbox">
 		<div class="mod-panel-flexbox-small-vertical">
-			<p>New keyword name</p>
-			<input type="text" ng-model="newKeywordName"/>
+			New keyword name <input type="text" ng-model="newKeywordName"/>
 		</div>
 
 		<button ng-click="createKeyword(newKeywordName.toLowerCase())" class="button-green">Send</button>
@@ -121,19 +120,45 @@
 
 	<div class="mod-panel-flexbox">
 		<div class="mod-panel-flexbox-small-vertical">
-			<p>Select comic</p>
+			Select comic 
 			<select ng-model="correctComic.comic" ng-options="comic.name for comic in allComicsList"></select>
 			<a ng-href="/{{correctComic.comic.Name}}" target="_blank" ng-show="correctComic.comic">Go to comic</a>
 		</div>
 
 		<div class="mod-panel-flexbox-small-vertical">
-			<div>Tag <select ng-model="correctComic.tag" ng-options="['Furry', 'MLP', 'Pokemon', 'Warcraft', 'Other']"></select></div>
-			<div>Cat <select ng-model="correctComic.cat" ng-options="['M', 'F', 'MM', 'MF', 'FF', 'MF+', 'I']"></select></div>
-			<div>Finished <select ng-model="correctComic.finished" ng-options="[1, 0]"></select></div>
-			<div>Artist <select ng-model="correctComic.artistName" ng-options="allArtistsList"></select></div>
+			Artist <select ng-model="correctComic.artistName" ng-options="artist.Name for artist in allArtistsList"></select>
+			Tag <select ng-model="correctComic.tag" ng-options="x for x in ['Furry', 'MLP', 'Pokemon', 'Warcraft', 'Other']"></select>
+			Cat <select ng-model="correctComic.cat" ng-options="x for x in ['M', 'F', 'MM', 'MF', 'FF', 'MF+', 'I']"></select>
+			Finished <select ng-model="correctComic.finished" ng-options="x for x in [1, 0]"></select>
 		</div>
 
 		<button ng-click="sendCorrectComic()" class="button-green">Send</button>
 	</div>
+
+
+	<h2>Adding a comic</h2>
+	<p ng-show="responseMessages.addComic.visible" ng-class="{'mod-panel-error': responseMessages.addComic.error, 'mod-panel-success': !responseMessages.addComic.error}">{{responseMessages.addComic.message}}</p>
+
+	<div ng-show="modOrAdmin == 'admin'" class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			Comic Name <input type="text" ng-model="newComic.name"/>
+			Artist <select ng-model="newComic.artist" ng-options="artist.Name for artist in allArtistsList"></select>
+			Tag <select ng-model="newComic.tag" ng-options="x for x in ['Furry', 'MLP', 'Pokemon', 'Warcraft', 'Other']"></select>
+			Cat <select ng-model="newComic.cat" ng-options="x for x in ['M', 'F', 'MM', 'MF', 'FF', 'MF+', 'I']"></select>
+			Finished <select ng-model="newComic.finished" ng-options="x for x in [1, 0]"></select>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<button ngf-select="uploadNewComicImages($files)" multiple accept="image/*">Select files</button>
+			<br/>
+			Files:
+			<br/>
+			<ul>
+				<li ng-repeat="f in files">{{f.name}}</li>
+			</ul>
+			<p ng-show="newComicUploadProgress != undefined">Upload progress: {{newComicUploadProgress}}%</p>
+		</div>
+	</div>
+
 
 </div>

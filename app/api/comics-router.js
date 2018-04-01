@@ -74,9 +74,46 @@ module.exports = function (app, mysqlPool) {
 
 
   function createComic (req, res, next) {
-    if (!authorizeMod(req)) { return res.end('You are not authoized to do this!') }
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+
+    // TODO: Make sure files end up in the right location!!
+    let someFiles = req.files
+    let newComicDetails = req.body.comicDetails
+    console.log(req.files)
+    let newComicName = 'TODO'
+    let numberOfPages = 'TODO'
+
+
+    pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicName], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
+      if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
+
+      let insertQuery = undefined
+      let insertQueryParams = []
+      let finalSuccessMessage = undefined
+
+      if (authorizeAdmin(req)) {
+        insertQuery = 'INSERT INTO Comic (Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
+        insertQueryParams = [newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
+        finalSuccessMessage = 'Thank you! You have enough power that this comic was immediately added, no approval required.'
+      }
+      else {
+        insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
+        insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
+        finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
+      }
+
+      mysqlPool.getConnection((err, connection) => {
+        connection.query(insertQuery, insertQueryParams, (err, results) => {
+          if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+          res.json({message: finalSuccessMessage})
+          connection.release()
+        })
+      })
+    })
+
+
     pythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: '/home/rag/mnet/app/'}, (err, results) => {
-      if (err) { return returnError('Pythong processing new comic failed: ' + err.toString(), res, null, err) }
+      if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
       var artistId    = req.body.artistId
       var comicName   = req.body.comicName
       var comicCat    = req.body.cat
@@ -106,7 +143,7 @@ module.exports = function (app, mysqlPool) {
   }
 
   function addImageToComic (req, res) {
-    if (!authorizeMod(req)) { return res.end('You are not authorized to do this!') }
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
     logComicUpdate(req, mysqlPool)
 
     let newImageFile = req.files.file.path

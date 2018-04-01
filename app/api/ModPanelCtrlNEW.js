@@ -5,11 +5,15 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	$scope.newComicPage = {file: undefined, comicName: undefined}
 	$scope.keywordAdding = {comic: undefined, keywordsToAdd: [], existingKeywords: [], keywordsToDelete: []}
 	$scope.correctComic = {comic: undefined, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
+	$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
+	$scope.newComicUploadProgress = undefined
 
 	$scope.suggestedKeywords = []
 	$scope.allComicsList = []
 	$scope.allKeywordsList = []
 	$scope.allArtistsList = []
+
+	$scope.modOrAdmin = undefined
 
 	$scope.responseMessages = {
 		kwSuggestions:  { visible: false, message: '', error: false },
@@ -18,6 +22,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 		createKeyword:  { visible: false, message: '', error: false },
 		correctComic:   { visible: false, message: '', error: false },
 		tagSuggestions: { visible: false, message: '', error: false },
+		addComic: 			{ visible: false, message: '', error: false },
 	}
 
 	$scope.respondToKeywordSuggestion = function (keyword, comicId, verdict, extension) {
@@ -152,7 +157,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 				cat: correctComic.cat,
 				tag: correctComic.tag,
 				finished: correctComic.finished,
-				artistName: correctComic.artistName
+				artistName: correctComic.artist.Name
 			}
 		})
 		.success((res) => {
@@ -166,6 +171,35 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	}
 
 
+	$scope.uploadNewComicImages = function (files) {
+		$scope.files = files
+		Upload.upload({
+			url: '/api/comics/new',
+			data: { 
+				files: files,
+				comicDetails: {name: $scope.newComic.name, artist: $scope.newComic.artist.Name, cat: $scope.newComic.cat, tag: $scope.newComic.tag, finished: $scope.newComic.finished}
+			}
+		})
+		.then(
+			function (res) => {
+				$timeout(function () {
+					$scope.responseMessages.newComic = {
+						visible: true,
+						message: (res.message || res.error),
+						error: (res.error ? false : true)
+					}
+					if (!res.error) {
+						$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
+						$scope.files = undefined
+					}
+				})
+			},
+			function (res) {},
+			function (evt) { 
+				$scope.newComic.uploadProgress = Math.min(100, parseInt(100.0 * evt.loaded / evt.total))
+			}
+		)
+	}
 
 
 
@@ -211,7 +245,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   	correctComic.tag = correctComic.comic.tag
   	correctComic.cat = correctComic.comic.cat
   	correctComic.finished = correctComic.comic.finished
-  	correctComic.artistName = correctComic.comic.artist
+  	correctComic.artistName = {Name: correctComic.comic.artist}
   })
 
 
@@ -259,6 +293,16 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 			valueList.push(obj[key])
 		}
 		return valueList
+	}
+
+
+	function init () {
+		refreshSession ()
+	}
+
+
+	function refreshSession () {
+		todo this
 	}
 
 }])

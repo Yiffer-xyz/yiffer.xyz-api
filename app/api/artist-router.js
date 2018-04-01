@@ -9,13 +9,11 @@ module.exports = function (app, mysqlPool) {
 
 
   function getAllArtists (req, res, next) {
-    let query = 'SELECT Name FROM Artist'
+    let query = 'SELECT Id, Name FROM Artist'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database query error: ' + err.toString(), res, connection, err) }
-        let allArtistList = []
-        for (var artist of results) { allArtistList.push(artist.Name) } // todo get query results as list?
-        res.json(allArtistList)
+        res.json(results)
         connection.release()
       })
     })
