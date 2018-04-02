@@ -53,14 +53,14 @@ module.exports = function (app, mysqlPool) {
           queryParams = [comicId]
         }
 
-        connection.query(comicMetadataQuery, queryParams, function (err, results2) {
+        connection.query(comicMetadataQuery, queryParams, function (err, results) {
           if (err) { return returnError('Database query error', res, connection, err) }
-          finalReturnValue = results2[0]
+          finalReturnValue = results[0]
 
-          connection.query(keywordsQuery, [comicId], function (err, results4) {
+          connection.query(keywordsQuery, [comicId], function (err, results) {
             if (err) { return returnError('Database query error', res, connection, err) }
             finalReturnValue.keywords = []
-            for (var v of results4) {
+            for (var v of results) {
               finalReturnValue.keywords.push(v.Keyword)
             }
 
@@ -87,20 +87,9 @@ module.exports = function (app, mysqlPool) {
     pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicName], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
       if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
 
-      let insertQuery = undefined
-      let insertQueryParams = []
-      let finalSuccessMessage = undefined
-
-      if (authorizeAdmin(req)) {
-        insertQuery = 'INSERT INTO Comic (Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
-        insertQueryParams = [newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
-        finalSuccessMessage = 'Thank you! You have enough power that this comic was immediately added, no approval required.'
-      }
-      else {
-        insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
-        insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
-        finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
-      }
+      let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
+      let insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
+      let finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
 
       mysqlPool.getConnection((err, connection) => {
         connection.query(insertQuery, insertQueryParams, (err, results) => {
@@ -175,6 +164,8 @@ module.exports = function (app, mysqlPool) {
 
 
   function updateComicDetailsByName (req, res, next) {
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+
     let comicId = req.body.comicId
     let updatedCat = req.body.cat
     let updatedTag = req.body.tag

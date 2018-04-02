@@ -61,6 +61,7 @@ module.exports = function (app, mysqlPool) {
 
   function createArtist (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+      
     let newArtistName = req.body.artistName
     let insertArtistQuery = 'INSERT INTO Artist (Name) VALUES (?)'
 

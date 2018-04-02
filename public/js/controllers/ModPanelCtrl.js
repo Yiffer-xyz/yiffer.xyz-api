@@ -8,6 +8,9 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	$scope.correctComic = {comic: {tag: undefined, cat: undefined, finished: undefined, artistName: undefined}, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
 	$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
 	$scope.newComicUploadProgress = undefined
+  $scope.addArtistLinks = {artist: undefined, links: ['', '', '', '', '', '']}
+  $scope.pendingComics = []
+  $scope.processedComics = []
 
 	$scope.suggestedKeywords = []
 	$scope.allComicsList = []
@@ -23,7 +26,10 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 		createKeyword:  { visible: false, message: '', error: false },
 		correctComic:   { visible: false, message: '', error: false },
 		tagSuggestions: { visible: false, message: '', error: false },
-		addComic: 			{ visible: false, message: '', error: false },
+    addComic:       { visible: false, message: '', error: false },
+    addArtist:      { visible: false, message: '', error: false },
+    addArtistLinks: { visible: false, message: '', error: false },
+		approveComic:   { visible: false, message: '', error: false },
 	}
 
 	$scope.respondToKeywordSuggestion = function (keyword, comicId, verdict, extension) {
@@ -175,7 +181,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	$scope.uploadNewComicImages = function (files) {
 		$scope.files = files
 		Upload.upload({
-			url: '/api/comics/new',
+			url: '/api/comics',
 			data: { 
 				files: files,
 				comicDetails: {name: $scope.newComic.name, artist: $scope.newComic.artist.Name, cat: $scope.newComic.cat, tag: $scope.newComic.tag, finished: $scope.newComic.finished}
@@ -203,6 +209,64 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	}
 
 
+  $scope.sendAddArtist = function (artistName) {
+    $http({
+      url: '/api/artists',
+      method: 'POST',
+      data: { artistName: newArtistName }
+    })
+    .success((res) => {
+      $scope.responseMessages.addArtist = { 
+        visible: true, 
+        message: (res.message || res.error), 
+        error: (res.error ? false : true)
+      }
+
+      $scope.getArtistList()
+      $scope.newArtistName = ''
+    })
+  }
+
+
+  $scope.sendAddArtistLinks = function () {
+    let artistLinks = extractNonEmptyCellsFromArray($scope.addArtistLinks.links)
+    $http({
+      url: '/api/modPanel/artistLink',
+      method: 'POST',
+      data: { artistId: $scope.addArtistLinks.artist.id, artistLinks: newArtistLinks }
+    })
+    .success((res) => {
+      $scope.responseMessages.addArtistLinks = { 
+        visible: true, 
+        message: (res.message || res.error), 
+        error: (res.error ? false : true)
+      }
+
+      $scope.addArtistLinks.links = ['', '', '', '', '', '']
+    })
+  }
+
+
+  $scope.approveComic = function (comic, verdict, comment) {
+    $http({
+      url: '/api/modPanel/suggestedComics',
+      method: 'POST',
+      data: {
+        comic: comic,
+        verdict: verdict,
+        comment: comment
+      }
+    })
+    .success((res) => {
+      $scope.responseMessages.approveComic = { 
+        visible: true, 
+        message: (res.message || res.error), 
+        error: (res.error ? false : true)
+      }
+
+      getSuggestedComics()
+    })
+  }
 
 
 	function getKeywordList () {
@@ -223,6 +287,16 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	function getPendingKeywordSuggestions () {
 		$http.get('/api/keywords/suggestions/pending').success((res) => { $scope.suggestedKeywords = res })
 	}
+
+  function getSuggestedComics () {
+    $http.get('/api/modPanel/suggestedComics').success((res) => {
+      for (var suggestedComic of res) {
+        if (suggestedComic.Processed) { $scope.processedComics.push(suggestedComic) }
+        else { $scope.pendingComics.push(suggestedComic) }
+      }
+    })
+  }
+
 
 
 
@@ -295,6 +369,15 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 		}
 		return valueList
 	}
+
+
+  function extractNonEmptyCellsFromArray (array) {
+    let returnArray = []
+    for (var a of array) {
+      if (a) { returnArray.push(a) }
+    }
+    return returnArray
+  }
 
 
 	function init () {

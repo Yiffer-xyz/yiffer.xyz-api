@@ -139,7 +139,7 @@
 	<h2>Adding a comic</h2>
 	<p ng-show="responseMessages.addComic.visible" ng-class="{'mod-panel-error': responseMessages.addComic.error, 'mod-panel-success': !responseMessages.addComic.error}">{{responseMessages.addComic.message}}</p>
 
-	<div ng-show="modOrAdmin == 'admin'" class="mod-panel-flexbox">
+	<div class="mod-panel-flexbox">
 		<div class="mod-panel-flexbox-small-vertical">
 			Comic Name <input type="text" ng-model="newComic.name"/>
 			Artist <select ng-model="newComic.artist" ng-options="artist.Name for artist in allArtistsList"></select>
@@ -159,6 +159,80 @@
 			<p ng-show="newComicUploadProgress != undefined">Upload progress: {{newComicUploadProgress}}%</p>
 		</div>
 	</div>
+
+
+  <h2>Adding artist</h2>
+  <p ng-show="responseMessages.addArtist.visible" ng-class="{'mod-panel-error': responseMessages.addArtist.error, 'mod-panel-success': !responseMessages.addArtist.error}">{{responseMessages.addArtist.message}}</p>
+
+  <div class="mod-panel-flexbox-small-vertical">
+    Artist name <input type="text" ng-model=newArtistName/>
+    <br/>
+    <button ng-show="newArtistName" ng-click="sendAddArtist(newArtistName)">Send</button>
+  </div>
+
+
+  <h2>Adding artist links</h2>
+  <p ng-show="responseMessages.addArtistLinks.visible" ng-class="{'mod-panel-error': responseMessages.addArtistLinks.error, 'mod-panel-success': !responseMessages.addArtistLinks.error}">{{responseMessages.addArtistLinks.message}}</p>
+
+  <div class="mod-panel-flexbox-small-vertical">
+    Choose artist
+    <select ng-model="addArtistLinks.artist" ng-options="artist.Name for artist in allArtistsList"></select>    
+  </div>
+
+  <div class="mod-panel-flexbox-small-vertical">
+    Add links
+    <input ng-repeat="linkNumber in artistLinks track by $index" ng-model="artistLinks[$index]"/>
+    <button ng-click="sendAddArtistLinks()">Send</button>
+  </div>
+</div>
+
+<div ng-show="userRole == 'admin'">
+
+  <h2>Approving suggested comics</h2>
+  <p ng-show="responseMessages.approveComic.visible" ng-class="{'mod-panel-error': responseMessages.approveComic.error, 'mod-panel-success': !responseMessages.approveComic.error}">{{responseMessages.approveComic.message}}</p>
+  
+  <table>
+    <tr>
+      <th>Comic name</th>
+      <th>Mod name</th>
+      <th>Artist</th>
+      <th>Cat</th>
+      <th>Tag</th>
+      <th>Finished</th>
+      <th>Added time</th>
+      <th>Comment</th>
+      <th>Approve?</th>
+    </tr>
+    <tr ng-repeat="comic in pendingComics">
+      <td><a ng-href="/pendingComics/{{comic.Name}}" target="_blank">{{comic.Name}}</a></td>
+      <td>{{comic.ModName}}</td>
+      <td><a ng-href="/artist/{{comic.ArtistName}}" target="_blank">{{comic.ArtistName}}</a></td>
+      <td>{{comic.Cat}}</td>
+      <td>{{comic.Tag}}</td>
+      <td>{{comic.Finished}}</td>
+      <td>{{comic.Timestamp}}</td>
+      <td><input type="text" ng-model="judgeComicComment"/></td>
+      <td>
+        <button ng-click="approveComic(comic, true, judgeComicComment)" class="button-green">Approve</button>
+        <button ng-class="approveComic(comic, false, judgeComicComment)" class="button-red">Reject</button>
+      </td>
+    </tr>
+  </table>
+
+  <br/>
+  Previously added and rejected comics (<p ng-click="showComicApprovalHistory = true">show</p>)
+  <table ng-show="showComicApprovalHistory">
+    <tr>
+      <th>Comic name</th>
+      <th>Approved</th>
+      <th>Comment</th>
+    </tr>
+    <tr ng-repeat="comic in processedComics">
+      <td><a ng-href="/pendingComics/{{comic.Name}}" target="_blank">{{comic.Name}}</a></td>
+      <td>{{comic.Approved ? 'Yes' : 'No'}}</td>
+      <td>{{comic.Comment || ''}}</td>
+    </tr>
+  </table>
 
 
 </div>
