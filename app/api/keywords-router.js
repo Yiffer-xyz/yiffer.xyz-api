@@ -78,7 +78,7 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, [keywordName, keywordDescription], (err, results) => {
         if (err) { return returnError('Database error:' + err.toString(), res,  connection, err) }
-        res.json({ message: 'Successfully created keyword ' + keywordName}})
+        res.json({ message: 'Successfully created keyword ' + keywordName})
         connection.release()
       })
     })

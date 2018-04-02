@@ -1,10 +1,11 @@
 angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPanelController', ['$scope', '$http', '$cookies', 'Upload', function ($scope, $http, $cookies, Upload) {
 
 	$scope.brightColors = true
+	$scope.userRole = 'mod'
 
 	$scope.newComicPage = {file: undefined, comicName: undefined}
-	$scope.keywordAdding = {comic: undefined, keywordsToAdd: [], existingKeywords: [], keywordsToDelete: []}
-	$scope.correctComic = {comic: undefined, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
+	$scope.keywordAdding = {comic: {Name: undefined}, keywordsToAdd: [], existingKeywords: [], keywordsToDelete: []}
+	$scope.correctComic = {comic: {tag: undefined, cat: undefined, finished: undefined, artistName: undefined}, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
 	$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
 	$scope.newComicUploadProgress = undefined
 
@@ -166,7 +167,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 				message: (res.message || res.error), 
 				error: (res.error ? false : true)
 			}
-			$scope.correctComic = {comic: undefined, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
+			$scope.correctComic = {comic: {tag: undefined, cat: undefined, finished: undefined, artistName: undefined}, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
 		})
 	}
 
@@ -181,7 +182,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 			}
 		})
 		.then(
-			function (res) => {
+			function (res) {
 				$timeout(function () {
 					$scope.responseMessages.newComic = {
 						visible: true,
@@ -242,10 +243,10 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
   $scope.$watch('correctComic.comic', () => {
-  	correctComic.tag = correctComic.comic.tag
-  	correctComic.cat = correctComic.comic.cat
-  	correctComic.finished = correctComic.comic.finished
-  	correctComic.artistName = {Name: correctComic.comic.artist}
+  	$scope.correctComic.tag = $scope.correctComic.comic.tag
+  	$scope.correctComic.cat = $scope.correctComic.comic.cat
+  	$scope.correctComic.finished = $scope.correctComic.comic.finished
+  	$scope.correctComic.artistName = {Name: $scope.correctComic.comic.artist}
   })
 
 
@@ -302,7 +303,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
 	function refreshSession () {
-		todo this
+		// todo this
 	}
 
 }])

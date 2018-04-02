@@ -4,14 +4,14 @@
 
 <h1>Mod panel</h1>
 
-<div ng-show="!loggedin">
+<div ng-show="!userRole">
 	<p>You have to log in to view the mod panel</p>
 	<input ng-model="loginInput.username" type="text">
 	<input ng-model="loginInput.password" type="text">
 	<button ng-click="login(loginInput.username, loginInput.password)" class="button-neutral">Log in</button>
-</p>
+</div>
 
-<div ng-show="loggedin">
+<div ng-show="userRole">
 	<h2>Tag suggestions</h2>
 	<p ng-show="responseMessages.kwSuggestions.visible" ng-class="{'mod-panel-error': responseMessages.kwSuggestions.error, 'mod-panel-success': !responseMessages.kwSuggestions.error}">{{responseMessages.kwSuggestions.message}}</p>
 
