@@ -2,14 +2,14 @@ let fs = require('fs')
 let archiver = require('archiver')
 let pythonShell = require('python-shell')
 let authorizedUsers = require('../../config/autorized-users.json')
-var multiparty = require('connect-multiparty')
-var multipartyMiddelware = multiparty()
+let multiparty = require('connect-multiparty')
+let multipartyMiddelware = multiparty()
 
 module.exports = function (app, mysqlPool) {
 
   app.get ('/api/comics', getComicList)
   app.get ('/api/comics/:name', getComicByName)
-  app.post('/api/comics', createComic)
+  app.post('/api/comics', multipartyMiddelware, createComic)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.put ('/api/comics/:name', updateComicDetailsByName)
 

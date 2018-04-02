@@ -9,6 +9,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
 	$scope.newComicUploadProgress = undefined
   $scope.addArtistLinks = {artist: undefined, links: ['', '', '', '', '', '']}
+  $scope.modFavImage = {artist: undefined}
   $scope.pendingComics = []
   $scope.processedComics = []
 
@@ -29,8 +30,9 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
     addComic:       { visible: false, message: '', error: false },
     addArtist:      { visible: false, message: '', error: false },
     addArtistLinks: { visible: false, message: '', error: false },
+    addModFavImage: { visible: false, message: '', error: false },
     approveComic:   { visible: false, message: '', error: false },
-		reZipComic:     { visible: false, message: '', error: false },
+		reZipComic:     { visible: false, message: '', error: false }
 	}
 
 	$scope.respondToKeywordSuggestion = function (keyword, comicId, verdict, extension) {
@@ -248,6 +250,24 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
 
+  $scope.sendModFavImage = function () {
+  	Upload.upload({
+  		url: '/api/artistFavImage',
+  		data: {
+  			file: modFavImage.file,
+  			artistName: modFavImage.artist.Name
+  		}
+  	})
+    .success((res) => {
+      $scope.responseMessages.addModFavImage = { 
+        visible: true, 
+        message: (res.message || res.error), 
+        error: (res.error ? false : true)
+      }
+  	})
+  }
+
+
   $scope.approveComic = function (comic, verdict, comment) {
     $http({
       url: '/api/modPanel/suggestedComics',
@@ -280,6 +300,8 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
       } 
     })
   }
+
+
 
 
 

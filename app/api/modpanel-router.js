@@ -9,7 +9,8 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/modPanel/comicsReadyForAdding', getComicsReadyForAdding)
   app.get ('/api/modPanel/suggestedComics/:name/numberOfPages', getPendingComicPagesByName)
   app.get ('/api/modPanel/suggestedComics', getSuggestedComics)
-  app.post('/api/modPanel/suggestedComics', judgePendingComic)
+  app.post('/api/modPanel/suggestedComics', processSuggestedComic)
+  app.get ('/api/modPanel/zip/:name', reZipAndCalculateNumberOfPagesByComicName)
 
   function getModTaggingHighscores (req, res, next) {
     if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
@@ -82,7 +83,7 @@ module.exports = function (app, mysqlPool) {
 
 
   function getSuggestedComics (req, res, next) {
-    let query = 'SELECT Processed, Approved, PendingComic.Id AS Id PendingComic.Name AS Name, ModName, PendingComic.Artist AS ArtistId, Artist.Name AS ArtistName Cat, Tag, NumberOfPages, Finished, Timestamp, Artist.Name FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id)'
+    let query = 'SELECT Processed, Approved, SuggestedComic.Id AS Id SuggestedComic.Name AS Name, ModName, SuggestedComic.Artist AS ArtistId, Artist.Name AS ArtistName Cat, Tag, NumberOfPages, Finished, Timestamp, Artist.Name FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id)'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
@@ -93,14 +94,14 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function judgePendingComic (req, res, next) {
+  function processSuggestedComic (req, res, next) {
     if (!authorizeAdmin(req)) { return returnError('Unauthorized or no access', res, null, null) }
 
     let comic = req.body.comic
     let verdict = req.body.verdict
     let comment = req.body.comment
 
-    let updatePendingTableQuery = 'UPDATE PendingComic SET Approved = ?, Processed = 1, Comment = ? WHERE Id = ?'
+    let updatePendingTableQuery = 'UPDATE SuggestedComic SET Approved = ?, Processed = 1, Comment = ? WHERE Id = ?'
     let updatePendingTableQueryParams = [verdict ? 1 : 0, comment, comic.Id]
     let addComicQuery = 'INSERT INTO Comic (Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, ?, ?, ?, ?)'
     let addComicQueryParams = [comic.Name, comic.ArtistId, comic.Cat, comic.Tag, comic.NumberOfPages, comic.Finished]
@@ -133,6 +134,27 @@ module.exports = function (app, mysqlPool) {
     if (files.indexOf('s.jpg') >= 0) { numberOfPages = files.length-1 }
     else { numberOfPages = files.length }
     res.json({ numberOfPages: numberOfPages })
+  }
+
+
+  function reZipAndCalculateNumberOfPagesByComicName (req, res, next) {
+    if (!authorizeAdmin(req)) { return returnError('Unauthorized or no access', res, null, null) }
+
+    let comicName = req.params.name
+    zipComic(comicName, false)
+
+    fs.readdir(__dirname + '/../../public/comics/' + comicName,  (err, files) => {
+      if (err) { return returnError('Reading file error: ' + err.toString(), res, null, err) }
+
+      let updateComicQuery = 'UPDATE Comic SET NumberOfPages = ? WHERE Name = ?'
+      mysqlPool.getConnection((err, connection) => {
+        connection.query(updateComicQuery, [files.length-1, comicName], (err, connection) => {
+          if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+          res.json({message: 'Successfully re-zipped comic ' + comicName})          
+          connection.release()
+        })
+      })
+    })
   }
 }
 

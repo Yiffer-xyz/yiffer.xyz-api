@@ -198,6 +198,28 @@
     <input ng-repeat="linkNumber in artistLinks track by $index" ng-model="artistLinks[$index]"/>
     <button ng-click="sendAddArtistLinks()">Send</button>
   </div>
+
+
+  <h2>Adding artist favorite images</h2>
+  <p ng-show="responseMessages.addModFavImage.visible" ng-class="{'mod-panel-error': responseMessages.addModFavImage.error, 'mod-panel-success': !responseMessages.addModFavImage.error}">{{responseMessages.addModFavImage.message}}</p>
+
+	<div class="mod-panel-flexbox">
+		<div class="mod-panel-flexbox-small-vertical">
+			Artist <select ng-model="modFavImage.artist" ng-options="artist.Name for artist in allArtistsList"></select>
+			<p ng-show="modFavImage.artist"><a ng-href="/artist/{{modFavImage.artist.Name}}" target="_blank">Go to artist</a></p>
+		</div>
+
+		<div class="mod-panel-flexbox-small-vertical">
+			<p>Select file</p>
+
+			<form>
+				<div ngf-select ng-model="modFavImage.file" name="uploadModFavImage" ngf-pattern="'image/*'" ngf-accept="'image/*'" ngf-max-size="100MB" class="button-neutral">Select file</div>
+			</form>
+
+			<button ng-click="sendModFavImage()" class="button-green">Send</button>
+		</div>
+	</div>
+
 </div>
 
 <div ng-show="userRole == 'admin'">
@@ -235,6 +257,8 @@
 
   
   <h2>Re-zip and recalculate number of pages</h2>
+  <p ng-show="responseMessages.reZipComic.visible" ng-class="{'mod-panel-error': responseMessages.reZipComic.error, 'mod-panel-success': !responseMessages.reZipComic.error}">{{responseMessages.reZipComic.message}}</p>
+
   <select ng-model="reZipComic" ng-options="comic.name for comic in allComicsList"></select>
   <button ng-click="sendReZipComic(reZipComic)" class="button-neutral">Send</button>
 
