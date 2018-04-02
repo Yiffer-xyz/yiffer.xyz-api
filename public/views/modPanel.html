@@ -179,7 +179,7 @@
   <p ng-show="responseMessages.addArtist.visible" ng-class="{'mod-panel-error': responseMessages.addArtist.error, 'mod-panel-success': !responseMessages.addArtist.error}">{{responseMessages.addArtist.message}}</p>
 
   <div class="mod-panel-flexbox-small-vertical">
-    Artist name <input type="text" ng-model=newArtistName/>
+    Artist name <input type="text" ng-model="newArtistName"/>
     <br/>
     <button ng-show="newArtistName" ng-click="sendAddArtist(newArtistName)">Send</button>
   </div>

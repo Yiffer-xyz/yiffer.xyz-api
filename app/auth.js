@@ -1,4 +1,5 @@
 var User = require('./mongoose_models/user-model')
+let authorizedUsers = require('../config/autorized-users.json')
 var donatorUsers = require('../config/donator-users.json')
 
 module.exports = function (app, passport) {
@@ -15,6 +16,10 @@ module.exports = function (app, passport) {
         }
 
         retur.yourRating = userDoc.comicVotes[comicID] || 0
+
+        if (authorizedUsers.mods.indexOf(req.session.user.username) >= 0) {retur.mod = true}
+        if (authorizedUsers.admins.indexOf(req.session.user.username) >= 0) {retur.admin = true}
+
         res.json(retur)
       })
     }

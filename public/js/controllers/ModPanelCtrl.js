@@ -418,13 +418,23 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   }
 
 
+	function refreshSession () {
+		$http.get('/userSession').success((res) => {
+			if (res.mod) { $scope.modOrAdmin = 'mod' }
+			else if (res.admin) { $scope.modOrAdmin = 'admin' }
+		})
+	}
+
+
 	function init () {
 		refreshSession ()
+		getKeywordList()
+		getArtistList()
+		getComicList()
+		getPendingKeywordSuggestions()
+		getSuggestedComics()
 	}
 
 
-	function refreshSession () {
-		// todo this
-	}
-
+	init()
 }])
