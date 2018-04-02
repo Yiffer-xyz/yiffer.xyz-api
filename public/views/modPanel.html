@@ -158,7 +158,21 @@
 			</ul>
 			<p ng-show="newComicUploadProgress != undefined">Upload progress: {{newComicUploadProgress}}%</p>
 		</div>
-	</div>
+  </div>
+
+  Previously added and rejected comics (<p ng-click="showComicApprovalHistory = true">show</p>)
+  <table ng-show="showComicApprovalHistory">
+    <tr>
+      <th>Comic name</th>
+      <th>Approved</th>
+      <th>Comment</th>
+    </tr>
+    <tr ng-repeat="comic in processedComics">
+      <td><a ng-href="/pendingComics/{{comic.Name}}" target="_blank">{{comic.Name}}</a></td>
+      <td>{{comic.Approved ? 'Yes' : 'No'}}</td>
+      <td>{{comic.Comment || ''}}</td>
+    </tr>
+  </table>
 
 
   <h2>Adding artist</h2>
@@ -219,20 +233,9 @@
     </tr>
   </table>
 
-  <br/>
-  Previously added and rejected comics (<p ng-click="showComicApprovalHistory = true">show</p>)
-  <table ng-show="showComicApprovalHistory">
-    <tr>
-      <th>Comic name</th>
-      <th>Approved</th>
-      <th>Comment</th>
-    </tr>
-    <tr ng-repeat="comic in processedComics">
-      <td><a ng-href="/pendingComics/{{comic.Name}}" target="_blank">{{comic.Name}}</a></td>
-      <td>{{comic.Approved ? 'Yes' : 'No'}}</td>
-      <td>{{comic.Comment || ''}}</td>
-    </tr>
-  </table>
-
+  
+  <h2>Re-zip and recalculate number of pages</h2>
+  <select ng-model="reZipComic" ng-options="comic.name for comic in allComicsList"></select>
+  <button ng-click="sendReZipComic(reZipComic)" class="button-neutral">Send</button>
 
 </div>

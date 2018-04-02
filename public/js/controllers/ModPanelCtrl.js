@@ -29,7 +29,8 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
     addComic:       { visible: false, message: '', error: false },
     addArtist:      { visible: false, message: '', error: false },
     addArtistLinks: { visible: false, message: '', error: false },
-		approveComic:   { visible: false, message: '', error: false },
+    approveComic:   { visible: false, message: '', error: false },
+		reZipComic:     { visible: false, message: '', error: false },
 	}
 
 	$scope.respondToKeywordSuggestion = function (keyword, comicId, verdict, extension) {
@@ -267,6 +268,21 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
       getSuggestedComics()
     })
   }
+
+
+  $scope.sendReZipComic = function (comic) {
+    $http.get('/api/modPanel/zip/' + comic.name)
+    .success((res) => {
+      $scope.responseMessages.reZipComic = { 
+        visible: true, 
+        message: (res.message || res.error), 
+        error: (res.error ? false : true)
+      } 
+    })
+  }
+
+
+
 
 
 	function getKeywordList () {
