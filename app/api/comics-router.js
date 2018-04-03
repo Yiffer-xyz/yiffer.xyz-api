@@ -9,8 +9,8 @@ module.exports = function (app, mysqlPool) {
 
   app.get ('/api/comics', getComicList)
   app.get ('/api/comics/:name', getComicByName)
-  app.post('/api/comics', multipartyMiddelware, createComic)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
+  app.post('/api/comics', multipartyMiddelware, createComic)
   app.put ('/api/comics/:name', updateComicDetailsByName)
 
 
@@ -115,7 +115,7 @@ module.exports = function (app, mysqlPool) {
         mysqlPool.getConnection(function (err, connection) {
           connection.query(query, [comicName, artistId, comicCat, comicTag, numberOfPages, finished], function (err, results, fields) {
             if (err) { return returnError('Query failed: ' + err.toString(), res, connection, err) }
-            res.json({status: `Success! (${comicName})`})
+            res.json({message: `Success! (${comicName})`})
             connection.release()
             zipComic(comicName, true)
           })
@@ -153,7 +153,7 @@ module.exports = function (app, mysqlPool) {
           mysqlPool.getConnection((err, connection) => {
             connection.query(query, [newNumberOfImages, comicName], (err, rows) => {
               if (err) { return returnError('Error updating number of pages in database', res, connection, err) }
-              res.json( {status: `Success! (${req.body.comicName})`} )
+              res.json( {message: `Success! (${req.body.comicName})`} )
               connection.release()
             })
           })

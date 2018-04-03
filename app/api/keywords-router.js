@@ -25,8 +25,9 @@ module.exports = function (app, mysqlPool) {
 	function deleteKeywordsFromComic (req, res, next) {
 		if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
 
-		let comicId = req.body.comicId
-		let keywordDeleteList = req.body.keywordsToDelete
+		let comicId = req.query.comicId
+		let keywordDeleteList = req.query.keywordsToDelete
+    if (typeof(keywordDeleteList) == 'string') { keywordDeleteList = [req.query.keywordsToDelete] }
 
 		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, Keyword) IN ('+ '(?, ?), '.repeat(keywordDeleteList.length)
 		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
@@ -52,7 +53,7 @@ module.exports = function (app, mysqlPool) {
     let keywordAddList = req.body.keywordAddList
 
     let insertQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES ' + '(?, ?), '.repeat(keywordAddList.length)
-    insertQuery = insertQuery.substring(0, insertQuery.length-2) + ')'
+    insertQuery = insertQuery.substring(0, insertQuery.length-2)
     let queryParams = []
     for (var i=0; i<keywordAddList.length; i++) {
       queryParams.push(comicId, keywordAddList[i])

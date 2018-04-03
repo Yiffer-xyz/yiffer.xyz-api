@@ -83,7 +83,7 @@ module.exports = function (app, mysqlPool) {
 
 
   function getSuggestedComics (req, res, next) {
-    let query = 'SELECT Processed, Approved, SuggestedComic.Id AS Id SuggestedComic.Name AS Name, ModName, SuggestedComic.Artist AS ArtistId, Artist.Name AS ArtistName Cat, Tag, NumberOfPages, Finished, Timestamp, Artist.Name FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id)'
+    let query = 'SELECT Processed, Approved, SuggestedComic.Id AS Id, SuggestedComic.Name AS Name, ModName, SuggestedComic.Artist AS ArtistId, Artist.Name AS ArtistName, Cat, Tag, NumberOfPages, Finished, Timestamp, Artist.Name FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id)'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }

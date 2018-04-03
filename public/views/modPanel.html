@@ -39,8 +39,8 @@
 
 	
 	<h2>Add pages</h2>
-	<p>Image file may have any name and must be .png or .jpg</p>
 	<p ng-show="responseMessages.newComicPage.visible" ng-class="{'mod-panel-error': responseMessages.newComicPage.error, 'mod-panel-success': !responseMessages.newComicPage.error}">{{responseMessages.newComicPage.message}}</p>
+	<p>Image file may have any name and must be .png or .jpg</p>
 
 	<div class="mod-panel-flexbox">
 		<div class="mod-panel-flexbox-small-vertical">
@@ -51,13 +51,14 @@
 			<p>Select file</p>
 
 			<form>
-				<div ngf-select ng-model="newComicPage.file" name="uploadNewPageFile" ngf-pattern="'image/*'" ngf-accept="'image/*'" ngf-max-size="100MB" class="button-neutral">Select file</div>
+				<button ngf-select ng-model="newComicPage.file" name="uploadNewPageFile" ngf-pattern="'image/*'" ngf-accept="'image/*'" ngf-max-size="100MB" class="button-neutral">Select file</button>
 			</form>
 		</div>
 
-		<button ng-show="newComicPage.file && newComicPage.comicName" ng-click="uploadNewPage(newComicPage.comicName, newComicPage.file)" class="button-neutral">
+		<button ng-show="newComicPage.file && newComicPage.comic" ng-click="uploadNewPage(newComicPage.comic, newComicPage.file)" class="button-green">
 			Submit {{newComicPage.file.name}}
 		</button>
+		<p ng-show="newComicPage.uploadProgress">Processing.. {{newComicPage.uploadProgress}}%</p>
 	</div>
 
 
@@ -68,11 +69,11 @@
 		<div class="mod-panel-flexbox-small-vertical">
 			<p>Select comic</p>
 			<select ng-model="keywordAdding.comic" ng-options="comic.name for comic in allComicsList"></select>
-			<a ng-href="/{{keywordAdding.comic.Name}}" target="_blank" ng-show="keywordAdding.comic">Go to comic</a>
+			<a ng-href="/{{keywordAdding.comic.name}}" target="_blank" ng-show="keywordAdding.comic">Go to comic</a>
 		</div>
 
 		<div class="mod-panel-flexbox-small-vertical">
-			<select ng-model="currentlySelectedKeyword" ng-keypress="keywordKeyPressed($event)" ng-options="keyword.KeywordName for keyword in allKeywordsList" size="12"></select>
+			<select ng-model="currentlySelectedKeyword" ng-keypress="keywordKeyPressed($event)" ng-options="keyword for keyword in allKeywordsList" size="12"></select>
 			<button ng-click="addSelectedKeyword(currentlySelectedKeyword)" class="button-neutral">&rarr;</button>
 		</div>
 
@@ -80,7 +81,7 @@
 			<p>Tags you're adding</p>
 
 			<ul>
-				<li ng-repeat="keyword in keywordAdding.keywordsToAdd" ng-click="removeObjectFromArray(keywordAdding.keywordsToAdd, keyword)" class="cursor-pointer">{{keyword.KeywordName}}</li>
+				<li ng-repeat="keyword in keywordAdding.keywordsToAdd" ng-click="removeKeywordFromAddList(keyword)" class="cursor-pointer">{{keyword}}</li>
 			</ul>
 
 			<p ng-show="keywordAdding.keywordsToAdd.length > 0">Click kw to remove</p>
@@ -91,7 +92,7 @@
 			<p>Tags already added</p>
 
 			<ul>
-				<li ng-repeat="keyword in keywordAdding.existingKeywords" ng-click="toggleKeywordDeletion(keyword)" class="cursor-pointer" ng-style="(objectArrayIndexOf(keywordAdding.keywordsToDelete, keyword) >= 0) ? {'text-decoration': 'line-through'} : {'text-decoration': 'none'}">{{keyword.KeywordName}}</li>
+				<li ng-repeat="keyword in keywordAdding.existingKeywords" ng-click="toggleKeywordDeletion(keyword)" class="cursor-pointer" ng-style="(keywordAdding.keywordsToDelete.indexOf(keyword) >= 0) ? {'text-decoration': 'line-through'} : {'text-decoration': 'none'}">{{keyword}}</li>
 			</ul>
 
 			<p ng-show="keywordAdding.existingKeywords.length > 0">Click kw to remove</p>
@@ -122,11 +123,11 @@
 		<div class="mod-panel-flexbox-small-vertical">
 			Select comic 
 			<select ng-model="correctComic.comic" ng-options="comic.name for comic in allComicsList"></select>
-			<a ng-href="/{{correctComic.comic.Name}}" target="_blank" ng-show="correctComic.comic">Go to comic</a>
+			<a ng-href="/{{correctComic.comic.name}}" target="_blank" ng-show="correctComic.comic">Go to comic</a>
 		</div>
 
 		<div class="mod-panel-flexbox-small-vertical">
-			Artist <select ng-model="correctComic.artistName" ng-options="artist.Name for artist in allArtistsList"></select>
+			Artist <select ng-model="correctComic.artist" ng-options="artist.Name for artist in allArtistsList"></select>
 			Tag <select ng-model="correctComic.tag" ng-options="x for x in ['Furry', 'MLP', 'Pokemon', 'Warcraft', 'Other']"></select>
 			Cat <select ng-model="correctComic.cat" ng-options="x for x in ['M', 'F', 'MM', 'MF', 'FF', 'MF+', 'I']"></select>
 			Finished <select ng-model="correctComic.finished" ng-options="x for x in [1, 0]"></select>

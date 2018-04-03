@@ -98,7 +98,7 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       connection.query(addLinksQuery, addLinksParams, (err, results) => {
         if (err) { return returnError('Database query error: '+err.toString(), res, connection, err) }
-        res.json({status: 'Successfully added links'})
+        res.json({message: 'Successfully added links'})
         connection.release()
       })
     })

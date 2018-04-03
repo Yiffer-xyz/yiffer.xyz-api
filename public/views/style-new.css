@@ -1,0 +1,27 @@
+.button-neutral {
+	background-color: #ddd;
+	border: 1px solid #555;
+	color: #555;
+}
+
+.button-green {
+	background-color: #5f5;
+	border: 1px solid #555;
+	color: #555;
+}
+
+.button-red {
+	background-color: #f55;
+	border: 1px solid #555;
+	color: #555;
+}
+
+.button-neutral:hover {
+	cursor: pointer;
+}
+.button-green:hover {
+	cursor: pointer;
+}
+.button-red:hover {
+	cursor: pointer;
+}
