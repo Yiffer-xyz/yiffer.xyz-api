@@ -1,21 +1,20 @@
+/*BUTTONS******************************************/
+.button-neutral, .button-green, .button-red {
+  border-radius: 5px;
+  padding: 2px;
+}
 .button-neutral {
-	background-color: #ddd;
-	border: 1px solid #555;
-	color: #555;
+  background-color: #ccc;
+  color: #555;
 }
-
 .button-green {
-	background-color: #5f5;
-	border: 1px solid #555;
-	color: #555;
+  background-color: #5a5;
+  color: #555;
 }
-
 .button-red {
-	background-color: #f55;
-	border: 1px solid #555;
-	color: #555;
+  background-color: #c55;
+  color: #555;
 }
-
 .button-neutral:hover {
 	cursor: pointer;
 }
@@ -24,4 +23,27 @@
 }
 .button-red:hover {
 	cursor: pointer;
+}
+
+
+/*MOD PANEL******************************************/
+.mod-panel-flexbox {
+  display: flex;
+  flex-flow: row;
+}
+.mod-panel-flexbox-small-vertical {
+  display: flex;
+  flex-flow: column;
+}
+.mod-panel-error {
+  background-color: #9d9;
+  color: black;
+  text-align: center;
+  font-style: italic;
+}
+.mod-panel-success {
+  background-color: #d88;
+  color: black;
+  text-align: center;
+  font-style: italic;
 }

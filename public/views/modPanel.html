@@ -150,11 +150,11 @@
 		</div>
 
 		<div class="mod-panel-flexbox-small-vertical">
-			<button ngf-select multiple accept="image/*">Select files</button>
-			<button ng-click="uploadNewComicImages($files)">Add comic!</button>
+			<button ngf-select="selectUploadFiles($files)" multiple accept="image/*">Select files</button>
+			<button ng-click="uploadNewComicImages()">Add comic!</button>
 			<br/>
 			Files:
-			<p ng-show="files"><span ng-repeat="f in files">{{f.name}} </span></p>
+			<p ng-show="newComicFiles"><span ng-repeat="f in newComicFiles">{{f.name}} </span></p>
 			<p ng-show="newComicUploadProgress != undefined">Upload progress: {{newComicUploadProgress}}%</p>
 		</div>
   </div>
