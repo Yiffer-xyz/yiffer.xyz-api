@@ -150,18 +150,16 @@
 		</div>
 
 		<div class="mod-panel-flexbox-small-vertical">
-			<button ngf-select="uploadNewComicImages($files)" multiple accept="image/*">Select files</button>
+			<button ngf-select multiple accept="image/*">Select files</button>
+			<button ng-click="uploadNewComicImages($files)">Add comic!</button>
 			<br/>
 			Files:
-			<br/>
-			<ul>
-				<li ng-repeat="f in files">{{f.name}}</li>
-			</ul>
+			<p ng-show="files"><span ng-repeat="f in files">{{f.name}} </span></p>
 			<p ng-show="newComicUploadProgress != undefined">Upload progress: {{newComicUploadProgress}}%</p>
 		</div>
   </div>
 
-  Previously added and rejected comics (<p ng-click="showComicApprovalHistory = true">show</p>)
+  Previously added and rejected comics (<span class="hover-cursor-pointer" ng-click="showComicApprovalHistory = !showComicApprovalHistory">show/hide</span>)
   <table ng-show="showComicApprovalHistory">
     <tr>
       <th>Comic name</th>

@@ -52,6 +52,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 				message: (res.message || res.error), 
 				error: (res.error ? false : true)
 			}
+			getPendingKeywordSuggestions()
 		})
 	}
 
@@ -177,13 +178,13 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 	$scope.sendCorrectComic = function () {
 		$http({
-			url: '/api/comics/' + correctComic.comic.name,
+			url: '/api/comics/' + $scope.correctComic.comic.name,
 			method: 'PUT',
 			data: {
-				cat: correctComic.cat,
-				tag: correctComic.tag,
-				finished: correctComic.finished,
-				artistName: correctComic.artist.Name
+				cat: $scope.correctComic.cat,
+				tag: $scope.correctComic.tag,
+				finished: $scope.correctComic.finished,
+				artistName: $scope.correctComic.artist.Name
 			}
 		})
 		.success((res) => {
@@ -193,6 +194,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 				error: (res.error ? false : true)
 			}
 			$scope.correctComic = {comic: {tag: undefined, cat: undefined, finished: undefined, artistName: undefined}, tag: undefined, cat: undefined, finished: undefined, artistName: undefined}
+			getComicList()
 		})
 	}
 
@@ -346,7 +348,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
   function getSuggestedComics () {
     $http.get('/api/modPanel/suggestedComics').success((res) => {
-    	// todo uncomment, commented now because there will be no comics in res ??? maybe?? wtf
+	    	// todo uncomment, commented now because there will be no comics in res ??? maybe?? wtf
       // for (var suggestedComic of res) {
       //   if (suggestedComic.Processed) { $scope.processedComics.push(suggestedComic) }
       //   else { $scope.pendingComics.push(suggestedComic) }

@@ -103,11 +103,11 @@ module.exports = function (app, mysqlPool) {
       connection.query(updateQuery, [verdict, modName, comicId, keywordName], (err, rows) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
 
-        connection.query(tagLogQuery, [keyword, ''+comicId, modName], (err, rows) => {
+        connection.query(tagLogQuery, [keywordName, ''+comicId, modName], (err, rows) => {
           if (err) { return returnError('Database error when updating TagLog: ' + err.toString(), res, connection, err) }
 
-          if (approval) {
-            connection.query(insertQuery, [comicId, keyword], (err, rows) => {
+          if (verdict) {
+            connection.query(insertQuery, [comicId, keywordName], (err, rows) => {
               if (err) { return returnError('Database error when adding new keyword: ' + err.toString(), res, connection, err) }
               res.json({message: 'Success!'})
               connection.release()

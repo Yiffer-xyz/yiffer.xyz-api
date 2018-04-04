@@ -166,19 +166,19 @@ module.exports = function (app, mysqlPool) {
   function updateComicDetailsByName (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
 
-    let comicId = req.body.comicId
+    let comicName = req.params.name
     let updatedCat = req.body.cat
     let updatedTag = req.body.tag
     let updatedFinished = req.body.finished
     let updatedArtistName = req.body.artistName
 
-    if (!comicId || !updatedCat || !updatedTag || !updatedFinished || !updatedArtistName) {
+    if (!comicName || !updatedCat || !updatedTag || updatedFinished==undefined || !updatedArtistName) {
       return returnError('Missing fields', res, null, null)
     }
 
-    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Id FROM Artist WHERE Name = ?)'
+    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Id FROM Artist WHERE Name = ?) WHERE Name = ?'
     mysqlPool.getConnection((err, connection) => {
-      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtistName], (err, results) => {
+      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtistName, comicName], (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
         res.json({ message: 'Successfully updated comic' })
         connection.release()
