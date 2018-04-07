@@ -108,7 +108,7 @@ module.exports = function (app, mysqlPool) {
 
       let numberOfPages = fileList.length - (pageSIncluded ? 1 : 0)
 
-      pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicDetails.name], scriptPath: '/home/rag/testmnet/app'}, (err, results) => {
+      pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicDetails.name], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
         if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
 
         let insertQuery = 'INSERT INTO SuggestedComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'

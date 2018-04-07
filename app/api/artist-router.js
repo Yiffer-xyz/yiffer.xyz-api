@@ -155,7 +155,7 @@ function extractLinkTypesFromLinkUrls (linkList) {
 }
 
 function convertImageToJpg (pathToImage) {
-  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/testmnet/app'}, (err, results) => {
+  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
     if (err) { console.log(err) }
   })
 }
