@@ -65,6 +65,9 @@
 		</div>
 		<p ng-show="newComicPage.uploadProgress">Upload progress: {{newComicPage.uploadProgress}}%</p>
 	</div>
+	<br/>
+	<p class="text-align-center">All unfinished comics (<span ng-click="showWipComics = !showWipComics" class="link-color">show/hide</span>)</p>
+	<p ng-show="showWipComics" class="text-align-center"><a ng-repeat="wipComic in wipComicsList" ng-href="/{{wipComic.name}}" target="_blank">{{wipComic.name}}&nbsp;&nbsp;&nbsp;</a></p>
 
 
 	<hr/>

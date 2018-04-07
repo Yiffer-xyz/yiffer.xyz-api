@@ -12,9 +12,11 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   $scope.modFavImage = {artist: undefined, uploadProgress: undefined}
   $scope.pendingComics = []
   $scope.processedComics = []
+  $scope.showWipComics = false
 
 	$scope.suggestedKeywords = []
 	$scope.allComicsList = []
+	$scope.wipComicsList = []
 	$scope.allKeywordsList = []
 	$scope.allArtistsList = []
 
@@ -299,7 +301,13 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
 	function getComicList () {
-		$http.get('/api/comics').success((res) => { $scope.allComicsList = res })
+		$http.get('/api/comics')
+		.success((res) => { 
+			$scope.allComicsList = res 
+			for (var comic of res) {
+				if (!comic.finished) { $scope.wipComicsList.push(comic) }
+			}
+		})
 	}
 
 
