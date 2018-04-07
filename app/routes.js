@@ -11,6 +11,8 @@ module.exports = function (app, passport) {
 
   require('./api/comics-router')(app, mysqlPool)
   require('./api/artist-router')(app, mysqlPool)
+  require('./api/modpanel-router')(app, mysqlPool)
+  require('./api/keywords-router')(app, mysqlPool)
 
   app.use('/api', api)
   app.get('*', function (req, res) {

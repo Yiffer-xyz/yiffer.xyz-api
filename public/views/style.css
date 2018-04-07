@@ -83,6 +83,9 @@ h1, h2, .introP { text-align: center; }
 .full-page-padding {
     padding: 0 150px;
 }
+.full-page-less-padding {
+    padding: 0 60px;
+}
 
 .brightness-button {
     font-size: 16px;
@@ -228,7 +231,6 @@ thumbContainer .dark-colors {
     width: 95%;
     border-radius: 5px;
     border-style: none;
-    /*border: 1px solid #ccc;*/
     background-color: #343434;
     font-family: 'Open Sans', sans-serif;
     font-weight: 400;
@@ -650,6 +652,7 @@ thumbContainer .dark-colors {
     .brightness-button {font-size: 12px;}
 
     .full-page-padding { padding: 0 20px; }
+    .full-page-less-padding { padding: 0 10px; }
 
     #buttonsDiv table {
         width: 100%;

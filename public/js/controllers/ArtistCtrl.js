@@ -21,26 +21,8 @@ angular.module('ArtistCtrl', []).controller('ArtistController', ['$scope', '$rou
     $anchorScroll()
     initColors()
     initContent()
-    // initFavImages()
     refreshSessionAndSendLog()
   }
-
-  // function initContent () { 
-  //   $http({
-  //     url: '/api/artist',
-  //     method: 'GET',
-  //     params: {artist: $scope.artistName}
-  //   }).success(function (res) {
-  //     if (res == '404') {
-  //       $scope.f404 = true
-  //       return
-  //     } 
-  //     $scope.comicList = res.comicList
-  //     $scope.linkList  = res.linkList
-  //     if ($scope.linkList.length == 0)
-  //       $scope.showNoLinksMessage = true
-  //   })
-  // }
 
 
   function initContent () {  // todo add
@@ -57,26 +39,6 @@ angular.module('ArtistCtrl', []).controller('ArtistController', ['$scope', '$rou
       $scope.modFavoriteImages = res.modFavoriteList
     })
   }
-
-
-  // function initFavImages () {
-  //   $http.get('/api/getModNames')
-  //     .success(function (res) {
-  //       var modNames = res
-
-  //       for (var mod of modNames) {
-  //         $http({
-  //           url: '/api/getModFavImageByArtistName',
-  //           method: 'GET',
-  //           params: {artistName: $scope.artistName, mod: mod}
-  //         }).success(function (res) {
-  //           if (res != '0') {
-  //             $scope.modFavoriteImages.push(res)
-  //           }
-  //         })
-  //       }
-  //     })
-  // }
 
 
   function sendLog () {
