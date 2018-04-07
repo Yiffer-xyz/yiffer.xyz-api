@@ -1,7 +1,6 @@
 angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPanelController', ['$scope', '$http', '$cookies', 'Upload', function ($scope, $http, $cookies, Upload) {
 
 	$scope.brightColors = true
-	$scope.userRole = 'mod'
 
 	$scope.newComicPage = {file: undefined, comic: undefined, uploadProgress: undefined}
 	$scope.keywordAdding = {comic: {Name: undefined}, keywordsToAdd: [], existingKeywords: [], keywordsToDelete: []}
@@ -10,7 +9,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   $scope.newComicFiles = []
 	$scope.newComicUploadProgress = undefined
   $scope.addArtistLinks = {artist: undefined, links: ['', '', '', '', '', '']}
-  $scope.modFavImage = {artist: undefined}
+  $scope.modFavImage = {artist: undefined, uploadProgress: undefined}
   $scope.pendingComics = []
   $scope.processedComics = []
 
@@ -175,7 +174,6 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
   $scope.selectUploadFiles = function (files) {
-    console.log(files)
     $scope.newComicFiles = files
   }
 
@@ -190,15 +188,16 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 		})
 		.then(
 			function (res) {
-        displayResponseMessage('newComic', res.data)
+        displayResponseMessage('addComic', res.data)
 				if (!res.data.error) {
 					$scope.newComic = {name: undefined, artist: undefined, cat: undefined, tag: undefined, finished: undefined}
 					$scope.newComicFiles = undefined
+					getSuggestedComics()
 				}
 			},
 			function (res) {},
 			function (evt) { 
-				$scope.newComic.uploadProgress = Math.min(100, parseInt(100.0 * evt.loaded / evt.total))
+				$scope.newComicUploadProgress = Math.min(100, parseInt(100.0 * evt.loaded / evt.total))
 			}
 		)
 	}
@@ -208,11 +207,12 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
     $http({
       url: '/api/artists',
       method: 'POST',
-      data: { artistName: newArtistName }
+      data: { artistName: artistName }
     })
     .success((res) => {
       displayResponseMessage('addArtist', res)
-      $scope.getArtistList()
+      getArtistList()
+      getComicList()
       $scope.newArtistName = ''
     })
   }
@@ -221,9 +221,9 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   $scope.sendAddArtistLinks = function () {
     let artistLinks = extractNonEmptyCellsFromArray($scope.addArtistLinks.links)
     $http({
-      url: '/api/modPanel/artistLink',
+      url: '/api/artistLinks',
       method: 'POST',
-      data: { artistId: $scope.addArtistLinks.artist.id, artistLinks: newArtistLinks }
+      data: { artistId: $scope.addArtistLinks.artist.Id, artistLinks: artistLinks }
     })
     .success((res) => {
       displayResponseMessage('addArtistLinks', res)
@@ -236,13 +236,21 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
   	Upload.upload({
   		url: '/api/artistFavImage',
   		data: {
-  			file: modFavImage.file,
-  			artistName: modFavImage.artist.Name
+  			file: $scope.modFavImage.file,
+  			artistName: $scope.modFavImage.artist.Name
   		}
   	})
-    .success((res) => {
-      displayResponseMessage('addModFavImage', res)
-  	})
+		.then(
+			function (res) {
+		    displayResponseMessage('addModFavImage', res.data)
+				$scope.modFavImage.uploadProgress = undefined
+				$scope.modFavImage.file = undefined
+			},
+			function (res) {},
+			function (evt) { 
+				$scope.modFavImage.uploadProgress = Math.min(100, parseInt(100.0 * evt.loaded / evt.total))
+			}
+		)
   }
 
 
@@ -267,7 +275,6 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
     $http.get('/api/modPanel/zip/' + comic.name)
     .success((res) => {
       displayResponseMessage('reZipComic', res)
-      } 
     })
   }
 
@@ -302,6 +309,8 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
   function getSuggestedComics () {
     $http.get('/api/modPanel/suggestedComics').success((res) => {
+      $scope.processedComics = []
+      $scope.pendingComics = []
       for (var suggestedComic of res) {
         if (suggestedComic.Processed) { $scope.processedComics.push(suggestedComic) }
         else { $scope.pendingComics.push(suggestedComic) }
@@ -329,10 +338,12 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
   $scope.$watch('correctComic.comic', () => {
-  	$scope.correctComic.tag = $scope.correctComic.comic.tag
-  	$scope.correctComic.cat = $scope.correctComic.comic.cat
-  	$scope.correctComic.finished = $scope.correctComic.comic.finished
-  	$scope.correctComic.artist = findArtistObjectInArtistListByName($scope.correctComic.comic.artist)
+  	if ($scope.correctComic.comic) {
+	  	$scope.correctComic.tag = $scope.correctComic.comic.tag
+	  	$scope.correctComic.cat = $scope.correctComic.comic.cat
+	  	$scope.correctComic.finished = $scope.correctComic.comic.finished
+	  	$scope.correctComic.artist = findArtistObjectInArtistListByName($scope.correctComic.comic.artist)
+  	}
 	})
 
 
@@ -372,12 +383,32 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 	function refreshSession () {
 		$http.get('/userSession').success((res) => {
 			if (res.mod) { $scope.modOrAdmin = 'mod' }
-			else if (res.admin) { $scope.modOrAdmin = 'admin' }
+			if (res.admin) { $scope.modOrAdmin = 'admin' }
 		})
 	}
 
 
+  function initColorTheme () {
+    var colors = $cookies.get('colorTheme')
+    if (colors && !JSON.parse(colors))
+      $scope.setBrightColors(false)
+    else 
+      $scope.setBrightColors(true)
+  }
+
+
+  $scope.setBrightColors = function (bool) {
+    document.getElementById('theBody').classList.remove('bright-colors')
+    document.getElementById('theBody').classList.remove('dark-colors')
+    document.getElementById('theBody').classList.add(bool ? 'bright-colors' : 'dark-colors')
+    $cookies.put('colorTheme', JSON.stringify(bool))
+    $scope.brightColors = bool
+  }
+
+
+
 	function init () {
+		initColorTheme()
 		refreshSession ()
 		getKeywordList()
 		getArtistList()

@@ -1,10 +1,16 @@
 <h1>Preview of {{comicName}}</h1>
 
 <h2>Thumbnail</h2>
-<img ng-show="comicPages.indexOf('s.jpg') >= 0" ng-src="/pending-comics/{{comicName}}/s.jpg"/>
-<p ng-show="comicPages.indexOf('s.jpg') < 0" style="font-size: 50px; color: 'red';"><b>Comic does not have thumbnail!</b></p>
 
+<div style="text-align: center;">
+
+<img ng-src="/comics/{{comicName}}/s.jpg" alt="Comic does not have thumbnail!" style="color: red; font-size: 20px;" />
+
+<br/>
 <h2>Comic</h2>
-<img ng-repeat="page in pageList" ng-src="/pending-comics/{{comicName}}/{{pageList}}"/>
+<img ng-repeat="page in pageList" ng-src="/comics/{{comicName}}/{{page}}"/>
 
+<br/>
 If there are no images here, the comic has been deleted as to not waste space.
+
+</div>

@@ -1,4 +1,5 @@
 let fs = require('fs')
+let archiver = require('archiver')
 let authorizedUsers = require('../../config/autorized-users.json')
 
 module.exports = function (app, mysqlPool) {
@@ -83,7 +84,7 @@ module.exports = function (app, mysqlPool) {
 
 
   function getSuggestedComics (req, res, next) {
-    let query = 'SELECT Processed, Approved, SuggestedComic.Id AS Id, SuggestedComic.Name AS Name, ModName, SuggestedComic.Artist AS ArtistId, Artist.Name AS ArtistName, Cat, Tag, NumberOfPages, Finished, Timestamp, Artist.Name FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id)'
+    let query = 'SELECT Processed, Comment, Approved, Artist.Name AS ArtistName, SuggestedComic.Id AS Id, SuggestedComic.Name AS Name, ModName, SuggestedComic.Artist AS ArtistId, Cat, Tag, NumberOfPages, Finished, Timestamp FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id)'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
@@ -129,11 +130,13 @@ module.exports = function (app, mysqlPool) {
 
   function getPendingComicPagesByName (req, res, next) {
     let comicName = req.params.name
-    let files = fs.readdirSync(__dirname + '/../../public/pending-comics/' + comicName)
-    let numberOfPages = 0
-    if (files.indexOf('s.jpg') >= 0) { numberOfPages = files.length-1 }
-    else { numberOfPages = files.length }
-    res.json({ numberOfPages: numberOfPages })
+    fs.readdir(__dirname + '/../../public/comics/' + comicName, (err, files) => {
+      if (err) { return returnError('Directory does not exist', res, null, null) }
+      let numberOfPages = 0
+      if (files.indexOf('s.jpg') >= 0) { numberOfPages = files.length-1 }
+      else { numberOfPages = files.length }
+      res.json({ numberOfPages: numberOfPages })
+    })
   }
 
 
@@ -148,7 +151,7 @@ module.exports = function (app, mysqlPool) {
 
       let updateComicQuery = 'UPDATE Comic SET NumberOfPages = ? WHERE Name = ?'
       mysqlPool.getConnection((err, connection) => {
-        connection.query(updateComicQuery, [files.length-1, comicName], (err, connection) => {
+        connection.query(updateComicQuery, [files.length-1, comicName], (err, results) => {
           if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
           res.json({message: 'Successfully re-zipped comic ' + comicName})          
           connection.release()

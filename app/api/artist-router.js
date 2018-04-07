@@ -8,7 +8,7 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/artists', getAllArtists)
   app.get ('/api/artists/:name', getArtistByName)
   app.post('/api/artists/', createArtist)
-  app.post('/api/artistLink', addArtistLinks)
+  app.post('/api/artistLinks', addArtistLinks)
   app.post('/api/artistFavImage', multipartyMiddelware, addArtistModFavoriteImage)
 
 
@@ -82,7 +82,8 @@ module.exports = function (app, mysqlPool) {
   function addArtistLinks (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
     let artistId = req.body.artistId
-    let artistLinks = req.body.artistLinkList
+    let artistLinks = req.body.artistLinks
+    if (!artistId && artistLinks.length == 0) { return returnError('Missing field(s)', res, null, null) }
     let typedLinkList = extractLinkTypesFromLinkUrls(artistLinks)
 
     let addLinksQuery = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
@@ -107,20 +108,26 @@ module.exports = function (app, mysqlPool) {
 
   function addArtistModFavoriteImage (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
+    if (!req.files || !req.files.file || !req.body.artistName) { return returnError('Missing field(s)', res, null, err) }
 
     let imageFile = req.files.file.path
     let artistName = req.body.artistName
     let modName = req.session.user.username
     let fileEnding = imageFile.substring(imageFile.length-4)
-    if ((fileEnding != '.jpg') && (fileEnding != '.png')) {
+    if ((fileEnding != '.jpg') && (fileEnding != '.png')) { 
       return returnError('File type must be png or jpg', res, null, null)
     }
 
     fs.readFile(imageFile, (err, fileData) => {
       if (err) { return returnError('Error reading the uploaded file: ' + err.toString(), res, null, err) }
-      fs.writeFile(__dirname + `/../../public/mod-favorites/${modName}/${artistName}${fileEnding}`, (err) => {
+
+      fs.writeFile(__dirname + `/../../public/mod-favorites/${modName}/${artistName}${fileEnding}`, fileData, (err) => {
         if (err) { return returnError('Error writing the uploaded file: ' + err.toString(), res, null, err) }
-        convertImageToJpg(`/public/mod-favorites/${modName}/${artistName}${fileEnding}`)
+
+        // if (fileEnding == '.png') { convertImageToJpg(`/public/mod-favorites/${modName}/${artistName}${fileEnding}`) }
+        if (fileEnding == '.png') { 
+          convertImageToJpg('/public/mod-favorites/' + modName + '/' + artistName + fileEnding)
+        }
         res.json({message: 'Successfully added new fav image!'})
       })
     })
@@ -147,9 +154,10 @@ function extractLinkTypesFromLinkUrls (linkList) {
   return typedLinkList
 }
 
-
 function convertImageToJpg (pathToImage) {
-  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/mnet/app'})
+  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/testmnet/app'}, (err, results) => {
+    if (err) { console.log(err) }
+  })
 }
 
 

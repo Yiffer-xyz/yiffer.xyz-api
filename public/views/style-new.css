@@ -1,19 +1,28 @@
+ul {
+  list-style-type: none;
+}
+
+
 /*BUTTONS******************************************/
 .button-neutral, .button-green, .button-red {
+  width: fit-content;  
+  border: none;
+  padding: 5px;
+  font-size: 14px;
+  padding: 6px 10px;
   border-radius: 5px;
-  padding: 2px;
 }
 .button-neutral {
-  background-color: #ccc;
-  color: #555;
+  background-color: #555;
+  color: white;
 }
 .button-green {
   background-color: #5a5;
-  color: #555;
+  color: white;
 }
 .button-red {
   background-color: #c55;
-  color: #555;
+  color: white;
 }
 .button-neutral:hover {
 	cursor: pointer;
@@ -30,10 +39,20 @@
 .mod-panel-flexbox {
   display: flex;
   flex-flow: row;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .mod-panel-flexbox-small-vertical {
   display: flex;
   flex-flow: column;
+  margin: 0px 10px;
+  flex-wrap: wrap;
+}
+.mod-panel-flexbox-small-horizontal {
+  display: flex;
+  flex-flow: row;
+  margin: 0px 10px;
+  flex-wrap: wrap;
 }
 .mod-panel-error {
   background-color: #9d9;
@@ -46,4 +65,34 @@
   color: black;
   text-align: center;
   font-style: italic;
+}
+.centered-flex {
+  display: flex;
+  justify-content: center;
+}
+.mod-panel-wrapper input {
+  width: 200px;
+}
+.mod-panel-wrapper select {
+  width: fit-content;
+}
+.mod-panel-flexbox-vertical {
+  display: flex;
+  flex-flow: column;
+}
+.text-align-center {
+  text-align: center;
+}
+.mod-panel-small-header {
+  font-weight: bold;
+}
+.mod-panel-error, .mod-panel-error {
+  margin-bottom: 10px;
+}
+.mod-panel-wrapper table td, .table-with-grid td {
+  border: 1px solid #ccc;
+  padding: 0px 5px;
+}
+.mod-panel-wrapper h2 {
+  margin-bottom: 10px;
 }

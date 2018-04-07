@@ -76,48 +76,50 @@ module.exports = function (app, mysqlPool) {
   function createComic (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
 
-    // TODO: Make sure files end up in the right location!!
-    let someFiles = req.files
     let newComicDetails = req.body.comicDetails
-    console.log(req.files)
-    let newComicName = 'TODO'
-    let numberOfPages = 'TODO'
+    let comicFolderPath = __dirname + '/../../public/comics/' + newComicDetails.name
+    let pageSIncluded = false
+    let fileList = []
 
+    if (!req.files.files) { return returnError('No files added!', res, null, null) }
+    if (Array.isArray(req.files.files)) {
+      fileList = req.files.files.sort( (file1, file2) => { return file1.name > file2.name } )
+    }
+    else {
+      fileList = extractFilesFromFileObject(req.files.files)
+    }
 
-    pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicName], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
-      if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
+    fs.mkdir(comicFolderPath, (err) => {
+      if (err) { return returnError('Error creating new comic folder: ' + err.toString(), res, null, err) }
+      for (var i=1; i<=fileList.length; i++) {
+        let file = fileList[i-1]
+        let fileContents = fs.readFileSync(file.path)
+        let pageName = getPageName(i, file.path)
+        if (!pageName) { return returnError('Some file is not .jpg or .png!', res, null, null) }
 
-      let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
-      let insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
-      let finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
+        if (file.name == 's.jpg') { 
+          pageSIncluded = true 
+          fs.writeFileSync(comicFolderPath + '/s.jpg', fileContents)
+        }
+        else { 
+          fs.writeFileSync(comicFolderPath + '/' + pageName, fileContents) 
+        }
+      }
 
-      mysqlPool.getConnection((err, connection) => {
-        connection.query(insertQuery, insertQueryParams, (err, results) => {
-          if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
-          res.json({message: finalSuccessMessage})
-          connection.release()
-        })
-      })
-    })
+      let numberOfPages = fileList.length - (pageSIncluded ? 1 : 0)
 
+      pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicDetails.name], scriptPath: '/home/rag/testmnet/app'}, (err, results) => {
+        if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
 
-    pythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: '/home/rag/mnet/app/'}, (err, results) => {
-      if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
-      var artistId    = req.body.artistId
-      var comicName   = req.body.comicName
-      var comicCat    = req.body.cat
-      var comicTag    = req.body.tag
-      var finished    = req.body.finished
-      fs.readdir(__dirname + '/../../public/comics/' + comicName, function (err, files) {
-        if (err) { return returnError('Error reading directory: ' + err.toString(), res, null, err) }
-        var numberOfPages = files.length - 1
-        var query = 'INSERT INTO Comic (Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, ?, ?, ?, ?)'
-        mysqlPool.getConnection(function (err, connection) {
-          connection.query(query, [comicName, artistId, comicCat, comicTag, numberOfPages, finished], function (err, results, fields) {
-            if (err) { return returnError('Query failed: ' + err.toString(), res, connection, err) }
-            res.json({message: `Success! (${comicName})`})
+        let insertQuery = 'INSERT INTO SuggestedComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
+        let insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
+        let finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
+
+        mysqlPool.getConnection((err, connection) => {
+          connection.query(insertQuery, insertQueryParams, (err, results) => {
+            if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+            res.json({message: finalSuccessMessage})
             connection.release()
-            zipComic(comicName, true)
           })
         })
       })
@@ -236,4 +238,22 @@ function logComicUpdate (req, mysqlPool) {
       connection.release()
     })
   })
+}
+
+
+function getPageName (pageNumber, filePathName) {
+  let pageNumberString = (pageNumber < 10) ? ('0' + pageNumber) : (pageNumber)
+  let pagePostfix = filePathName.substring(filePathName.length - 4)
+  if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
+  return pageNumberString + pagePostfix
+}
+
+
+function extractFilesFromFileObject (fileObject) {
+  let keys = Object.keys(fileObject)
+  let fileArray = []
+  for (var i=0; i<keys.length; i++) {
+    fileArray.push(fileObject['' + i])
+  }
+  return fileArray
 }
