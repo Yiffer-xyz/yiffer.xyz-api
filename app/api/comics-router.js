@@ -2,15 +2,16 @@ let fs = require('fs')
 let archiver = require('archiver')
 let pythonShell = require('python-shell')
 let authorizedUsers = require('../../config/autorized-users.json')
-var multiparty = require('connect-multiparty')
-var multipartyMiddelware = multiparty()
+let multiparty = require('connect-multiparty')
+let multipartyMiddelware = multiparty()
 
 module.exports = function (app, mysqlPool) {
 
   app.get ('/api/comics', getComicList)
   app.get ('/api/comics/:name', getComicByName)
-  app.post('/api/comics', createComic)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
+  app.post('/api/comics', multipartyMiddelware, createComic)
+  app.put ('/api/comics/:name', updateComicDetailsByName)
 
 
   function getComicList (req, res, next) {
@@ -52,14 +53,14 @@ module.exports = function (app, mysqlPool) {
           queryParams = [comicId]
         }
 
-        connection.query(comicMetadataQuery, queryParams, function (err, results2) {
+        connection.query(comicMetadataQuery, queryParams, function (err, results) {
           if (err) { return returnError('Database query error', res, connection, err) }
-          finalReturnValue = results2[0]
+          finalReturnValue = results[0]
 
-          connection.query(keywordsQuery, [comicId], function (err, results4) {
+          connection.query(keywordsQuery, [comicId], function (err, results) {
             if (err) { return returnError('Database query error', res, connection, err) }
             finalReturnValue.keywords = []
-            for (var v of results4) {
+            for (var v of results) {
               finalReturnValue.keywords.push(v.Keyword)
             }
 
@@ -73,24 +74,52 @@ module.exports = function (app, mysqlPool) {
 
 
   function createComic (req, res, next) {
-    if (!authorizeMod(req)) { return res.end('You are not authoized to do this!') }
-    pythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: '/home/rag/mnet/app/'}, (err, results) => {
-      if (err) { return returnError('Pythong processing new comic failed: ' + err.toString(), res, null, err) }
-      var artistId    = req.body.artistId
-      var comicName   = req.body.comicName
-      var comicCat    = req.body.cat
-      var comicTag    = req.body.tag
-      var finished    = req.body.finished
-      fs.readdir(__dirname + '/../../public/comics/' + comicName, function (err, files) {
-        if (err) { return returnError('Error reading directory: ' + err.toString(), res, null, err) }
-        var numberOfPages = files.length - 1
-        var query = 'INSERT INTO Comic (Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, ?, ?, ?, ?)'
-        mysqlPool.getConnection(function (err, connection) {
-          connection.query(query, [comicName, artistId, comicCat, comicTag, numberOfPages, finished], function (err, results, fields) {
-            if (err) { return returnError('Query failed: ' + err.toString(), res, connection, err) }
-            res.json({status: `Success! (${comicName})`})
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+
+    let newComicDetails = req.body.comicDetails
+    let comicFolderPath = __dirname + '/../../public/comics/' + newComicDetails.name
+    let pageSIncluded = false
+    let fileList = []
+
+    if (!req.files.files) { return returnError('No files added!', res, null, null) }
+    if (Array.isArray(req.files.files)) {
+      fileList = req.files.files.sort( (file1, file2) => { return file1.name > file2.name } )
+    }
+    else {
+      fileList = extractFilesFromFileObject(req.files.files)
+    }
+
+    fs.mkdir(comicFolderPath, (err) => {
+      if (err) { return returnError('Error creating new comic folder: ' + err.toString(), res, null, err) }
+      for (var i=1; i<=fileList.length; i++) {
+        let file = fileList[i-1]
+        let fileContents = fs.readFileSync(file.path)
+        let pageName = getPageName(i, file.path)
+        if (!pageName) { return returnError('Some file is not .jpg or .png!', res, null, null) }
+
+        if (file.name == 's.jpg') { 
+          pageSIncluded = true 
+          fs.writeFileSync(comicFolderPath + '/s.jpg', fileContents)
+        }
+        else { 
+          fs.writeFileSync(comicFolderPath + '/' + pageName, fileContents) 
+        }
+      }
+
+      let numberOfPages = fileList.length - (pageSIncluded ? 1 : 0)
+
+      pythonShell.run('process_new_comic.py', {mode: 'text', args: [newComicDetails.name], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
+        if (err) { return returnError('Python processing new comic failed: ' + err.toString(), res, null, err) }
+
+        let insertQuery = 'INSERT INTO SuggestedComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished) VALUES (?, ?, (SELECT Id FROM Artist WHERE Name = ?), ?, ?, ?, ?)'
+        let insertQueryParams = [req.session.user.username, newComicDetails.name, newComicDetails.artist, newComicDetails.cat, newComicDetails.tag, numberOfPages, newComicDetails.finished]
+        let finalSuccessMessage = 'Thank you! The comic is added to a final approval queue, and will be processed shortly by admin.'
+
+        mysqlPool.getConnection((err, connection) => {
+          connection.query(insertQuery, insertQueryParams, (err, results) => {
+            if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+            res.json({message: finalSuccessMessage})
             connection.release()
-            zipComic(comicName, true)
           })
         })
       })
@@ -105,7 +134,7 @@ module.exports = function (app, mysqlPool) {
   }
 
   function addImageToComic (req, res) {
-    if (!authorizeMod(req)) { return res.end('You are not authorized to do this!') }
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
     logComicUpdate(req, mysqlPool)
 
     let newImageFile = req.files.file.path
@@ -126,11 +155,35 @@ module.exports = function (app, mysqlPool) {
           mysqlPool.getConnection((err, connection) => {
             connection.query(query, [newNumberOfImages, comicName], (err, rows) => {
               if (err) { return returnError('Error updating number of pages in database', res, connection, err) }
-              res.json( {status: `Success! (${req.body.comicName})`} )
+              res.json( {message: `Success! (${req.body.comicName})`} )
               connection.release()
             })
           })
         })
+      })
+    })
+  }
+
+
+  function updateComicDetailsByName (req, res, next) {
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+
+    let comicName = req.params.name
+    let updatedCat = req.body.cat
+    let updatedTag = req.body.tag
+    let updatedFinished = req.body.finished
+    let updatedArtistName = req.body.artistName
+
+    if (!comicName || !updatedCat || !updatedTag || updatedFinished==undefined || !updatedArtistName) {
+      return returnError('Missing fields', res, null, null)
+    }
+
+    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Id FROM Artist WHERE Name = ?) WHERE Name = ?'
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtistName, comicName], (err, results) => {
+        if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+        res.json({ message: 'Successfully updated comic' })
+        connection.release()
       })
     })
   }
@@ -185,4 +238,22 @@ function logComicUpdate (req, mysqlPool) {
       connection.release()
     })
   })
+}
+
+
+function getPageName (pageNumber, filePathName) {
+  let pageNumberString = (pageNumber < 10) ? ('0' + pageNumber) : (pageNumber)
+  let pagePostfix = filePathName.substring(filePathName.length - 4)
+  if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
+  return pageNumberString + pagePostfix
+}
+
+
+function extractFilesFromFileObject (fileObject) {
+  let keys = Object.keys(fileObject)
+  let fileArray = []
+  for (var i=0; i<keys.length; i++) {
+    fileArray.push(fileObject['' + i])
+  }
+  return fileArray
 }

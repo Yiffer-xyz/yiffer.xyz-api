@@ -1,10 +1,27 @@
 let fs = require('fs')
+let pythonShell = require('python-shell')
 let authorizedUsers = require('../../config/autorized-users.json')
+let multiparty = require('connect-multiparty')
+let multipartyMiddelware = multiparty()
 
 module.exports = function (app, mysqlPool) {
+  app.get ('/api/artists', getAllArtists)
   app.get ('/api/artists/:name', getArtistByName)
   app.post('/api/artists/', createArtist)
-  app.post('/api/artistLink', addArtistLinks)
+  app.post('/api/artistLinks', addArtistLinks)
+  app.post('/api/artistFavImage', multipartyMiddelware, addArtistModFavoriteImage)
+
+
+  function getAllArtists (req, res, next) {
+    let query = 'SELECT Id, Name FROM Artist'
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(query, (err, results) => {
+        if (err) { return returnError('Database query error: ' + err.toString(), res, connection, err) }
+        res.json(results)
+        connection.release()
+      })
+    })
+  }
 
 
   function getArtistByName (req, res, next) {
@@ -20,9 +37,9 @@ module.exports = function (app, mysqlPool) {
         let finalReturn = {comicList: [], linkList: []}
         for (var r in results) { finalReturn.comicList.push(results[r].Name) }
 
-        connection.query(queryLinks, [artistName], (err, results2) => {
+        connection.query(queryLinks, [artistName], (err, results) => {
           if (err) { return returnError('Database query error', res, connection, err) }
-          finalReturn.linkList = results2
+          finalReturn.linkList = results
 
           let modFavorites = getModFavImagesForArtist(artistName)
           finalReturn.modFavoriteList = modFavorites
@@ -48,6 +65,7 @@ module.exports = function (app, mysqlPool) {
 
   function createArtist (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+      
     let newArtistName = req.body.artistName
     let insertArtistQuery = 'INSERT INTO Artist (Name) VALUES (?)'
 
@@ -64,7 +82,8 @@ module.exports = function (app, mysqlPool) {
   function addArtistLinks (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
     let artistId = req.body.artistId
-    let artistLinks = req.body.artistLinkList
+    let artistLinks = req.body.artistLinks
+    if (!artistId && artistLinks.length == 0) { return returnError('Missing field(s)', res, null, null) }
     let typedLinkList = extractLinkTypesFromLinkUrls(artistLinks)
 
     let addLinksQuery = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
@@ -80,8 +99,36 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       connection.query(addLinksQuery, addLinksParams, (err, results) => {
         if (err) { return returnError('Database query error: '+err.toString(), res, connection, err) }
-        res.json({status: 'Successfully added links'})
+        res.json({message: 'Successfully added links'})
         connection.release()
+      })
+    })
+  }
+
+
+  function addArtistModFavoriteImage (req, res, next) {
+    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
+    if (!req.files || !req.files.file || !req.body.artistName) { return returnError('Missing field(s)', res, null, err) }
+
+    let imageFile = req.files.file.path
+    let artistName = req.body.artistName
+    let modName = req.session.user.username
+    let fileEnding = imageFile.substring(imageFile.length-4)
+    if ((fileEnding != '.jpg') && (fileEnding != '.png')) { 
+      return returnError('File type must be png or jpg', res, null, null)
+    }
+
+    fs.readFile(imageFile, (err, fileData) => {
+      if (err) { return returnError('Error reading the uploaded file: ' + err.toString(), res, null, err) }
+
+      fs.writeFile(__dirname + `/../../public/mod-favorites/${modName}/${artistName}${fileEnding}`, fileData, (err) => {
+        if (err) { return returnError('Error writing the uploaded file: ' + err.toString(), res, null, err) }
+
+        // if (fileEnding == '.png') { convertImageToJpg(`/public/mod-favorites/${modName}/${artistName}${fileEnding}`) }
+        if (fileEnding == '.png') { 
+          convertImageToJpg('/public/mod-favorites/' + modName + '/' + artistName + fileEnding)
+        }
+        res.json({message: 'Successfully added new fav image!'})
       })
     })
   }
@@ -105,6 +152,12 @@ function extractLinkTypesFromLinkUrls (linkList) {
     else { typedLinkList.push({linkUrl: link, linkType: 'website'}) }
   }
   return typedLinkList
+}
+
+function convertImageToJpg (pathToImage) {
+  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
+    if (err) { console.log(err) }
+  })
 }
 
 

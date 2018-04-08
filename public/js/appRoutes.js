@@ -69,6 +69,11 @@ angular.module('appRoutes', []).config(['$routeProvider', '$locationProvider', f
       controller: 'ComicsDetailController'
     })
 
+    .when('/pendingComics/:comicName', {
+      templateUrl: '/views/pendingComicPreview.html',
+      controller: 'PendingComicPreviewController'
+    })
+
     .otherwise({
       redirectTo: '/'
     })
