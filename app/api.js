@@ -1168,11 +1168,11 @@ function logNode (req, message) {
   var maxStringLength = 15
   if (user) {lengthOfUser = (String(user)).length}
   else if (ip) {lengthOfUser = (String(ip)).length}
-    
-  var firstSpaceCount = maxStringLength-lengthOfUser
-  if (firstSpaceCount < 0) { firstSpaceCount = 0 }
 
-  console.log(`[${user||ip}] ${' '.repeat(firstSpaceCount)}${message} ${' '.repeat(maxPathLength-message.length)}[${time}]`)
+  var firstSpaceCount = (maxStringLength-lengthOfUser < 0) ? 1 : maxStringLength-lengthOfUser
+  var secondSpaceLength = (maxPathLength-message.length < 0) ? 1 : maxPathLength-message.length
+
+  console.log(`[${user||ip}] ${' '.repeat(firstSpaceCount)}${message} ${' '.repeat(secondSpaceLength)}[${time}]`)
 }
 
 
