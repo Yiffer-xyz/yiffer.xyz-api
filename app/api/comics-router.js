@@ -86,7 +86,7 @@ module.exports = function (app, mysqlPool) {
       fileList = req.files.files.sort( (file1, file2) => { return file1.name > file2.name } )
     }
     else {
-      fileList = extractFilesFromFileObject(req.files.files)
+      fileList =  extractFilesFromFileObject(req.files.files).sort( (file1, file2) => { return file1.name > file2.name } )
     }
 
     fs.mkdir(comicFolderPath, (err) => {
