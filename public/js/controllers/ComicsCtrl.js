@@ -155,7 +155,7 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
   $scope.$watch('searchInput', function (newValue, oldValue) {
     updateKeywordSearchList()
     filterComicListAndUpdateShownComicsList()
-    tagSearch()
+    keywordSearch()
   })
 
   $scope.setSort = function (sortName) {
@@ -390,7 +390,7 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
   }
 
   function getKeywords () {
-    $http.get('/api/getComicTags')
+    $http.get('/api/keywords/inIdOrder')
       .success((keywordsData) => {
         for (var i=0; i<keywordsData.length; i++) {
           allComicsList[i]['keywords'] = keywordsData[i]
@@ -411,7 +411,7 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
   function sendLog () {
     hasLogged = true
     $http({
-      url: '/api/addLog',
+      url: '/api/log',
       method: 'POST',
       data: {
         path: '/',
@@ -509,12 +509,11 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
 
   onPageLoad()
 
-  function tagSearch () {
-    $http({
-      url: '/api/keywordAutoComplete',
-      method: 'GET',
-      params: {tagName: currentSearchTerm}
-    }).then(function (res) { $scope.suggestedTags = res.data.slice(0, 50) })
+  function keywordSearch () {
+    $http.get('/api/keywords/autocomplete/' + currentSearchTerm})
+    .success((res) => { 
+      $scope.suggestedTags = res.slice(0,50)
+    })
   }
 
 
@@ -579,9 +578,9 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
 
   function logKeywordSearch (keywordName) {
     $http({
-      url: '/api/logKeywordSearch',
-      method: 'GET',
-      params: {keywordName: keywordName}
+      url: '/api/keywords/log',
+      method: 'POST',
+      data: {keywordName: keywordName}
     })
   }
 

@@ -43,7 +43,7 @@ angular.module('ArtistCtrl', []).controller('ArtistController', ['$scope', '$rou
 
   function sendLog () {
     $http({
-      url: '/api/addLog',
+      url: '/api/log',
       method: 'POST',
       data: {
         path: '/artist/' + $scope.artistName,

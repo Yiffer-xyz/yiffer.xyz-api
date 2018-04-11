@@ -210,43 +210,36 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
     })
   }
 
-  $scope.sendKeywordAddition = function (keywordToAdd) {
-    $scope.showWaitingMessage = true
-    $scope.suggestKeywordSuccessMessage = ''
-    $scope.suggestKeywordErrorMessage = ''
-    $http({
-      url: '/api/suggestKeyword',
-      method: 'POST',
-      data: {
-        comicId: $scope.comicId,
-        suggestedKeyword: keywordToAdd,
-        extension: true
-      }
-    }).success((res) => {
-      $scope.showWaitingMessage = false
-      if (res.error) { $scope.suggestKeywordErrorMessage = res.error + ` (${keywordToAdd})` }
-      else { $scope.suggestKeywordSuccessMessage = res.message + ` (${keywordToAdd})` }
-    })
+
+  $scope.sendKeywordAddition = function (keywordName) {
+    sendKeywordSuggestion(keywordName, true)
   }
+
   
-  $scope.sendKeywordRemoval = function (keywordToRemove) {
+  $scope.sendKeywordRemoval = function (keywordName) {
+    sendKeywordSuggestion(keywordName, false)
+  }
+
+
+  function sendKeywordSuggestion (keywordName, addition) {
     $scope.showWaitingMessage = true
     $scope.suggestKeywordSuccessMessage = ''
     $scope.suggestKeywordErrorMessage = ''
     $http({
-      url: '/api/suggestKeyword',
+      url: '/api/keywords/suggestions',
       method: 'POST',
       data: {
         comicId: $scope.comicId,
-        suggestedKeyword: keywordToRemove,
-        extension: false
+        suggestedKeyword: keywordName,
+        extension: addition
       }
     }).success((res) => {
       $scope.showWaitingMessage = false
-      if (res.error) { $scope.suggestKeywordErrorMessage = res.error + ` (${keywordToRemove})` }
-      else { $scope.suggestKeywordSuccessMessage = res.message + ` (${keywordToRemove})` }
+      if (res.error) { $scope.suggestKeywordErrorMessage = `${res.error} (${keywordToAdd})` }
+      else if (res.message) { $scope.suggestKeywordSuccessMessage = `${res.message} (${keywordToAdd})` }
     })
   }
+
 
   // Validation for login/register form
   // USERNAME
@@ -373,7 +366,7 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
   function sendLog () {
     hasLogged = true
     $http({
-      url: '/api/addLog',
+      url: '/api/log',
       method: 'POST',
       data: {
         path: '/' + $scope.comicName,

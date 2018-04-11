@@ -6,19 +6,14 @@ angular.module('ContactCtrl', ['ngCookies']).controller('ContactController', ['$
 
   $scope.submitFeedback = function () {
     $http({
-      url: '/api/addFeedback',
+      url: '/api/feedback',
       method: 'POST',
-      data: {
-        feedback: $scope.contactContent
-      }
-    }).success(function (res) {
-      console.log(res)
-      if (res === 'Success!') {
-        $scope.hideThings = true
-      }
+      data: { feedback: $scope.contactContent }
+    })
+    .success((res) => {
+      if (res.message && res.message == 'success') { $scope.hideThings = true }
     })
   }
-
 
 
   function refreshSession () {
@@ -28,14 +23,16 @@ angular.module('ContactCtrl', ['ngCookies']).controller('ContactController', ['$
         sendLog()
       })
   }
+  
 
   function onPageLoad() {
     refreshSession()
   }
 
+
   function sendLog () {
     $http({
-      url: '/api/addLog',
+      url: '/api/log',
       method: 'POST',
       data: {
         path: '/contact',

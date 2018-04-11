@@ -62,7 +62,7 @@ angular.module('ComicsOldCtrl', []).controller('ComicsOldController', ['$scope',
 
   $scope.log = function (path) {
     $http({
-      url: '/api/addLog',
+      url: '/api/log',
       method: 'POST',
       data: {
         path: path

@@ -55,13 +55,6 @@ app.post('/addLog', function (req, res) {
 })
 
 
-app.get('/getModNames', function (req, res) {
-  fs.readdir(__dirname + '/../public/mod-favorites', function (err, files) {
-    res.json(files)
-  })
-})
-
-
 module.exports = app.get('/getComicRating', function (req, res) {
   var username = req.query.username
   var comicId  = req.query.comicId
@@ -124,161 +117,6 @@ function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
 }
 
 
-app.post('/addFeedback', function (req, res) {
-  if (!req.session || !req.session.user || req.body.feedback.length < 7) return res.end()
-
-  var newContentForFile = '[[' + req.session.user.username + ']]  ' + req.body.feedback
-
-  fs.readFile(__dirname + '/contact.txt', function (err, data) {
-    var newData = data.toString() + '\n\n\n' + newContentForFile
-    fs.writeFile(__dirname + '/contact.txt', newData, function (err) {
-      res.end('Success!')
-    })
-  })
-})
-
-
-app.get('/getComicTags', function (req, res) {
-  var query = 'SELECT Id AS id, GROUP_CONCAT(DISTINCT ComicKeyword.Keyword SEPARATOR \';\') AS keywords FROM Comic LEFT JOIN ComicKeyword ON (Comic.Id = ComicKeyword.ComicId) GROUP BY id ORDER BY id'
-
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-
-      var results2 = []
-      for (var r of results) {
-        if (r.keywords) { results2.push(r.keywords.split(';')) } 
-        else { results2.push([]) }
-      }
-
-      res.json(results2)
-      connection.release()
-    })
-  })
-})
-
-
-app.post('/kofiCallback', function (req, res) {
-  console.log('Ko-Fi callback!')
-  var kofiData = JSON.parse(req.body.data)
-  var message = kofiData.message
-  var amount  = Number(kofiData.amount)
-
-  if (message.indexOf('yiffer-user=') >= 0 && amount >= 2) {
-    var message2 = message.slice(message.indexOf('yiffer-user='))
-    var spaceIndex = message2.indexOf(' ')
-    if (spaceIndex == -1) {spaceIndex = message2.length}
-
-    var yifferUser = message2.substring(12, spaceIndex)
-
-    mysqlPool.getConnection(function (err, connection) {
-      var query = 'INSERT INTO DonatorUser (Username) VALUES (?)'
-      connection.query(query, [yifferUser], function (err3, results3, fields3) {
-        if (err3) {
-          console.log(err3.toString())
-          connection.release()
-        } 
-        res.end('1')
-        console.log('User has been added to donator table')
-        connection.release()
-      })
-    })
-  }
-})
-
-
-app.get('/keywordAutoComplete', function (req, res) {
-  let escapedInput = mysql.escape(req.query.tagName)
-  let input = escapedInput.substring(1, escapedInput.length-1)
-  let query
-  const artistQuery = 'SELECT Artist.Name AS name, COUNT(*) AS count FROM Artist INNER JOIN Comic ON (Artist=Artist.Id) WHERE Artist.name LIKE \'' + input + '%\' GROUP BY Artist.name'
-  const comicNameQuery = 'SELECT Comic.Name AS name, 1 AS count FROM Comic WHERE Comic.Name LIKE \'' + input + '%\''
-  if (input.length >= 1) {
-    query = 'SELECT Keyword AS name, COUNT(*) AS count FROM ComicKeyword WHERE Keyword LIKE \'' + input + '%\' GROUP BY name ORDER BY count DESC'
-  }
-  else {
-    query = 'SELECT Keyword AS name, COUNT(*) AS count FROM ComicKeyword GROUP BY name ORDER BY count DESC'
-  }
-
-  mysqlPool.getConnection((err, connection) => {
-    connection.query(query, (err, results) => {
-      if (err) {res.end(); return connection.release()}
-
-      if (input.length >= 1) {
-        connection.query(artistQuery, (err, results2) => {
-          if (err) {console.log(err); res.end(); return connection.release()}
-          var concatResults = results.concat(results2)
-
-          connection.query(comicNameQuery, (err, results3) => {
-            if (err) {console.log(err); res.end(); return connection.release()}
-            var concatResults2 = results3.concat(concatResults)
-
-            res.json(concatResults2.sort(function (a, b) {return b.count - a.count}))
-            connection.release()
-          })
-        })
-      }
-      else {
-        res.json(results)
-        connection.release()
-      }
-    })
-  })
-})
-
-
-app.post('/suggestKeyword', (req, res) => {
-  let comicId = req.body.comicId
-  let suggestedKeyword = req.body.suggestedKeyword
-  let extension = req.body.extension ? 1 : 0
-  let user
-  if (req.session && req.session.user) { user = req.session.user.username }
-  else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
-
-  if (authorizeMod(req)) {
-    let tagLogQuery = 'INSERT INTO TagLog (TagNames, ComicName, username) VALUES (?, ?, ?)'
-    let kwQuery = extension ? 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND Keyword = ?'
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(tagLogQuery, [suggestedKeyword, ''+comicId, user], (err, rows) => {
-        if (err) { return returnError(500, 'Database query error', res, connection, err) }
-        connection.query(kwQuery, [comicId, suggestedKeyword], (err, rows) => {
-          if (err) { return returnError(500, 'Database query error: ' + err.toString(), res, connection, err) }
-          res.json({message: 'Keyword auto-approved, because you\'re a mod!'})
-          connection.release()
-        })
-      })
-    })
-  }
-
-  else {
-    let tagAlreadyExistsQuery = 'SELECT Keyword FROM ComicKeyword WHERE ComicId = ? AND Keyword = ?'
-    let alreadySuggestedQuery = 'SELECT * FROM KeywordSuggestion WHERE ComicId = ? AND Keyword = ?'
-    let insertQuery = 'INSERT INTO KeywordSuggestion (ComicId, Keyword, Extension, User) VALUES (?, ?, ?, ?)'
-
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(tagAlreadyExistsQuery, [comicId, suggestedKeyword], (err, rows) => {
-        if (err) { return returnError(500, 'Database query error', res, connection, err) }
-        if (rows.length > 0 && extension == 1) { return returnError(200, 'This comic already has this keyword!', res, connection, err) }
-
-        connection.query(alreadySuggestedQuery, [comicId, suggestedKeyword], (err, rows) => {
-          if (err) { return returnError(500, 'Database query error', res, connection, err) }
-          if (rows.length > 0) {
-            if (rows[0].Processed == 1 && rows[0].Approved == 0) { return returnError(200, 'This has already been suggested for this comic, and was not approved.', res, connection, err) }
-            if (rows[0].Processed == 0) { return returnError(200, 'This has already been suggested for this comic, pending approval!', res, connection, err) }
-          }
-
-          connection.query(insertQuery, [comicId, suggestedKeyword, extension, user], (err, rows) => {
-            if (err) { return returnError(500, 'Database query error', res, connection, err) }
-            res.json({message: 'Suggestion added, now pending approval. Thank you!'})
-            connection.release()
-          })
-        })
-      })
-    })
-  }
-})
-
-
 app.get('/keywordsNotInComic', (req, res) => {
   let comicId = req.query.comicId
   let query = 'SELECT KeywordName FROM Keyword WHERE KeywordName NOT IN (SELECT Keyword FROM ComicKeyword WHERE ComicId = ?)'
@@ -294,22 +132,6 @@ app.get('/keywordsNotInComic', (req, res) => {
       connection.release()
     })
   })
-})
-
-
-app.get('/logKeywordSearch', (req, res) => {
-  let keyword = req.query.keywordName
-  logNode(req, `KW: ${keyword}`)
-  if (keyword) {
-    let query = 'UPDATE KeywordSearches SET Count = Count + 1 WHERE Keyword = ?'
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(query, [keyword], (err, results) => {
-        if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
-        res.json({status: 'success'})
-        connection.release()
-      })
-    })
-  }
 })
 
 
@@ -348,16 +170,6 @@ function archiveNewRating (imageId, newRating) {
       connection.release()
     })
   })
-}
-
-
-function appendZeroFirstIfSingleNumber (number) {
-  if (number < 10) {
-    return '0' + number
-  }
-  else {
-    return '' + number
-  }
 }
 
 
