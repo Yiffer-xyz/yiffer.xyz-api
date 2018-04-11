@@ -8,6 +8,7 @@ module.exports = function (app, mysqlPool) {
   app.post  ('/api/keywords', createKeyword)
   app.post  ('/api/keywords/suggestions/responses', respondToKeywordSuggestion)
   app.get   ('/api/keywords/suggestions/pending', getPendingKeywordSuggestions)
+  app.post  ('/api/keywords/log', logKeywordSearch)
 
 
   function getAllKeywords (req, res, next) {
@@ -134,6 +135,22 @@ module.exports = function (app, mysqlPool) {
         connection.release()
       })
     })  
+  }
+
+
+  function logKeywordSearch (req, res, next) {
+    let keyword = req.query.keywordName
+    logNode(req, `KW: ${keyword}`)
+    if (keyword) {
+      let query = 'UPDATE KeywordSearches SET Count = Count + 1 WHERE Keyword = ?'
+      mysqlPool.getConnection((err, connection) => {
+        connection.query(query, [keyword], (err, results) => {
+          if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+          res.json({status: 'success'})
+          connection.release()
+        })
+      })
+    }
   }
 }
 

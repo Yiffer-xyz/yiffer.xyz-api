@@ -117,34 +117,6 @@ module.exports = app.post('/addVote', function (req, res) {
 })
 
 
-module.exports = app.get('/getComicLinks', function (req, res) {
-  var comicId = req.query.comicId
-  var prevQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = FirstComic) WHERE LastComic = ?'
-  var nextQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = LastComic) WHERE FirstComic = ?'
-  var retur = {previousComic: null, nextComic: null}
-
-  mysqlPool.getConnection(function (err, connection) {
-    if (err) return connection.release()
-    connection.query(prevQuery, [comicId], function (err2, results2, fields2) {
-      if (err2) return connection.release()
-      if (results2.length > 0) {
-        retur.previousComic = results2[0].Name
-      }
-
-      connection.query(nextQuery, [comicId], function (err3, results3, fields3) {
-        if (err3) return connection.release()
-        if (results3.length > 0) {
-          retur.nextComic = results3[0].Name
-        }
-
-        res.json(retur)
-        connection.release()
-      })
-    })
-  })
-})
-
-
 function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
   if (err) {console.log(err)}
   if (res) { res.json({ error: errorMessage }) }
@@ -161,130 +133,6 @@ app.post('/addFeedback', function (req, res) {
     var newData = data.toString() + '\n\n\n' + newContentForFile
     fs.writeFile(__dirname + '/contact.txt', newData, function (err) {
       res.end('Success!')
-    })
-  })
-})
-
-
-app.get('/getTaggingHighscores', function (req, res) {
-  var query = "SELECT T1.Username AS username, count(*) AS count FROM (SELECT distinct Username, ComicName FROM TagLog WHERE ComicName NOT LIKE '%FAVORITE IMAGE%') AS T1 GROUP BY username ORDER BY count DESC"
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {return connection.release()}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/getModFavImageCount', function (req, res) {
-  fs.readdir(__dirname + '/../public/mod-favorites/' + req.query.modName, function (err, files) {
-    if (err) res.json({'modName': req.query.modName, 'count': 0})
-    res.json({'modName': req.query.modName, 'count': files.length})
-  })  
-})
-
-
-app.get('/getComicRatings', function (req, res) {
-  var query = 'SELECT Name as name, Vote as rating FROM Comic INNER JOIN ComicVote ON (Id = ComicId) WHERE Username = ? ORDER BY rating DESC'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, [req.query.modName], function (err2, results, fields) {
-      if (err2) {return connection.release()}
-      res.json({'modName': req.query.modName, 'data': results})
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/getModFavoriteImages', function (req, res) {
-  fs.readdir(__dirname + '/../public/mod-favorites/' + req.query.modName, function (err, files) {
-    if (err) res.end("oops")
-    res.json({'modName': req.query.modName, 'data': files})
-  })  
-})
-
-
-app.get('/tagLog', function (req, res) {
-  var query = 'SELECT Username, ComicName, Timestamp FROM TagLog WHERE Timestamp > NOW() - INTERVAL 1 DAY ORDER BY Timestamp DESC'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {connection.release(); return res.end("Some database error lolol")}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/addTagLogModIndex', function (req, res) {
-  if (req.session && req.session.user && req.session.user.username) {
-    var query = 'INSERT INTO TagLog (TagNames, ComicName, username) VALUES (?, ?, ?)'
-    mysqlPool.getConnection(function (err, connection) {
-      connection.query(query, ['ModIndex', 'ModIndex', req.session.user.username], function (err2, results, fields) {
-        connection.release()
-      })
-    })
-  }
-})
-
-
-app.get('/allComicData', function (req, res) {
-  var query = 'SELECT Name, Cat, Tag, Created, AVG(Vote) AS AvgRating, COUNT(*) AS NumberVotes FROM Comic INNER JOIN ComicVote ON (ComicId=Id) GROUP BY Name, Comic.Id ORDER BY Created DESC'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/tagStats', function (req, res) {
-  var query = 'SELECT Tag, COUNT(*) AS NumberOfComics FROM Comic GROUP BY Tag'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/catStats', function (req, res) {
-  var query = 'SELECT Cat, COUNT(*) AS NumberOfComics FROM Comic GROUP BY Cat'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/tagVotes', function (req, res) {
-  var query = 'SELECT Tag, AVG(Vote) AS AvgRating FROM Comic INNER JOIN ComicVote ON (Id=ComicId) GROUP BY Tag'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-      res.json(results)
-      connection.release()
-    })
-  })
-})
-
-
-app.get('/catVotes', function (req, res) {
-  var query = 'SELECT Cat, AVG(Vote) AS AvgRating FROM Comic INNER JOIN ComicVote ON (Id=ComicId) GROUP BY Cat'
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, function (err2, results, fields) {
-      if (err2) {res.end(); return connection.release()}
-      res.json(results)
-      connection.release()
     })
   })
 })
@@ -428,17 +276,6 @@ app.post('/suggestKeyword', (req, res) => {
       })
     })
   }
-})
-
-
-app.get('/completedKeywordSuggestions', (req, res) => {
-  let query = 'SELECT Keyword, User, Extension, Name, Moderator, Timestamp, Approved FROM KeywordSuggestion INNER JOIN Comic ON (Id=ComicId) WHERE Processed = 1 ORDER BY Timestamp DESC'
-  mysqlPool.getConnection((err, connection) => {
-    connection.query(query, (err, rows) => {
-      if (err) { return returnError(500, 'Database query error', res, connection, err) }
-      res.json(rows)
-    })
-  })
 })
 
 

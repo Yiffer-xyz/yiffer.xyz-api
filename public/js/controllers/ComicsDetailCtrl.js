@@ -22,10 +22,8 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
   var hasLogged = false
 
   function initImages () {
-    $http({
-      url: `/api/comics/${$scope.comicName}`,
-      method: 'GET'
-    }).success(function (res) {
+    $http.get('/api/comics/' + $scope.comicName)
+    .success(function (res) {
       if (res.error) {
         $scope.f404 = true
       }
@@ -34,28 +32,15 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
         $scope.artist  = res.artist
         $scope.yourRating = res.yourRating
         $scope.keywords = res.keywords
+        $scope.prevComicName = res.previousComic
+        $scope.nextComicName = res.nextComic
       }
 
-      var temp = []
+      let temp = []
       for (var i = 1; i < res.numberOfPages+1; i++) {
         temp.push({src: '../comics/' + $scope.comicName + '/' + ((i < 10) ? '0' + (i) : '' + (i)) + '.jpg'})
       }
       $scope.images = temp    
-
-      getComicLinks()
-    })
-  }
-
-
-  function getComicLinks () {
-    $http({
-      url: '/api/getComicLinks',
-      method: 'GET',
-      params: {comicId: $scope.comicId}
-    }).success(function (res) {
-      $scope.prevComicName = res.previousComic
-      $scope.nextComicName = res.nextComic
-      $scope.showComicLink = $scope.prevComicName || $scope.nextComicName
     })
   }
 
@@ -91,13 +76,10 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
   }
 
   function getYourRating () {
-    $http({
-      url: '/api/getComicRating',
-      method: 'GET',
-      params: {comicId: $scope.comicId, username: $scope.username}
-    })
-    .success(function (res) {
-      $scope.yourRating = parseInt(res) || null
+    $http.get(`/api/comics/${$scope.comicName}/userRating`)
+    .success((res) => {
+      $scope.yourRating = res.rating 
+      if (res.rating == 0) { $scope.yourRating = null }
     })
   }
 

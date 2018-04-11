@@ -5,21 +5,6 @@ angular.module('appRoutes', []).config(['$routeProvider', '$locationProvider', f
       controller: 'ComicsController'
     })
 
-    .when('/admin', {
-      templateUrl: '/views/admin.html',
-      controller: 'AdminController'
-    })
-
-    .when('/modIndex', {
-      templateUrl: '/views/modIndex.html',
-      controller: 'ModIndexController'
-    })
-
-    .when('/stats', {
-      templateUrl: '/views/stats.html',
-      controller: 'StatsController'
-    })
-
     .when('/ragTest', {
       title: 'Home - Yiffing time',
       templateUrl: '/views/comicsTest.html',

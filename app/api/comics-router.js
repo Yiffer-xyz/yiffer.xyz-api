@@ -9,14 +9,16 @@ module.exports = function (app, mysqlPool) {
 
   app.get ('/api/comics', getComicList)
   app.get ('/api/comics/:name', getComicByName)
+  app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
   app.put ('/api/comics/:name', updateComicDetailsByName)
 
 
   function getComicList (req, res, next) {
-    if (req.session && req.session.user) { var query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = \''+req.session.user.username+'\') AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' }
-    else { var query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' }
+    let query = ''
+    if (req.session && req.session.user) { query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = \''+req.session.user.username+'\') AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' }
+    else { query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' }
       
     mysqlPool.getConnection((err, connection) => {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
@@ -31,18 +33,20 @@ module.exports = function (app, mysqlPool) {
 
   function getComicByName (req, res, next) {
     let comicName = req.params.name
-    let finalReturnValue = {}
+    let finalReturnValue = {previousComic: null, nextComic: null}
     let getIdQuery = 'SELECT Id FROM Comic WHERE Name = ?'
     let comicMetadataQuery = ''
     let keywordsQuery = 'SELECT Keyword FROM ComicKeyword WHERE ComicId = ?'
-    let queryParams = {}
+    let queryParams = []
+    let prevLinkQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = FirstComic) WHERE LastComic = ?'
+    let nextLinkQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = LastComic) WHERE FirstComic = ?'
 
-    mysqlPool.getConnection(function (err, connection) {
+    mysqlPool.getConnection((err, connection) => {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
 
       connection.query(getIdQuery, [comicName], (err, results) => {
         if (err) { return returnError('Database query error', res, connection, err) } // todo not 400 but something else
-        if (results.length == 0) { return returnError('Invalid comic name', res, connection, err) }
+        if (results.length == 0) { return returnError('Invalid comic name', res, connection, null) }
         let comicId = results[0].Id
         if (req.session && req.session.user) {
           comicMetadataQuery = 'SELECT NumberOfPages as numberOfPages, Artist.Name as artist, Comic.Id as comicId, T1.Vote as yourRating FROM Comic LEFT JOIN (SELECT Vote, ComicId FROM ComicVote WHERE ComicId = ? AND Username = ?) AS T1 ON (Comic.Id = T1.ComicId) INNER JOIN Artist ON (Artist.Id = Comic.Artist) WHERE Comic.Id = ?'
@@ -53,21 +57,51 @@ module.exports = function (app, mysqlPool) {
           queryParams = [comicId]
         }
 
-        connection.query(comicMetadataQuery, queryParams, function (err, results) {
+        connection.query(comicMetadataQuery, queryParams, (err, results) => {
           if (err) { return returnError('Database query error', res, connection, err) }
           finalReturnValue = results[0]
 
-          connection.query(keywordsQuery, [comicId], function (err, results) {
+          connection.query(keywordsQuery, [comicId], (err, results) => {
             if (err) { return returnError('Database query error', res, connection, err) }
             finalReturnValue.keywords = []
             for (var v of results) {
               finalReturnValue.keywords.push(v.Keyword)
             }
 
-            res.json(finalReturnValue)
-            connection.release()
+            connection.query(prevLinkQuery, [comicId], (err, results) => {
+              if (err) { return returnError('Database query error', res, connection, err) }
+              if (results.length > 0) { finalReturnValue.previousComic = results[0].Name }
+
+              connection.query(nextLinkQuery, [comicId], (err, results) => {
+                if (err) { return returnError('Database query error', res, connection, err) }
+                if (results.length > 0) { finalReturnValue.nextComic = results[0].Name }
+
+                res.json(finalReturnValue)
+                connection.release()
+              })
+            })
           })
         })
+      })
+    })
+  }
+
+
+  function getComicUserRatingByName (req, res, next) {
+    let comicName = req.params.name
+    if (!req.session || !req.session.user || !req.session.user.username) {
+      return returnError('Must be logged in', res, null, null)
+    }
+    let username = req.session.user.username
+    let query = 'SELECT Vote FROM ComicVote WHERE Username = ?'
+
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(query, [username], (err, results) => {
+        if (err) { return returnError('Database query error', res, connection, err) }
+        connection.release()
+
+        if (results.length > 0) { res.json({rating: results[0].Vote}) }
+        else { res.json({rating: 0}) }
       })
     })
   }
@@ -79,15 +113,8 @@ module.exports = function (app, mysqlPool) {
     let newComicDetails = req.body.comicDetails
     let comicFolderPath = __dirname + '/../../public/comics/' + newComicDetails.name
     let pageSIncluded = false
-    let fileList = []
-
     if (!req.files.files) { return returnError('No files added!', res, null, null) }
-    if (Array.isArray(req.files.files)) {
-      fileList = req.files.files.sort( (file1, file2) => { return file1.name > file2.name } )
-    }
-    else {
-      fileList =  extractFilesFromFileObject(req.files.files).sort( (file1, file2) => { return file1.name > file2.name } )
-    }
+    let fileList = sortNewComicImages(req.files)
 
     fs.mkdir(comicFolderPath, (err) => {
       if (err) { return returnError('Error creating new comic folder: ' + err.toString(), res, null, err) }
@@ -191,14 +218,14 @@ module.exports = function (app, mysqlPool) {
 
 
 function zipComic (comicName, isNewComic) {
-  var zipFilePath = __dirname + '/../../public/021njnwjfusjkfn89c23nfsnfkas/' + comicName + '.zip'
+  let zipFilePath = __dirname + '/../../public/021njnwjfusjkfn89c23nfsnfkas/' + comicName + '.zip'
   if (!isNewComic) {
     console.log('Deleting file ' + zipFilePath)
     fs.unlinkSync(zipFilePath)
   }
 
-  var outputStream = fs.createWriteStream(zipFilePath)
-  var archive = archiver('zip', {zlib: {level: 9}})
+  let outputStream = fs.createWriteStream(zipFilePath)
+  let archive = archiver('zip', {zlib: {level: 9}})
 
   archive.pipe(outputStream)
   archive.directory(__dirname + '/../../public/comics/'+ comicName +'/', false)
@@ -256,4 +283,30 @@ function extractFilesFromFileObject (fileObject) {
     fileArray.push(fileObject['' + i])
   }
   return fileArray
+}
+
+
+function sortNewComicImages (requestFiles) {
+  let fileList = []
+  if (Array.isArray(requestFiles.files)) {
+console.log('is array')
+    fileList = requestFiles.files.sort((file1, file2) => {
+      console.log('==================================')
+      console.log(file1)
+      console.log(file2)
+      console.log(file1.name > file2.name)
+      return (file1.name > file2.name) ? 1 : -1
+    })
+  }
+  else {
+console.log('NOTTTT array')
+    fileList = extractFilesFromFileObject(requestFiles.files).sort((file1, file2) => {
+      console.log('==================================')
+      console.log(file1)
+      console.log(file2)
+      console.log(file1.name > file2.name)
+      return (file1.name > file2.name) ? 1 : -1
+    })
+  }
+  return fileList
 }
