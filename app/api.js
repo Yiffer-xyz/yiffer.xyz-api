@@ -23,56 +23,6 @@ function authorizeMod (req) {
 }
 
 
-app.post('/addLog', function (req, res) {
-  var urll = req.body.path
-  var user = req.body.username
-  var query
-  var dailyCookie = req.body.dailyCookie
-  var monthlyCookie = req.body.monthlyCookie
-
-  if (user) {
-    query = 'INSERT INTO Log (User, Url, DailyCookie, MonthlyCookie) VALUES (?, ?, ?, ?)'
-    mysqlPool.getConnection(function (err, connection) {
-      connection.query(query, [user, urll, dailyCookie, monthlyCookie], function (err, results, fields) {
-        if (err) {return returnError(500, 'Database query error', res, connection, err)}
-        connection.release()
-        res.end('ok')
-      })
-    })
-  }
-  else {
-    query = 'INSERT INTO Log (Url, DailyCookie, MonthlyCookie) VALUES (?, ?, ?)'
-    mysqlPool.getConnection(function (err, connection) {
-      connection.query(query, [urll, dailyCookie, monthlyCookie], function (err, results, fields) {
-        if (err) {return returnError(500, 'Database query error', res, connection, err)}
-        connection.release()
-        res.end('ok')
-      })
-    })
-  }
-
-  logNode(req, urll)
-})
-
-
-module.exports = app.get('/getComicRating', function (req, res) {
-  var username = req.query.username
-  var comicId  = req.query.comicId
-  var query = 'SELECT Vote FROM ComicVote WHERE Username = ? AND ComicId = ?'
-
-  mysqlPool.getConnection(function (err, connection) {
-    connection.query(query, [username, comicId], function (err2, results, fields) {
-      if (err2) return connection.release()
-      if (results.length == 0)
-        res.end('0')
-      else
-        res.end('' + results[0].Vote)
-      connection.release()
-    })
-  })
-})
- 
-
 module.exports = app.post('/addVote', function (req, res) {
   if (!req.session || !req.session.user) { return res.json({error: 'Not logged in'}) }
   var username = req.session.user.username
@@ -115,24 +65,6 @@ function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
   if (res) { res.json({ error: errorMessage }) }
   if (mysqlConnection) { mysqlConnection.release() }
 }
-
-
-app.get('/keywordsNotInComic', (req, res) => {
-  let comicId = req.query.comicId
-  let query = 'SELECT KeywordName FROM Keyword WHERE KeywordName NOT IN (SELECT Keyword FROM ComicKeyword WHERE ComicId = ?)'
-
-  mysqlPool.getConnection((err, connection) => {
-    connection.query(query, [comicId], (err, rows) => {
-      if (err) { return returnError(500, 'Database query error', res, connection, err) }
-      let keywordList = []
-      for (var x of rows) {
-        keywordList.push(x.KeywordName)
-      }
-      res.json(keywordList)
-      connection.release()
-    })
-  })
-})
 
 
 app.get('/listRagGetImages', (req, res) => {

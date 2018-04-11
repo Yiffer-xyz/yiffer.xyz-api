@@ -201,13 +201,7 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
 
   $scope.initKeywordSuggestions = function () {
     $scope.showKeywordSuggestions = true
-    $http({
-      url: '/api/keywordsNotInComic',
-      method: 'GET',
-      params: {comicId: $scope.comicId}
-    }).success((res) => {
-      $scope.addKeywordList = res
-    })
+    getKeywordsNotInComic()
   }
 
 
@@ -330,6 +324,19 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
   }
 
 
+  function getKeywordsNotInComic() {
+    $scope.addKeywordList = []
+    $http.get('/api/keywords')
+    .success((res) => {
+      for (var keyword of res) {
+        if ($scope.keywords.indexOf(keyword.KeywordName) == -1) {
+          $scope.addKeywordList.push(keyword.KeywordName)
+        }
+      }
+    })
+  }
+
+
   function initColorTheme () {
     var colors = $cookies.get('colorTheme')
     if (colors && !JSON.parse(colors))
@@ -353,6 +360,7 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
       })
   }
 
+
   function authorizeDonator () {
     $http.get('/authorizeDonator')
       .success(function (res) {
@@ -362,6 +370,7 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
         }
       })
   }
+
 
   function sendLog () {
     hasLogged = true
