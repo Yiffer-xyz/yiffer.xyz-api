@@ -510,7 +510,7 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
   onPageLoad()
 
   function keywordSearch () {
-    $http.get('/api/keywords/autocomplete/' + currentSearchTerm})
+    $http.get('/api/keywords/autocomplete/' + currentSearchTerm)
     .success((res) => { 
       $scope.suggestedTags = res.slice(0,50)
     })

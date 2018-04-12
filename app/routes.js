@@ -13,6 +13,7 @@ module.exports = function (app, passport) {
   require('./api/artist-router')(app, mysqlPool)
   require('./api/modpanel-router')(app, mysqlPool)
   require('./api/keywords-router')(app, mysqlPool)
+  require('./api/misc-router')(app, mysqlPool)
 
   app.use('/api', api)
   app.get('*', function (req, res) {

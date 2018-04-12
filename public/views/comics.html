@@ -114,7 +114,7 @@
     </tr>
     <tr>
       <td style="text-align: left; display: flex; flex-flow: row wrap; overflow: hidden;" ng-class="{'show-more-tags': hasFocusedSearchBar, 'show-fewer-tags': !hasFocusedSearchBar}">
-        <div ng-repeat="tag in suggestedTags" class="tag-suggestion" ng-click="selectTag(tag)">
+        <div ng-repeat="tag in suggestedTags track by $index" class="tag-suggestion" ng-click="selectTag(tag)">
           {{tag.name}} ({{tag.count}})
         </div>
       </td>

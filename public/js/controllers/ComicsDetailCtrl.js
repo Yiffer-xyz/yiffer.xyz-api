@@ -34,6 +34,7 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
         $scope.keywords = res.keywords
         $scope.prevComicName = res.previousComic
         $scope.nextComicName = res.nextComic
+        $scope.showComicLink = $scope.prevComicName || $scope.nextComicName
       }
 
       let temp = []
@@ -229,8 +230,8 @@ angular.module('ComicsDetailCtrl', ['ngCookies']).controller('ComicsDetailContro
       }
     }).success((res) => {
       $scope.showWaitingMessage = false
-      if (res.error) { $scope.suggestKeywordErrorMessage = `${res.error} (${keywordToAdd})` }
-      else if (res.message) { $scope.suggestKeywordSuccessMessage = `${res.message} (${keywordToAdd})` }
+      if (res.error) { $scope.suggestKeywordErrorMessage = `${res.error} (${keywordName})` }
+      else if (res.message) { $scope.suggestKeywordSuccessMessage = `${res.message} (${keywordName})` }
     })
   }
 

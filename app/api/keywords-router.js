@@ -1,3 +1,4 @@
+let mysql = require('mysql')
 let authorizedUsers = require('../../config/autorized-users.json')
 
 module.exports = function (app, mysqlPool) {
@@ -12,6 +13,7 @@ module.exports = function (app, mysqlPool) {
   app.get   ('/api/keywords/suggestions/pending', getPendingKeywordSuggestions)
   app.post  ('/api/keywords/log', logKeywordSearch)
   app.get   ('/api/keywords/autocomplete/:query', keywordAutocomplete)
+  app.get   ('/api/keywords/autocomplete/', keywordAutocomplete)
 
 
   function getAllKeywords (req, res, next) {
@@ -231,7 +233,8 @@ module.exports = function (app, mysqlPool) {
 
 
   function keywordAutocomplete (req, res, next) {
-    let escapedInput = mysql.escape(req.params.query)
+    let escapedInput = ''
+    if (req.params && req.params.query) { escapedInput = mysql.escape(req.params.query) }
     let input = escapedInput.substring(1, escapedInput.length-1)
     let query = ''
     let artistQuery = 'SELECT Artist.Name AS name, COUNT(*) AS count FROM Artist INNER JOIN Comic ON (Artist=Artist.Id) WHERE Artist.name LIKE \'' + input + '%\' GROUP BY Artist.name'
