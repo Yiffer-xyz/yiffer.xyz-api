@@ -289,22 +289,12 @@ function extractFilesFromFileObject (fileObject) {
 function sortNewComicImages (requestFiles) {
   let fileList = []
   if (Array.isArray(requestFiles.files)) {
-console.log('is array')
     fileList = requestFiles.files.sort((file1, file2) => {
-      console.log('==================================')
-      console.log(file1)
-      console.log(file2)
-      console.log(file1.name > file2.name)
       return (file1.name > file2.name) ? 1 : -1
     })
   }
   else {
-console.log('NOTTTT array')
     fileList = extractFilesFromFileObject(requestFiles.files).sort((file1, file2) => {
-      console.log('==================================')
-      console.log(file1)
-      console.log(file2)
-      console.log(file1.name > file2.name)
       return (file1.name > file2.name) ? 1 : -1
     })
   }
