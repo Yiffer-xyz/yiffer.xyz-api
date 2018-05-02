@@ -107,6 +107,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 			refreshKeywordsForComic($scope.keywordAdding.comic.name)
 			$scope.keywordAdding.keywordsToDelete = []
 			$scope.keywordAdding.keywordsToAdd = []
+			getKeywordList()
 		})
 	}
 
