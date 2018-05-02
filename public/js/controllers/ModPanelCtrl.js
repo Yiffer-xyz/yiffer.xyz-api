@@ -104,10 +104,12 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 		})
 		.success((res) => {
       displayResponseMessage('addKeywords', res)
-			refreshKeywordsForComic($scope.keywordAdding.comic.name)
-			$scope.keywordAdding.keywordsToDelete = []
-			$scope.keywordAdding.keywordsToAdd = []
-			getKeywordList()
+      if (!res.error) {
+				refreshKeywordsForComic($scope.keywordAdding.comic.name)
+				$scope.keywordAdding.keywordsToDelete = []
+				$scope.keywordAdding.keywordsToAdd = []
+				getKeywordList()
+      }
 		})
 	}
 
