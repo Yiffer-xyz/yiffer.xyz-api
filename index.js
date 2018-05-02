@@ -1,20 +1,19 @@
-var port = 8012
+let port = 8012
 
-var express = require('express')
-var bodyParser = require('body-parser')
-var mongoose = require('mongoose')
-var passport = require('passport')
-var sessions = require('express-session')
-var RedisStore = require('connect-redis')(sessions)
-var db = require('./config/db')
-var app = express()
+let express = require('express')
+let bodyParser = require('body-parser')
+let mongoose = require('mongoose')
+let passport = require('passport')
+let sessions = require('express-session')
+let RedisStore = require('connect-redis')(sessions)
+let db = require('./config/db')
+let app = express()
 
 mongoose.connect(db.url)
 
-
 require('./config/passport')(passport)
 
-var sessionsSetup = require('./config/sessions-setup')
+let sessionsSetup = require('./config/sessions-setup')
 app.use(sessionsSetup)
 
 app.use(bodyParser.json())
