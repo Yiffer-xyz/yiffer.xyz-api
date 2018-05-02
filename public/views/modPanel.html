@@ -28,10 +28,10 @@
 				<td> {{suggestedKeyword.Extension ? 'ADD' : 'DELETE'}} <b>{{suggestedKeyword.Keyword}}</b> </td>
 				<td> {{suggestedKeyword.User}} </td>
 				<td> 
-					<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, true)" class="button-green">
+					<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, true, suggestedKeyword.Extension)" class="button-green">
 						Approve suggestion ({{suggestedKeyword.Extension ? 'add the keyword' : 'delete the keyword'}})
 					</button> 
-					<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, false)" class="button-red">
+					<button ng-click="respondToKeywordSuggestion(suggestedKeyword.Keyword, suggestedKeyword.ComicId, false, suggestedKeyword.Extension)" class="button-red">
 						Reject suggestion
 					</button> 
 				</td>
