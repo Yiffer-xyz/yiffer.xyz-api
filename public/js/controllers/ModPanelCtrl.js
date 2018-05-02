@@ -79,8 +79,10 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 
 
 	$scope.addSelectedKeyword = function (keyword) {
-		$scope.keywordAdding.keywordsToAdd.push(keyword)
-		removeStringFromArray($scope.allKeywordsList, keyword)
+		if (keyword) {
+			$scope.keywordAdding.keywordsToAdd.push(keyword)
+			removeStringFromArray($scope.allKeywordsList, keyword)
+		}
 	}
 
 
