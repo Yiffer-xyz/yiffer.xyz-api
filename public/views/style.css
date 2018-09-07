@@ -115,6 +115,10 @@ h2,
   font-size: 16px;
 }
 
+.brand-logo {
+  font-family: 'Shrikhand', cursive;
+}
+
 .introP {
   margin-top: 10px;
   font-size: 19px;
