@@ -13,16 +13,23 @@ module.exports = function (app, mysqlPool) {
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
   app.put ('/api/comics/:name', updateComicDetailsByName)
+  app.get ('/api/comics/pendingComics', getPendingComics)
 
 
   function getComicList (req, res, next) {
-    let query = ''
-    if (req.session && req.session.user) { query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = \''+req.session.user.username+'\') AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' }
-    else { query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' }
-      
+		let query = ''
+		let queryParams = []
+    if (req.session && req.session.user) { 
+			query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating, T3.Keywords AS keywords FROM (( SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 INNER JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR ',') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T3 ON (T1.ComicId = T3.ComicId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' 
+			queryParams = [req.session.user.username]
+		}
+    else {
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, T1.Keywords AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) INNER JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T1 ON (T1.ComicId = Comic.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
+		}
+		
     mysqlPool.getConnection((err, connection) => {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
-      connection.query(query, (err, results, fields) => {
+      connection.query(query, queryParams, (err, results, fields) => {
         if (err) { return returnError('Database query error', res, null, err) }
         res.json(results)
         connection.release()
@@ -44,44 +51,40 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
 
-      connection.query(getIdQuery, [comicName], (err, results) => {
-        if (err) { return returnError('Database query error', res, connection, err) } // todo not 400 but something else
-        if (results.length == 0) { return returnError('Invalid comic name', res, connection, null) }
-        let comicId = results[0].Id
-        if (req.session && req.session.user) {
-          comicMetadataQuery = 'SELECT NumberOfPages as numberOfPages, Artist.Name as artist, Comic.Id as comicId, T1.Vote as yourRating FROM Comic LEFT JOIN (SELECT Vote, ComicId FROM ComicVote WHERE ComicId = ? AND Username = ?) AS T1 ON (Comic.Id = T1.ComicId) INNER JOIN Artist ON (Artist.Id = Comic.Artist) WHERE Comic.Id = ?'
-          queryParams = [comicId, req.session.user.username, comicId]
-        }
-        else {
-          comicMetadataQuery = 'SELECT NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS comicId, NULL AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) WHERE Comic.Id = ?'
-          queryParams = [comicId]
-        }
+			if (req.session && req.session.user) {
+				comicMetadataQuery = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) WHERE T1.ComicName = ? ORDER BY id'
+				queryParams = [req.session.user.username, comicName]
+			}
+			else {
+				comicMetadataQuery = 'SELECT Comic.Name AS name, NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ?'
+				queryParams = [comicName]
+			}
 
-        connection.query(comicMetadataQuery, queryParams, (err, results) => {
-          if (err) { return returnError('Database query error', res, connection, err) }
-          finalReturnValue = results[0]
+			connection.query(comicMetadataQuery, queryParams, (err, results) => {
+				if (err) { return returnError('Database query error', res, connection, err) }
+				finalReturnValue = results[0]
+				let comicId = finalReturnValue.id
 
-          connection.query(keywordsQuery, [comicId], (err, results) => {
-            if (err) { return returnError('Database query error', res, connection, err) }
-            finalReturnValue.keywords = []
-            for (var v of results) {
-              finalReturnValue.keywords.push(v.Keyword)
-            }
+				connection.query(keywordsQuery, [comicId], (err, results) => {
+					if (err) { return returnError('Database query error', res, connection, err) }
+					finalReturnValue.keywords = []
+					for (var v of results) {
+						finalReturnValue.keywords.push(v.Keyword)
+					}
 
-            connection.query(prevLinkQuery, [comicId], (err, results) => {
-              if (err) { return returnError('Database query error', res, connection, err) }
-              if (results.length > 0) { finalReturnValue.previousComic = results[0].Name }
+					connection.query(prevLinkQuery, [comicId], (err, results) => {
+						if (err) { return returnError('Database query error', res, connection, err) }
+						if (results.length > 0) { finalReturnValue.previousComic = results[0].Name }
 
-              connection.query(nextLinkQuery, [comicId], (err, results) => {
-                if (err) { return returnError('Database query error', res, connection, err) }
-                if (results.length > 0) { finalReturnValue.nextComic = results[0].Name }
+						connection.query(nextLinkQuery, [comicId], (err, results) => {
+							if (err) { return returnError('Database query error', res, connection, err) }
+							if (results.length > 0) { finalReturnValue.nextComic = results[0].Name }
 
-                res.json(finalReturnValue)
-                connection.release()
-              })
-            })
-          })
-        })
+							res.json(finalReturnValue)
+							connection.release()
+						})
+					})
+				})
       })
     })
   }
@@ -214,6 +217,19 @@ module.exports = function (app, mysqlPool) {
       })
     })
   }
+}
+
+
+function getPendingComics (req, res, next) {
+	let query = 'SELECT Artist.Name AS artist, SuggestedComic.Id AS id, SuggestedComic.Name AS name, ModName AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished FROM SuggestedComic INNER JOIN Artist ON (SuggestedComic.Artist=Artist.Id) WHERE Processed=0'
+	let keywordsQuery = 'SELECT Keyword FROM ComicKeyword WHERE ComicId = ?'
+		mysqlPool.getConnection((err, connection) => {
+		connection.query(query, (err, results) => {
+			if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+			res.json(results)
+			connection.release()
+		})
+	})
 }
 
 
