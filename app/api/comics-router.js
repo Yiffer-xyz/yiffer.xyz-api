@@ -20,7 +20,7 @@ module.exports = function (app, mysqlPool) {
 		let query = ''
 		let queryParams = []
     if (req.session && req.session.user) { 
-			query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating, T3.Keywords AS keywords FROM (( SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 INNER JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR ',') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T3 ON (T1.ComicId = T3.ComicId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' 
+			query = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating, T3.Keywords AS keywords FROM (( SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 INNER JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T3 ON (T1.ComicId = T3.ComicId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id' 
 			queryParams = [req.session.user.username]
 		}
     else {
@@ -30,7 +30,10 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
       connection.query(query, queryParams, (err, results, fields) => {
-        if (err) { return returnError('Database query error', res, null, err) }
+				if (err) { return returnError('Database query error', res, null, err) }
+				for (var comic of results) {
+					comic.keywords = comic.keywords.split(',')
+				}
         res.json(results)
         connection.release()
       })
@@ -41,9 +44,7 @@ module.exports = function (app, mysqlPool) {
   function getComicByName (req, res, next) {
     let comicName = req.params.name
     let finalReturnValue = {previousComic: null, nextComic: null}
-    let getIdQuery = 'SELECT Id FROM Comic WHERE Name = ?'
-    let comicMetadataQuery = ''
-    let keywordsQuery = 'SELECT Keyword FROM ComicKeyword WHERE ComicId = ?'
+    let comicDataQuery = ''
     let queryParams = []
     let prevLinkQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = FirstComic) WHERE LastComic = ?'
     let nextLinkQuery = 'SELECT Name FROM ComicLink INNER JOIN Comic ON (Id = LastComic) WHERE FirstComic = ?'
@@ -52,37 +53,30 @@ module.exports = function (app, mysqlPool) {
       if (err) { return returnError('Error connecting to database connection pool', res, null, err) }
 
 			if (req.session && req.session.user) {
-				comicMetadataQuery = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) WHERE T1.ComicName = ? ORDER BY id'
-				queryParams = [req.session.user.username, comicName]
+				comicDataQuery = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating, T3.Keywords AS keywords FROM ((SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY Comic.Name, Comic.Id) AS T1 INNER JOIN (SELECT ComicKeyword.ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword WHERE ComicKeyword.ComicId = (SELECT Comic.Id FROM Comic WHERE Comic.Name = ?)) AS T3 ON (T1.ComicId = T3.ComicId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE Username = ?) AS T2 ON (T1.ComicId = T2.ComicId)) WHERE T1.ComicName = ?'
+				queryParams = [comicName, req.session.user.username, comicName]
 			}
 			else {
-				comicMetadataQuery = 'SELECT Comic.Name AS name, NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ?'
-				queryParams = [comicName]
+				comicDataQuery = 'SELECT Comic.Name AS name, NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, T1.Keywords AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) INNER JOIN (SELECT ComicKeyword.ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword WHERE ComicKeyword.ComicId = (SELECT Comic.Id FROM Comic WHERE Comic.Name = ?)) AS T1 ON (T1.ComicId = Comic.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ?'
+				queryParams = [comicName, comicName]
 			}
 
-			connection.query(comicMetadataQuery, queryParams, (err, results) => {
+			connection.query(comicDataQuery, queryParams, (err, results) => {
 				if (err) { return returnError('Database query error', res, connection, err) }
 				finalReturnValue = results[0]
 				let comicId = finalReturnValue.id
+				finalReturnValue.keywords = finalReturnValue.keywords.split(',')
 
-				connection.query(keywordsQuery, [comicId], (err, results) => {
+				connection.query(prevLinkQuery, [comicId], (err, results) => {
 					if (err) { return returnError('Database query error', res, connection, err) }
-					finalReturnValue.keywords = []
-					for (var v of results) {
-						finalReturnValue.keywords.push(v.Keyword)
-					}
+					if (results.length > 0) { finalReturnValue.previousComic = results[0].Name }
 
-					connection.query(prevLinkQuery, [comicId], (err, results) => {
+					connection.query(nextLinkQuery, [comicId], (err, results) => {
 						if (err) { return returnError('Database query error', res, connection, err) }
-						if (results.length > 0) { finalReturnValue.previousComic = results[0].Name }
+						if (results.length > 0) { finalReturnValue.nextComic = results[0].Name }
 
-						connection.query(nextLinkQuery, [comicId], (err, results) => {
-							if (err) { return returnError('Database query error', res, connection, err) }
-							if (results.length > 0) { finalReturnValue.nextComic = results[0].Name }
-
-							res.json(finalReturnValue)
-							connection.release()
-						})
+						res.json(finalReturnValue)
+						connection.release()
 					})
 				})
       })
