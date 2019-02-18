@@ -8,6 +8,9 @@ let sessions = require('express-session')
 let RedisStore = require('connect-redis')(sessions)
 let db = require('./config/db')
 let app = express()
+let cors = require('cors')
+
+app.use(cors())
 
 mongoose.connect(db.url)
 
