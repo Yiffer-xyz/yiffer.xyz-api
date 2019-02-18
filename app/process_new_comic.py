@@ -1,7 +1,7 @@
 from PIL import Image
 import sys, os
 
-comic_folder_path = os.getcwd() + '/public/comics/' + sys.argv[1]
+comic_folder_path = os.getcwd() + '/../client/public/comics/' + sys.argv[1]
 
 images = os.listdir(comic_folder_path)
 images.sort()
