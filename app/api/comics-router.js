@@ -14,6 +14,7 @@ module.exports = function (app, mysqlPool) {
   app.post('/api/comics', multipartyMiddelware, createComic)
   app.put ('/api/comics/:name', updateComicDetailsByName)
 	app.get ('/api/pendingcomics', getPendingComics)
+	app.get ('/api/pendingcomics/:name', getPendingComic)
 	app.put ('/api/pendingcomics', authorizeAdmin, processPendingComic)
 
 
@@ -252,6 +253,29 @@ module.exports = function (app, mysqlPool) {
 				}
 				res.json(results)
 				connection.release()
+			})
+		})
+	}
+
+
+	function getPendingComic (req, res, next) {
+		let comicDataQuery = 'SELECT Artist.Name AS artistName, PendingComic.Id AS id, PendingComic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) WHERE PendingComic.Name = ?'
+		let keywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(comicDataQuery, [req.params.name], (err, results) => {
+				if (err) { return returnError('Database error: Error getting comic data', res, connection, err) }
+				if (results.length===0) { return returnError('No pending comic with this name', res, connection, err) }
+				let comicData = results[0]
+				comicData.keywords = []
+
+				connection.query(keywordsQuery, [comicData.id], (err, results) => {
+					if (err) { return returnError('Database error: Error getting comic keywords', res, connection, err) }
+					if (results.length > 0) {
+						comicData.keywords = results.map(keywordObj => keywordObj.Keyword)
+					}
+					res.json(comicData)
+					connection.release()
+				})
 			})
 		})
 	}
