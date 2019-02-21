@@ -15,7 +15,11 @@ module.exports = function (app, mysqlPool) {
   app.put ('/api/comics/:name', updateComicDetailsByName)
 	app.get ('/api/pendingcomics', getPendingComics)
 	app.get ('/api/pendingcomics/:name', getPendingComic)
-	app.put ('/api/pendingcomics', authorizeAdmin, processPendingComic)
+	app.put ('/api/pendingcomics/:id', authorizeAdmin, processPendingComic)
+	app.post('/api/pendingcomics/:name/addthumbnail', multipartyMiddelware, addThumbnailToPendingComic)
+	app.post('/api/pendingcomics/:id/addkeywords', addKeywordsToPendingComic)
+	app.post('/api/pendingcomics/:id/removekeywords', removeKeywordsFromPendingComic)
+	app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, addPagesToPendingComic)
 
 
   function getComicList (req, res, next) {
@@ -41,7 +45,7 @@ module.exports = function (app, mysqlPool) {
         connection.release()
       })
     })
-  }
+	}
 
 
   function getComicByName (req, res, next) {
@@ -121,8 +125,13 @@ module.exports = function (app, mysqlPool) {
 		let fileList = sortNewComicImages(req.files.pageFile)
 		let hasThumbnailPage = !!req.files.thumbnailFile
 
-    fs.mkdir(comicFolderPath, (err) => {
-			if (err) { return returnError('Error creating new comic folder. Comic with this name might already exist?', res, null, err) }
+		let allComicFoldersList = fs.readdirSync(__dirname + '/../../../client/public/comics')
+		if (allComicFoldersList.indexOf(req.body.comicName) >= 0) {
+			return returnError('Directory of a comic with this name already exists!', res, null, err)
+		}
+
+		try {
+			fs.mkdirSync(comicFolderPath)
 
 			for (var i=1; i<= req.files.pageFile.length; i++) {
 				let file = req.files.pageFile[i-1]
@@ -135,47 +144,51 @@ module.exports = function (app, mysqlPool) {
 				let fileContents = fs.readFileSync(req.files.thumbnailFile.path)
 				fs.writeFileSync(comicFolderPath + '/s.jpg', fileContents)
 			}
-      pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
-        if (err) { return returnError('Python processing new comic failed.', res, null, err) }
+		}
+		catch (err) {
+			return returnError('Error creating new directory or writing new files to disc', res, null, err)
+		}
 
-        let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        let insertQueryParams = [
-					'malann',// BIG todo req.session.user.username
-					req.body.comicName,
-					Number(req.body.artistId),
-					req.body.cat,
-					req.body.tag,
-					fileList.length,
-					req.body.finished==='true',
-					hasThumbnailPage ? 1 : 0
-				] 
-        mysqlPool.getConnection((err, connection) => {
-					connection.query(insertQuery, insertQueryParams, (err, results) => {
-						if (err) { return returnError('Error inserting new comic into database', res, connection, err) }
-						if (req.body.keywords && req.body.keywords.length > 0) {
-							let insertId = results.insertId
-							let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
-							let insertKeywordsParams = []
-							for (var keyword of req.body.keywords.split(',')) {
-								insertKeywordsQuery += `(?, ?), `
-								insertKeywordsParams.push(insertId)
-								insertKeywordsParams.push(keyword)
-							}
-							insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
-							connection.query(insertKeywordsQuery, insertKeywordsParams, (err, results) => {
-								if (err) { return returnError('Error adding tags to comic', res, connection, err) }
-								res.json({success: true})
-								connection.release()	
-							})
+		pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
+			if (err) { return returnError('Python processing new comic failed.', res, null, err) }
+
+			let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+			let insertQueryParams = [
+				'malann',// BIG todo req.session.user.username
+				req.body.comicName,
+				Number(req.body.artistId),
+				req.body.cat,
+				req.body.tag,
+				fileList.length,
+				req.body.finished==='true',
+				hasThumbnailPage ? 1 : 0
+			] 
+			mysqlPool.getConnection((err, connection) => {
+				connection.query(insertQuery, insertQueryParams, (err, results) => {
+					if (err) { return returnError('Error inserting new comic into database', res, connection, err) }
+					if (req.body.keywords && req.body.keywords.length > 0) {
+						let insertId = results.insertId
+						let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
+						let insertKeywordsParams = []
+						for (var keyword of req.body.keywords.split(',')) {
+							insertKeywordsQuery += `(?, ?), `
+							insertKeywordsParams.push(insertId)
+							insertKeywordsParams.push(keyword)
 						}
-						else {
+						insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
+						connection.query(insertKeywordsQuery, insertKeywordsParams, (err, results) => {
+							if (err) { return returnError('Error adding tags to comic', res, connection, err) }
 							res.json({success: true})
-							connection.release()
-						}
-          })
-        })
-      })
-    })
+							connection.release()	
+						})
+					}
+					else {
+						res.json({success: true})
+						connection.release()
+					}
+				})
+			})
+		})
   }
 
 
@@ -282,7 +295,7 @@ module.exports = function (app, mysqlPool) {
 
 
 	function processPendingComic (req, res, next) {
-		let comicId = req.body.comicId
+		let comicId = req.params.id
 		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
 		let getKeywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
@@ -325,8 +338,130 @@ module.exports = function (app, mysqlPool) {
 			})
 		})
 	}
+
+
+	async function addThumbnailToPendingComic (req, res, next) {
+		let thumbnailFile = req.files.thumbnailFile
+		let comicName = req.params.name
+		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
+
+		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
+			return returnError('File must exist and be .jpg or .png', res, null, null)
+		}
+
+		try {
+			let directoryContents = fs.readdirSync(comicFolderPath)
+			if (directoryContents.indexOf('s.jpg') >= 0) {
+				fs.unlinkSync(comicFolderPath + '/s.jpg')
+			}
+			let fileContents = fs.readFileSync(thumbnailFile.path)
+			await fs.writeFileSync(comicFolderPath+'/s.jpg', fileContents)
+		}
+		catch (err) {
+			return returnError('Error deleting old thumbnail or writing new one to disc', res, null, err)
+		}
+
+		let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Name = ?'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(updateComicDataQuery, [comicName], (err) => {
+				if (err) { return returnError('Error updating comic data to reflect new thumbnail added', res, connection, err) }
+				res.json({success: true})
+				connection.release()
+			})
+		})
+	}
+
+
+	async function addPagesToPendingComic (req, res, next) {
+		if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+		let comicFolderPath = __dirname + '/../../../client/public/comics/' + req.body.comicName
+		if (!req.files || !req.files.newPages) { return returnError('No files added!', res, null, null) }
+		
+		let newNumberOfPages
+		try { newNumberOfPages = await parseAndWriteNewFiles(comicFolderPath, req.files.newPages) }
+		catch (err) { return returnError('Error parsing or writing the new files to disc', res, null, err) }
+
+		let updateNumberOfPagesQuery = 'UPDATE PendingComic SET NumberOfPages = ? WHERE Id = ?'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(updateNumberOfPagesQuery, [newNumberOfPages, req.params.id], (err) => {
+				if (err) { return returnError('Database error: Error updating number of pages', res, connection, err) }
+				res.json({success: true})
+				connection.release()
+			})
+		})
+	}
+
+
+	function addKeywordsToPendingComic (req, res, next) {
+		let comicId = req.params.id
+		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
+		let addKeywordsQueryParams = []
+		for (var keyword of req.body.keywords) {
+			addKeywordsQuery += '(?, ?), '
+			addKeywordsQueryParams.push(comicId)
+			addKeywordsQueryParams.push(keyword)
+		}
+		addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
+
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(addKeywordsQuery, addKeywordsQueryParams, (err) => {
+				if (err) { return returnError('Error inserting the keywords into the database', res, connection, err) }
+				res.json({success: true})
+				connection.release()
+			})
+		})
+	}
+
+
+	function removeKeywordsFromPendingComic (req, res, next) {
+		let comicId = req.params.id
+		let removeKeywordsQuery = 'DELETE FROM PendingComicKeyword WHERE (ComicId, Keyword) IN ('
+		let removeKeywordsQueryParams = []
+		for (var keyword of req.body.keywords) {
+			removeKeywordsQuery += '(?, ?), '
+			removeKeywordsQueryParams.push(comicId)
+			removeKeywordsQueryParams.push(keyword)
+		}
+		removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
+
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(removeKeywordsQuery, removeKeywordsQueryParams, (err) => {
+				if (err) { return returnError('Error removing the keywords from the database', res, connection, err) }
+				res.json({success: true})
+				connection.release()
+			})
+		})
+	}
+
+
+
+
 }
 
+
+async function parseAndWriteNewFiles (comicFolderPath, requestFiles) {
+	return new Promise( async resolve => {
+		fs.readdir(comicFolderPath, (err, files) => {
+			let oldNumberOfPages = files.filter(f => f!='s.jpg').length
+			let newFilesWithNames = []
+			if (requestFiles.hasOwnProperty('fieldName')) { // one file only
+				newFilesWithNames.push({filename: getPageName(oldNumberOfPages+1, requestFiles.path), file: requestFiles})
+			}
+			else {
+				requestFiles = [...requestFiles]
+				for (var i=0; i<requestFiles.length; i++) {
+					newFilesWithNames.push({filename: getPageName(oldNumberOfPages+i+1, requestFiles[i].path), file: requestFiles[i]})
+				}
+			}
+
+			for (var newFile of newFilesWithNames) {
+				fs.writeFileSync(`${comicFolderPath}/${newFile.filename}`, newFile.file)
+			}
+
+			resolve(oldNumberOfPages + newFilesWithNames.length)
+		})
+	})
+}
 
 
 function zipComic (comicName, isNewComic) {
