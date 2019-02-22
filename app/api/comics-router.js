@@ -14,6 +14,7 @@ module.exports = function (app, mysqlPool) {
   app.post('/api/comics', multipartyMiddelware, createComic)
   app.put ('/api/comics/:name', updateComicDetailsByName)
 	app.get ('/api/pendingcomics', getPendingComics)
+
 	app.get ('/api/pendingcomics/:name', getPendingComic)
 	app.put ('/api/pendingcomics/:id', authorizeAdmin, processPendingComic)
 	app.post('/api/pendingcomics/:name/addthumbnail', multipartyMiddelware, addThumbnailToPendingComic)
@@ -448,14 +449,14 @@ async function parseAndWriteNewFiles (comicFolderPath, requestFiles) {
 				newFilesWithNames.push({filename: getPageName(oldNumberOfPages+1, requestFiles.path), file: requestFiles})
 			}
 			else {
-				requestFiles = [...requestFiles]
+				requestFiles = [...requestFiles].sort((f1, f2) => f1>f2 ? 1 : -1)
 				for (var i=0; i<requestFiles.length; i++) {
 					newFilesWithNames.push({filename: getPageName(oldNumberOfPages+i+1, requestFiles[i].path), file: requestFiles[i]})
 				}
 			}
 
 			for (var newFile of newFilesWithNames) {
-				fs.writeFileSync(`${comicFolderPath}/${newFile.filename}`, newFile.file)
+				fs.writeFileSync(`${comicFolderPath}/${newFile.filename}`, fs.readFileSync(newFile.file.path))
 			}
 
 			resolve(oldNumberOfPages + newFilesWithNames.length)
@@ -521,16 +522,6 @@ function getPageName (pageNumber, filePathName) {
   let pagePostfix = filePathName.substring(filePathName.length - 4)
   if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
   return pageNumberString + pagePostfix
-}
-
-
-function extractFilesFromFileObject (fileObject) {
-  let keys = Object.keys(fileObject)
-  let fileArray = []
-  for (var i=0; i<keys.length; i++) {
-    fileArray.push(fileObject['' + i])
-  }
-  return fileArray
 }
 
 

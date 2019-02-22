@@ -3,9 +3,22 @@ let fs = require('fs')
 
 module.exports = function (app, mysqlPool) {
 
+	app.get ('/api/comicsuggestions', getComicSuggestions)
   app.get ('/api/kofiCallback', kofiCallback)
   app.post('/api/feedback', submitFeedback)
   app.post('/api/log', addLog)
+
+
+	function getComicSuggestions (req, res, next) {
+		let query = 'SELECT Name AS name, ArtistName AS artist, Description AS description, User AS user FROM ComicSuggestion ORDER BY Timestamp DESC'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(query, (err, results) => {
+				if (err) { return returnError('Database query error', res, connection, err) }
+				res.json(results)
+				connection.release()
+			})
+		})
+	}
 
 
   function kofiCallback (req, res, next) {
