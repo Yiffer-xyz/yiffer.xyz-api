@@ -8,7 +8,7 @@ module.exports = function (app, mysqlPool) {
   app.delete('/api/keywords', deleteKeywordsFromComic)
   app.post  ('/api/keywords/addToComic', addKeywordsToComic)
   app.post  ('/api/keywords', createKeyword)
-  app.post  ('/api/keywords/suggestions/responses', respondToKeywordSuggestion)
+  app.post  ('/api/keywordsuggestions/process', processKeywordSuggestion)
   app.get   ('/api/keywordsuggestions', getKeywordSuggestions)
   app.post  ('/api/keywordsuggestions', addKeywordSuggestion)
   app.post  ('/api/keywords/log', logKeywordSearch)
@@ -158,45 +158,40 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function respondToKeywordSuggestion (req, res, next) {
-    if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
-
-    let keywordName = req.body.keywordName
-    let comicId = req.body.comicId
-    let extension = req.body.extension
-    let verdict = req.body.verdict
-    let modName = req.session.user.username
-
-    let updateQuery = 'UPDATE KeywordSuggestion SET Approved = ?, Moderator = ?, Processed = 1 WHERE ComicId = ? AND Keyword = ?'
+  function processKeywordSuggestion (req, res, next) {
+		let [suggestionId, comicId, keyword, extension, isApproved] = 
+			[req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
+    let updateQuery = 'UPDATE KeywordSuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
     let insertQuery = extension ? 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND Keyword = ?'
-    let tagLogQuery = 'INSERT INTO TagLog (TagNames, ComicName, username) VALUES (?, ?, ?)'
 
     mysqlPool.getConnection((err, connection) => {
-      connection.query(updateQuery, [verdict, modName, comicId, keywordName], (err, results) => {
-        if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+			if (isApproved) {
+				connection.query(insertQuery, [comicId, keyword], (err, results) => {
+					if (err) { return returnError('Database error: Error adding/deleting tags to/from comic', res, connection, err) }
+	
+					connection.query(updateQuery, [1, suggestionId], (err, results) => {
+						if (err) { return returnError('Database error: Error updating suggested tags', res, connection, err) }
+						
+						res.json({success: true})
+						connection.release()
+					})
+				})
+			}
 
-        connection.query(tagLogQuery, [keywordName, ''+comicId, modName], (err, results) => {
-          if (err) { return returnError('Database error when updating TagLog: ' + err.toString(), res, connection, err) }
-
-          if (verdict) {
-            connection.query(insertQuery, [comicId, keywordName], (err, results) => {
-              if (err) { return returnError('Database error when adding new keyword: ' + err.toString(), res, connection, err) }
-              res.json({message: 'Success!'})
-              connection.release()
-            })
-          }
-          else {
-            res.json({message: 'Success!'})
-            connection.release()
-          }
-        })
-      })
+			else {
+				connection.query(updateQuery, [0, suggestionId], (err, results) => {
+					if (err) { return returnError('Database error: Error updating suggested tags', res, connection, err) }
+					
+					res.json({success: true})
+					connection.release()
+				})
+			}
     })
   }
 
 
   function getKeywordSuggestions (req, res, next) {
-    let query = 'SELECT Name AS comicName, ComicId AS comicId, Extension AS addKeyword, User AS user, Keyword AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) WHERE Processed = 0'
+    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, Extension AS addKeyword, User AS user, Keyword AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) WHERE Processed = 0'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error', res, connection, err) }
