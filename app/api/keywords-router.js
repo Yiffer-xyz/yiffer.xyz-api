@@ -9,8 +9,8 @@ module.exports = function (app, mysqlPool) {
   app.post  ('/api/keywords/addToComic', addKeywordsToComic)
   app.post  ('/api/keywords', createKeyword)
   app.post  ('/api/keywords/suggestions/responses', respondToKeywordSuggestion)
-  app.get   ('/api/keywords/suggestions/pending', getPendingKeywordSuggestions)
-  app.post  ('/api/keywords/suggestions', createKeywordSuggestion)
+  app.get   ('/api/keywordsuggestions', getKeywordSuggestions)
+  app.post  ('/api/keywordsuggestions', addKeywordSuggestion)
   app.post  ('/api/keywords/log', logKeywordSearch)
   app.get   ('/api/keywords/autocomplete/:query', keywordAutocomplete)
   app.get   ('/api/keywords/autocomplete/', keywordAutocomplete)
@@ -113,52 +113,45 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function createKeywordSuggestion (req, res, next) {
+  function addKeywordSuggestion (req, res, next) {
     let comicId = req.body.comicId
-    let suggestedKeyword = req.body.suggestedKeyword
+    let suggestedKeyword = req.body.keyword
     let extension = req.body.extension ? 1 : 0
     let user
-    if (req.session && req.session.user) { user = req.session.user.username }
-    else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
-
-    if (authorizeMod(req)) {
-      let tagLogQuery = 'INSERT INTO TagLog (TagNames, ComicName, username) VALUES (?, ?, ?)'
+    // if (req.session && req.session.user) { user = req.session.user.username }
+		// else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
+		user = 'todo ragnar todo'
+		let userIsMod = false  // todo
+    if (userIsMod) {
       let kwQuery = extension ? 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND Keyword = ?'
       mysqlPool.getConnection((err, connection) => {
-        connection.query(tagLogQuery, [suggestedKeyword, ''+comicId, user], (err, results) => {
-          if (err) { return returnError('Database query error', res, connection, err) }
-          connection.query(kwQuery, [comicId, suggestedKeyword], (err, results) => {
-            if (err) { return returnError('Database query error: ' + err.toString(), res, connection, err) }
-            res.json({message: 'Keyword auto-approved, because you\'re a mod!'})
-            connection.release()
-          })
+				connection.query(kwQuery, [comicId, suggestedKeyword], (err, results) => {
+					if (err) {
+						return returnError(
+							(extension ? 'Database error. Keyword might already exist?' : 'Database error'), 
+							res, connection, err
+						)
+					}
+					res.json({success: true})
+					connection.release()
         })
       })
     }
 
     else {
       let tagAlreadyExistsQuery = 'SELECT Keyword FROM ComicKeyword WHERE ComicId = ? AND Keyword = ?'
-      let alreadySuggestedQuery = 'SELECT * FROM KeywordSuggestion WHERE ComicId = ? AND Keyword = ?'
       let insertQuery = 'INSERT INTO KeywordSuggestion (ComicId, Keyword, Extension, User) VALUES (?, ?, ?, ?)'
 
       mysqlPool.getConnection((err, connection) => {
         connection.query(tagAlreadyExistsQuery, [comicId, suggestedKeyword], (err, results) => {
-          if (err) { return returnError('Database query error', res, connection, err) }
-          if (results.length > 0 && extension == 1) { return returnError(200, 'This comic already has this keyword!', res, connection, err) }
+          if (err) { return returnError('Database error', res, connection, err) }
+          if (results.length > 0 && extension == 1) { return returnError('This comic already has this keyword!', res, connection, err) }
 
-          connection.query(alreadySuggestedQuery, [comicId, suggestedKeyword], (err, results) => {
-            if (err) { return returnError('Database query error', res, connection, err) }
-            if (results.length > 0) {
-              if (results[0].Processed == 1 && results[0].Approved == 0) { return returnError(200, 'This has already been suggested for this comic, and was not approved.', res, connection, err) }
-              if (results[0].Processed == 0) { return returnError(200, 'This has already been suggested for this comic, pending approval!', res, connection, err) }
-            }
-
-            connection.query(insertQuery, [comicId, suggestedKeyword, extension, user], (err, results) => {
-              if (err) { return returnError('Database query error', res, connection, err) }
-              res.json({message: 'Suggestion added, now pending approval. Thank you!'})
-              connection.release()
-            })
-          })
+					connection.query(insertQuery, [comicId, suggestedKeyword, extension ? 1:0, user], (err, results) => {
+						if (err) { return returnError('Database query error', res, connection, err) }
+						res.json({success: true})
+						connection.release()
+					})
         })
       })
     }
@@ -202,13 +195,11 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function getPendingKeywordSuggestions (req, res, next) {
-    if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
-
-    let query = 'SELECT Name as ComicName, ComicId, Extension, User, Keyword FROM KeywordSuggestion INNER JOIN Comic ON (Id=ComicId) WHERE Processed = 0'
+  function getKeywordSuggestions (req, res, next) {
+    let query = 'SELECT Name AS comicName, ComicId AS comicId, Extension AS addKeyword, User AS user, Keyword AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) WHERE Processed = 0'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
-        if (err) { return returnError('Database query error:' + err.toString(), res, connection, err) }
+        if (err) { return returnError('Database error', res, connection, err) }
         res.json(results)
         connection.release()
       })
