@@ -12,12 +12,12 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
-  app.post('/api/comics/:id/updatedetails', updateComicDetails)
+	app.post('/api/comics/:id/updatedetails', updateComicDetails)
+	
 	app.get ('/api/pendingcomics', getPendingComics)
-
 	app.get ('/api/pendingcomics/:name', getPendingComic)
-	app.put ('/api/pendingcomics/:id', authorizeAdmin, processPendingComic)
-	app.post('/api/pendingcomics/:name/addthumbnail', multipartyMiddelware, addThumbnailToPendingComic)
+	app.post('/api/pendingcomics/:id', authorizeAdmin, processPendingComic)
+	app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, addThumbnailToPendingComic)
 	app.post('/api/pendingcomics/:id/addkeywords', addKeywordsToPendingComic)
 	app.post('/api/pendingcomics/:id/removekeywords', removeKeywordsFromPendingComic)
 	app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, addPagesToPendingComic)
@@ -344,7 +344,8 @@ module.exports = function (app, mysqlPool) {
 
 	async function addThumbnailToPendingComic (req, res, next) {
 		let thumbnailFile = req.files.thumbnailFile
-		let comicName = req.params.name
+		let comicName = req.body.comicName
+		let comicId = req.params.id
 		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
 
 		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
@@ -363,9 +364,9 @@ module.exports = function (app, mysqlPool) {
 			return returnError('Error deleting old thumbnail or writing new one to disc', res, null, err)
 		}
 
-		let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Name = ?'
+		let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Id = ?'
 		mysqlPool.getConnection((err, connection) => {
-			connection.query(updateComicDataQuery, [comicName], (err) => {
+			connection.query(updateComicDataQuery, [comicId], (err) => {
 				if (err) { return returnError('Error updating comic data to reflect new thumbnail added', res, connection, err) }
 				res.json({success: true})
 				connection.release()

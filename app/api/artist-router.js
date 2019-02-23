@@ -17,7 +17,6 @@ module.exports = function (app, mysqlPool) {
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
 				if (err) { return returnError('Database error: Error fetching artists', res, connection, err) }
-				console.log(results)
         res.json(results)
         connection.release()
       })
