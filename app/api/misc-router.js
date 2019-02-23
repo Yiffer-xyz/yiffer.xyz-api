@@ -4,6 +4,7 @@ let fs = require('fs')
 module.exports = function (app, mysqlPool) {
 
 	app.get ('/api/comicsuggestions', getComicSuggestions)
+	app.post('/api/comicsuggestions', addComicSuggestion)
   app.get ('/api/kofiCallback', kofiCallback)
   app.post('/api/feedback', submitFeedback)
   app.post('/api/log', addLog)
@@ -15,6 +16,19 @@ module.exports = function (app, mysqlPool) {
 			connection.query(query, (err, results) => {
 				if (err) { return returnError('Database query error', res, connection, err) }
 				res.json(results)
+				connection.release()
+			})
+		})
+	}
+
+
+	function addComicSuggestion (req, res, next) {
+		let query = 'INSERT INTO ComicSuggestion (Name, ArtistName, Description, User) VALUES (?, ?, ?, ?)'
+		let user = 'todo ragnar todo'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(query, [req.body.comicName, req.body.artist, req.body.comment, user], (err, results) => {
+				if (err) { return returnError('Database error', res, connection, err) }
+				res.json({success: true})
 				connection.release()
 			})
 		})
