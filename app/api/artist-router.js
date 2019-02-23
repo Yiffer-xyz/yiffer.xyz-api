@@ -13,10 +13,11 @@ module.exports = function (app, mysqlPool) {
 
 
   function getAllArtists (req, res, next) {
-    let query = 'SELECT Id, Name FROM Artist'
+    let query = 'SELECT Id AS id, Name AS name FROM Artist'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
-        if (err) { return returnError('Database query error: ' + err.toString(), res, connection, err) }
+				if (err) { return returnError('Database error: Error fetching artists', res, connection, err) }
+				console.log(results)
         res.json(results)
         connection.release()
       })

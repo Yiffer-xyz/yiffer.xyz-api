@@ -12,7 +12,7 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
-  app.put ('/api/comics/:id/updatedetails', updateComicDetails)
+  app.post('/api/comics/:id/updatedetails', updateComicDetails)
 	app.get ('/api/pendingcomics', getPendingComics)
 
 	app.get ('/api/pendingcomics/:name', getPendingComic)
@@ -231,15 +231,19 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function updateComicDetails (req, res, next) {
-    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
-
-		let [comicId, newName, newCat, newTag, newFinished, newArtistName] = 
-			[req.params.id, req.body.name, req.body.cat, req.body.tag, req.body.finished, req.body.artist]
+  async function updateComicDetails (req, res, next) {
+		if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName] = 
+			[req.params.id, req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished, req.body.artist]
 
     if (!newName || !newCat || !newTag || newFinished==undefined || !newArtistName) {
       return returnError('Missing fields', res, null, null)
-    }
+		}
+		
+		if (oldName !== newName) {
+			let renameResponse = await renameComic(oldName, newName)
+			if (!renameResponse.success) { return returnError('Rename unsuccessful, comic with given name might exist already', res, null, renameResponse.error) }
+		}
 
     let updateQuery = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
     mysqlPool.getConnection((err, connection) => {
@@ -434,6 +438,16 @@ module.exports = function (app, mysqlPool) {
 
 
 
+}
+
+
+function renameComic (oldComicName, newComicName) {
+	return new Promise(resolve => {
+		fs.rename(`${__dirname}/../../../client/public/comics/${oldComicName}`, `${__dirname}/../../../client/public/comics/${newComicName}`, (err) => {
+			if (err) { resolve({success: false, error: err}) }
+			else { resolve({success: true}) }
+		})
+	})
 }
 
 
