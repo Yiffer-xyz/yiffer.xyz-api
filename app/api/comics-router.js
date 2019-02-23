@@ -12,7 +12,7 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
-  app.put ('/api/comics/:name', updateComicDetailsByName)
+  app.put ('/api/comics/:id/updatedetails', updateComicDetails)
 	app.get ('/api/pendingcomics', getPendingComics)
 
 	app.get ('/api/pendingcomics/:name', getPendingComic)
@@ -231,26 +231,23 @@ module.exports = function (app, mysqlPool) {
   }
 
 
-  function updateComicDetailsByName (req, res, next) {
+  function updateComicDetails (req, res, next) {
     if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
 
-    let comicName = req.params.name
-    let updatedCat = req.body.cat
-    let updatedTag = req.body.tag
-    let updatedFinished = req.body.finished
-    let updatedArtistName = req.body.artistName
+		let [comicId, newName, newCat, newTag, newFinished, newArtistName] = 
+			[req.params.id, req.body.name, req.body.cat, req.body.tag, req.body.finished, req.body.artist]
 
-    if (!comicName || !updatedCat || !updatedTag || updatedFinished==undefined || !updatedArtistName) {
+    if (!newName || !newCat || !newTag || newFinished==undefined || !newArtistName) {
       return returnError('Missing fields', res, null, null)
     }
 
-    let updateQuery = 'UPDATE Comic SET Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Id FROM Artist WHERE Name = ?) WHERE Name = ?'
+    let updateQuery = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
     mysqlPool.getConnection((err, connection) => {
-      connection.query(updateQuery, [updatedCat, updatedTag, updatedFinished, updatedArtistName, comicName], (err, results) => {
+      connection.query(updateQuery, [newName, newCat, newTag, newFinished, newArtistName, comicId], (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
-        res.json({ message: 'Successfully updated comic' })
+        res.json({success: true})
         connection.release()
-      })
+      }) //todo inkluder name i update details mod panel!!
     })
   }
 	

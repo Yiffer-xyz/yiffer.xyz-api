@@ -17,7 +17,7 @@ module.exports = function (app, mysqlPool) {
 
 
   function getAllKeywords (req, res, next) {
-    let query = 'SELECT KeywordName, Description FROM Keyword'
+    let query = 'SELECT KeywordName AS keyword, Description AS description FROM Keyword'
     mysqlPool.getConnection((err, connection) => {
       connection.query(query, (err, results) => {
         if (err) { return returnError('Database error: ' + err.toString(), res,  connection, err) }
