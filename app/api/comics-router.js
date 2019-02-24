@@ -12,6 +12,7 @@ module.exports = function (app, mysqlPool) {
   app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
   app.post('/api/comics/:name', multipartyMiddelware, updateComicByName)
   app.post('/api/comics', multipartyMiddelware, createComic)
+  app.post('/api/comics/:id/addpages', multipartyMiddelware, addPagesToLiveComic)
 	app.post('/api/comics/:id/updatedetails', updateComicDetails)
 	
 	app.get ('/api/pendingcomics', getPendingComics)
@@ -151,7 +152,7 @@ module.exports = function (app, mysqlPool) {
 		}
 
 		pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
-			if (err) { return returnError('Python processing new comic failed.', res, null, err) }
+			if (err) { return returnError('Python processing new pages failed', res, null, err) }
 
 			let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [
@@ -375,26 +376,40 @@ module.exports = function (app, mysqlPool) {
 	}
 
 
+	async function addPagesToLiveComic (req, res, next) {
+		addPagesToComic(req, res, false)
+	}
+
+
 	async function addPagesToPendingComic (req, res, next) {
-		if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
+		addPagesToComic(req, res, true)
+	}
+
+	
+	async function addPagesToComic (req, res, isPendingComic) {
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + req.body.comicName
 		if (!req.files || !req.files.newPages) { return returnError('No files added!', res, null, null) }
-		
-		let newNumberOfPages
-		try { newNumberOfPages = await parseAndWriteNewFiles(comicFolderPath, req.files.newPages) }
+
+		let amountOfPagesAdded, newNumberOfPages
+		try { [amountOfPagesAdded, newNumberOfPages] = await parseAndWriteNewFiles(comicFolderPath, req.files.newPages) }
 		catch (err) { return returnError('Error parsing or writing the new files to disc', res, null, err) }
 
-		let updateNumberOfPagesQuery = 'UPDATE PendingComic SET NumberOfPages = ? WHERE Id = ?'
-		mysqlPool.getConnection((err, connection) => {
-			connection.query(updateNumberOfPagesQuery, [newNumberOfPages, req.params.id], (err) => {
-				if (err) { return returnError('Database error: Error updating number of pages', res, connection, err) }
-				res.json({success: true})
-				connection.release()
+		pythonShell.PythonShell.run('process_new_pages.py',
+			{mode: 'text', args: [req.body.comicName, amountOfPagesAdded], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
+			if (err) { return returnError('Python processing new pages failed', res, null, err) }
+
+			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'PendingComic' : 'Comic'} SET NumberOfPages = ? WHERE Id = ?`
+			mysqlPool.getConnection((err, connection) => {
+				connection.query(updateNumberOfPagesQuery, [newNumberOfPages, req.params.id], (err) => {
+					if (err) { return returnError('Database error: Error updating number of pages', res, connection, err) }
+					res.json({success: true})
+					connection.release()
+				})
 			})
 		})
 	}
 
-
+	
 	function addKeywordsToPendingComic (req, res, next) {
 		let comicId = req.params.id
 		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
@@ -471,7 +486,7 @@ async function parseAndWriteNewFiles (comicFolderPath, requestFiles) {
 				fs.writeFileSync(`${comicFolderPath}/${newFile.filename}`, fs.readFileSync(newFile.file.path))
 			}
 
-			resolve(oldNumberOfPages + newFilesWithNames.length)
+			resolve([newFilesWithNames.length, oldNumberOfPages + newFilesWithNames.length])
 		})
 	})
 }
