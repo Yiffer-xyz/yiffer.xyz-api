@@ -5,13 +5,14 @@ module.exports = function (app, mysqlPool) {
 
 	app.get ('/api/comicsuggestions', getComicSuggestions)
 	app.post('/api/comicsuggestions', addComicSuggestion)
+	app.post('/api/comicsuggestions/process', processComicSuggestion)
   app.get ('/api/kofiCallback', kofiCallback)
   app.post('/api/feedback', submitFeedback)
   app.post('/api/log', addLog)
 
 
 	function getComicSuggestions (req, res, next) {
-		let query = 'SELECT Name AS name, ArtistName AS artist, Description AS description, User AS user FROM ComicSuggestion ORDER BY Timestamp DESC'
+		let query = 'SELECT Id AS id, Name AS name, ArtistName AS artist, Description AS description, User AS user FROM ComicSuggestion WHERE Processed=0 ORDER BY Timestamp DESC'
 		mysqlPool.getConnection((err, connection) => {
 			connection.query(query, (err, results) => {
 				if (err) { return returnError('Database query error', res, connection, err) }
@@ -27,6 +28,19 @@ module.exports = function (app, mysqlPool) {
 		let user = 'todo ragnar todo'
 		mysqlPool.getConnection((err, connection) => {
 			connection.query(query, [req.body.comicName, req.body.artist, req.body.comment, user], (err, results) => {
+				if (err) { return returnError('Database error', res, connection, err) }
+				res.json({success: true})
+				connection.release()
+			})
+		})
+	}
+
+
+	function processComicSuggestion (req, res, next) {
+		let [suggestionId, isApproved] = [req.body.suggestionId, req.body.isApproved]
+		let query = 'UPDATE ComicSuggestion SET Processed=1, Approved=? WHERE Id=?'
+		mysqlPool.getConnection((err, connection) => {
+			connection.query(query, [isApproved, suggestionId], (err, results) => {
 				if (err) { return returnError('Database error', res, connection, err) }
 				res.json({success: true})
 				connection.release()
