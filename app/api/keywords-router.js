@@ -3,17 +3,17 @@ let authorizedUsers = require('../../config/autorized-users.json')
 
 module.exports = function (app, mysqlPool) {
 
-  app.get   ('/api/keywords', getAllKeywords)
-  app.get   ('/api/keywords/inIdOrder', getComicKeywordsInOrder)
-  app.delete('/api/keywords', deleteKeywordsFromComic)
-  app.post  ('/api/keywords/addToComic', addKeywordsToComic)
-  app.post  ('/api/keywords', createKeyword)
-  app.post  ('/api/keywordsuggestions/process', processKeywordSuggestion)
-  app.get   ('/api/keywordsuggestions', getKeywordSuggestions)
-  app.post  ('/api/keywordsuggestions', addKeywordSuggestion)
-  app.post  ('/api/keywords/log', logKeywordSearch)
-  app.get   ('/api/keywords/autocomplete/:query', keywordAutocomplete)
-  app.get   ('/api/keywords/autocomplete/', keywordAutocomplete)
+  app.get ('/api/keywords', getAllKeywords)
+  app.get ('/api/keywords/inIdOrder', getComicKeywordsInOrder)
+  app.post('/api/keywords/removefromcomic', removeKeywordsFromComic)
+  app.post('/api/keywords/addtocomic', addKeywordsToComic)
+  app.post('/api/keywords', createKeyword)
+  app.post('/api/keywordsuggestions/process', processKeywordSuggestion)
+  app.get ('/api/keywordsuggestions', getKeywordSuggestions)
+  app.post('/api/keywordsuggestions', addKeywordSuggestion)
+  app.post('/api/keywords/log', logKeywordSearch)
+  app.get ('/api/keywords/autocomplete/:query', keywordAutocomplete)
+  app.get ('/api/keywords/autocomplete/', keywordAutocomplete)
 
 
   function getAllKeywords (req, res, next) {
@@ -45,28 +45,25 @@ module.exports = function (app, mysqlPool) {
         res.json(keywordList)
       })
     })
-
   }
 
 
-	function deleteKeywordsFromComic (req, res, next) {
-		if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
+	function removeKeywordsFromComic (req, res, next) {
+		let [comicId, keywords] = [req.body.comicId, req.body.keywords]
+    if (typeof(keywords) == 'string') { keywords = [req.body.keywords] }
 
-		let comicId = req.query.comicId
-		let keywordDeleteList = req.query.keywordsToDelete
-    if (typeof(keywordDeleteList) == 'string') { keywordDeleteList = [req.query.keywordsToDelete] }
-
-		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, Keyword) IN ('+ '(?, ?), '.repeat(keywordDeleteList.length)
-		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
+		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, Keyword) IN ('
 		let queryParams = []
-		for (var i=0; i<keywordDeleteList.length; i++) {
-			queryParams.push(comicId, keywordDeleteList[i])
+		for (keyword of keywords) {
+			deleteQuery += '(?, ?), '
+			queryParams.push(comicId, keyword)
 		}
+		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
 
     mysqlPool.getConnection((err, connection) => {
 			connection.query(deleteQuery, queryParams, (err, results) => {
-				if (err) { return returnError('Database error: ' + err.toString(), res,  connection, err) }
-				res.json({ message: 'Successfully removed keywords' })
+				if (err) { return returnError('Database error', res, connection, err) }
+        res.json({success: true})
 				connection.release()
 			})
 		})
@@ -74,22 +71,21 @@ module.exports = function (app, mysqlPool) {
 
 
   function addKeywordsToComic (req, res, next) {
-    if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
+		let [comicId, keywords] = [req.body.comicId, req.body.keywords]
+    if (typeof(keywords) == 'string') { keywords = [req.body.keywords] }
 
-    let comicId = req.body.comicId
-    let keywordAddList = req.body.keywordAddList
-
-    let insertQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES ' + '(?, ?), '.repeat(keywordAddList.length)
-    insertQuery = insertQuery.substring(0, insertQuery.length-2)
+    let insertQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
     let queryParams = []
-    for (var i=0; i<keywordAddList.length; i++) {
-      queryParams.push(comicId, keywordAddList[i])
+    for (var keyword of keywords) {
+			insertQuery += '(?, ?), '
+			queryParams.push(comicId, keyword)
     }
+		insertQuery = insertQuery.substring(0, insertQuery.length-2)
 
     mysqlPool.getConnection((err, connection) => {
       connection.query(insertQuery, queryParams, (err, results) => {
-        if (err) { return returnError('Database error: ' + err.toString(), res,  connection, err) }
-        res.json({ message: 'Successfully added keywords' })
+        if (err) { return returnError('Database error. One of the keywords might already exist for this comic?', res, connection, err) }
+        res.json({success: true})
         connection.release()
       })
     })
