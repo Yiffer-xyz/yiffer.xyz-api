@@ -93,16 +93,11 @@ module.exports = function (app, mysqlPool) {
 
 
   function createKeyword (req, res, next) {
-    if (!authorizeMod) { return returnError('Unauthorized, no access', res, null, null) }
-
-    let keywordName = req.body.keywordName
-    let keywordDescription = req.body.keywordDescription
-
-    let query = 'INSERT INTO Keyword (KeywordName, Description) VALUES (?, ?)'
+    let query = 'INSERT INTO Keyword (KeywordName) VALUES (?)'
     mysqlPool.getConnection((err, connection) => {
-      connection.query(query, [keywordName, keywordDescription], (err, results) => {
-        if (err) { return returnError('Database error:' + err.toString(), res,  connection, err) }
-        res.json({ message: 'Successfully created keyword ' + keywordName})
+      connection.query(query, [req.body.keyword], (err, results) => {
+        if (err) { return returnError('Database error', res, connection, err) }
+				res.json({success: true})
         connection.release()
       })
     })
