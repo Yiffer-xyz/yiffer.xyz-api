@@ -6,6 +6,10 @@ module.exports = function (app, mysqlPool) {
 	app.get ('/api/comicsuggestions', getComicSuggestions)
 	app.post('/api/comicsuggestions', addComicSuggestion)
 	app.post('/api/comicsuggestions/process', processComicSuggestion)
+
+	app.get ('/api/comicpagechanges', getComicPageChanges)
+	app.post('/api/swapcomicpages', swapComicPages)
+	
   app.get ('/api/kofiCallback', kofiCallback)
   app.post('/api/feedback', submitFeedback)
   app.post('/api/log', addLog)
@@ -44,6 +48,82 @@ module.exports = function (app, mysqlPool) {
 				if (err) { return returnError('Database error', res, connection, err) }
 				res.json({success: true})
 				connection.release()
+			})
+		})
+	}
+
+
+	function getComicPageChanges (req, res, next) {
+		let comicId = req.query.id
+
+    let query = 'SELECT MAX(Timestamp) AS lastUpdated FROM ComicPageChanges WHERE ComicId = ?'
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(query, [comicId], (err, results) => {
+				if (err) { return returnError('Database error', res, connection, err) }
+				if (results.length === 0) { res.json({lastUpdated: null}) }
+        else { res.json(results[0]) }
+        connection.release()
+      })
+    })
+	}
+
+
+	async function swapComicPages (req, res, next) {
+		let [comicName, comicId, pageNumber1, pageNumber2] = 
+			[req.body.comicName, req.body.comicId, req.body.pageNumber1, req.body.pageNumber2]
+		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
+
+		try {
+			await renameFile(`${comicFolderPath}/${getPageName(pageNumber1)}.jpg`, `${comicFolderPath}/temp.jpg`)
+			await renameFile(`${comicFolderPath}/${getPageName(pageNumber2)}.jpg`, `${comicFolderPath}/${getPageName(pageNumber1)}.jpg`)
+			await renameFile(`${comicFolderPath}/temp.jpg`, `${comicFolderPath}/${getPageName(pageNumber2)}.jpg`)
+		} catch (err) {
+			return returnError(err, res, null, err)
+		}
+
+		let query = 'INSERT INTO ComicPageChanges (ComicId) VALUES (?)'
+		let queryParams = [comicId]
+		try {
+			await executeMysqlQuery(query, queryParams, 'Database error: Error updating comic page change timestamp')
+			res.json({success: true})
+		} catch (err) {
+			return returnError(err.message, res, null, err.error)
+		}
+	}
+
+
+	async function executeMysqlQuery (queryString, queryParams, errorMessage) { //tood i egen klasse
+		return new Promise (async (resolve, reject) => {
+			mysqlPool.getConnection((err, connection) => {
+				if (err) {
+					reject({error: err, message: 'Error establishing database connection'})
+				}
+				else if (queryParams) {
+					connection.query(queryString, queryParams, (err, results) => {
+						if (err) { reject({error: err, message: errorMessage}) }
+						resolve(results)
+						connection.release()
+						console.log('connection released')
+					})
+				}
+				else {
+					connection.query(queryString, (err, results) => {
+						if (err) { reject({error: err, message: errorMessage}) }
+						resolve(results)
+						connection.release()
+						console.log('connection released')
+					})
+				}
+			})
+		})
+	}
+
+
+	async function renameFile (oldFilename, newFilename, errorMessage) {
+		return new Promise(async (resolve, reject) => {
+			fs.rename(oldFilename, newFilename, err => {
+				if (err) { reject({error: err, message: errorMessage}) }
+				else { resolve() }
 			})
 		})
 	}
@@ -152,4 +232,9 @@ function logNode (req, message) {
   let secondSpaceLength = (maxPathLength-message.length < 0) ? 1 : maxPathLength-message.length
 
   console.log(`[${user||ip}] ${' '.repeat(firstSpaceCount)}${message} ${' '.repeat(secondSpaceLength)}[${time}]`)
+}
+
+
+function getPageName (pageNumber) {
+	return pageNumber<10 ? '0'+pageNumber : pageNumber
 }

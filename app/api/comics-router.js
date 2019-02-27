@@ -127,7 +127,7 @@ module.exports = function (app, mysqlPool) {
 		let fileList = sortNewComicImages(req.files.pageFile)
 		let hasThumbnailPage = !!req.files.thumbnailFile
 
-		let allComicFoldersList = fs.readdirSync(__dirname + '/../../../client/public/comics')
+		let allComicFoldersList = fs.readdirSync(comicFolderPath)
 		if (allComicFoldersList.indexOf(req.body.comicName) >= 0) {
 			return returnError('Directory of a comic with this name already exists!', res, null, err)
 		}
@@ -233,7 +233,6 @@ module.exports = function (app, mysqlPool) {
 
 
   async function updateComicDetails (req, res, next) {
-		if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
 		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName] = 
 			[req.params.id, req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished, req.body.artist]
 
@@ -249,12 +248,12 @@ module.exports = function (app, mysqlPool) {
     let updateQuery = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
     mysqlPool.getConnection((err, connection) => {
       connection.query(updateQuery, [newName, newCat, newTag, newFinished, newArtistName, comicId], (err, results) => {
-        if (err) { return returnError('Database error: ' + err.toString(), res, connection, err) }
+        if (err) { return returnError('Database error', res, connection, err) }
         res.json({success: true})
         connection.release()
       }) //todo inkluder name i update details mod panel!!
     })
-  }
+	}
 	
 	
 	function getPendingComics (req, res, next) {
