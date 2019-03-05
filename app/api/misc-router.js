@@ -1,15 +1,14 @@
-let fs = require('fs')
 let FileSystemFacade = require('../fileSystemFacade')
+let BaseRouter = require('./baseRouter')
 
-module.exports = class MiscRouter {
+module.exports = class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade, mysqlPool) {
+		super()
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.setupRoutes()
 		this.mysqlPool = mysqlPool
 	}
-
-	//todo super inheritance returnError???
 
 	setupRoutes () {
 		this.app.get ('/api/comicsuggestions', (req, res) => this.getComicSuggestions(req, res))
@@ -27,20 +26,20 @@ module.exports = class MiscRouter {
 			res.json(result)
 		}
 		catch(err) {
-			return returnError(err.message, res, null, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
 	}
 
 	async addComicSuggestion (req, res) {
 		let query = 'INSERT INTO ComicSuggestion (Name, ArtistName, Description, User) VALUES (?, ?, ?, ?)'
-		let queryParams = [req.body.comicName, req.body.artist, req.body.comment, user]
 		let user = 'todo ragnar todo'
+		let queryParams = [req.body.comicName, req.body.artist, req.body.comment, user]
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Database error')
 			res.json({success: true})
 		}
 		catch (err) {
-			return returnError(err.message, res, null, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
 	}
 
@@ -52,7 +51,7 @@ module.exports = class MiscRouter {
 			res.json({success: true})
 		}
 		catch (err) {
-			return returnError(err.message, res, null, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
 	}
 
@@ -66,7 +65,7 @@ module.exports = class MiscRouter {
 			res.json(result)
 		}
 		catch (err) {
-			return returnError(err.message, res, null, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
 	}
 
@@ -93,23 +92,8 @@ module.exports = class MiscRouter {
 			res.json({success: true})
 		}
 		catch (err) {
-			return this.returnError(err.message, res, null, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
-	}
-
-	async renameFile (oldFilename, newFilename, errorMessage) {
-		return new Promise(async (resolve, reject) => {
-			fs.rename(oldFilename, newFilename, err => {
-				if (err) { reject({error: err, message: errorMessage}) }
-				else { resolve() }
-			})
-		})
-	}
-
-	returnError (errorMessage, res, mysqlConnection, err) {
-		if (err) { console.log(err) }
-		if (res) { res.json({ error: errorMessage }) }
-		if (mysqlConnection) { mysqlConnection.release() }
 	}
 
 	getPageName (pageNumber) {
