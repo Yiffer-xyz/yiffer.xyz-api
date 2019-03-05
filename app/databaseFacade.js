@@ -5,7 +5,7 @@ module.exports = class DatabaseFacade {
 
 	execute (queryString, queryParams, errorMessage) {
 		return new Promise (async (resolve, reject) => {
-			mysqlPool.getConnection((err, connection) => {
+			this.mysqlPool.getConnection((err, connection) => {
 				if (err) {
 					reject({error: err, message: 'Error establishing database connection'})
 				}
@@ -14,7 +14,6 @@ module.exports = class DatabaseFacade {
 						if (err) { reject({error: err, message: errorMessage}) }
 						resolve(results)
 						connection.release()
-						console.log('connection released')
 					})
 				}
 				else {
@@ -22,7 +21,6 @@ module.exports = class DatabaseFacade {
 						if (err) { reject({error: err, message: errorMessage}) }
 						resolve(results)
 						connection.release()
-						console.log('connection released')
 					})
 				}
 			})
