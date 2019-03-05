@@ -6,7 +6,6 @@ let mysqlPool = mysql.createPool(mysqlSettings)
 
 let DatabaseFacade = require('./databaseFacade')
 let databaseFacade = new DatabaseFacade(mysqlPool)
-console.log(databaseFacade)
 
 module.exports = function (app, passport) {
   require('./auth')(app, passport)
@@ -16,7 +15,10 @@ module.exports = function (app, passport) {
   require('./api/artist-router')(app, mysqlPool)
   require('./api/modpanel-router')(app, mysqlPool)
   require('./api/keywords-router')(app, mysqlPool)
-  require('./api/misc-router')(app, mysqlPool)
+	// require('./api/misc-router')(app, mysqlPool)
+	
+	let MiscRouter = require('./api/misc-router')
+	new MiscRouter(app, databaseFacade, mysqlPool)
 
   app.use('/api', api)
   app.get('*', function (req, res) {
