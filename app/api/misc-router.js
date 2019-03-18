@@ -2,12 +2,11 @@ let FileSystemFacade = require('../fileSystemFacade')
 let BaseRouter = require('./baseRouter')
 
 module.exports = class MiscRouter extends BaseRouter {
-	constructor (app, databaseFacade, mysqlPool) {
+	constructor (app, databaseFacade) {
 		super()
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.setupRoutes()
-		this.mysqlPool = mysqlPool
 	}
 
 	setupRoutes () {
