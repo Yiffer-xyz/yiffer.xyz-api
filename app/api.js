@@ -68,7 +68,7 @@ function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
 
 
 app.get('/listRagGetImages', (req, res) => {
-  let query = 'SELECT Id AS id, Artist AS artist, Rating AS rating, Added AS added FROM ListRagImage'
+  let query = 'SELECT Id AS id, Artist AS artist, Rating AS rating, Added AS added, Pup as pp FROM ListRagImage'
   mysqlPool.getConnection((err, connection) => {
     connection.query(query, (err, results) => {
       if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
@@ -78,6 +78,24 @@ app.get('/listRagGetImages', (req, res) => {
   })
 })
 
+app.post('/listRagLogClick', (req, res) => {
+  if (req.session && req.session.user) {
+    return
+  }
+  else {
+    let imageId = req.body.imageId
+    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
+    let query = 'INSERT INTO ListLog (imageId, userIp) VALUES (?, ?)' 
+
+    mysqlPool.getConnection((err, connection) => {
+      connection.query(query, [imageId, ip], (err, results) => {
+        if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+        res.json({status: 'ok'})
+        connection.release()
+      })
+    })
+  }
+})
 
 app.post('/listRagAssignRating', (req, res) => {
   let imageId = req.body.id

@@ -442,6 +442,7 @@ thumbContainer .dark-colors {
 }
 
 .input-label {
+  display: inline-block;
   float: right;
   padding: 0 1em;
   width: 40%;
