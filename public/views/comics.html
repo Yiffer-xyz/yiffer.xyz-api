@@ -2,11 +2,11 @@
     <span class="link-color brightness-button" ng-click="setBrightColors(true)">Bright</span> | <span class="link-color brightness-button" ng-click="setBrightColors(false)">Dark</span>
 </p>
 
-<h1>Yiffing time!</h1>
+<h1 class="brand-logo">Yiffer.xyz</h1>
 <h2>A collection of high-quality comics (<a ng-href="/about">info</a>)</h2>
 
 <p class="introP">
-    {{loggedin ? 'Welcome, ' + username + '!' : 'You are not logged in, so you can\'t vote!'}} 
+    {{loggedin ? 'Welcome, ' + username + '!' : 'You are not logged in, so you can\'t vote!'}}
     &nbsp;
     <a ng-click="openLoginModal()" class="loginLink">{{loggedin ? 'Log out' : 'Log in'}}</a>
 </p>
@@ -66,36 +66,36 @@
 <div id="buttonsDiv">
 
     <table class="buttonContainingTable"><tr>
-        <td class="tagButt butt" id="tagAllB"   ng-click="setFilter('tag', 'All')"      ng-class="{'selected': tag.all}">  
+        <td class="tagButt butt" id="tagAllB"   ng-click="setFilter('tag', 'All')"      ng-class="{'selected': tag.all}">
             <p id="allTextTag" class="buttText">All</p> </td>
-        <td class="tagButt butt" id="furryB"    ng-click="setFilter('tag', 'Furry')"    ng-class="{'selected': tag.list.indexOf('Furry') >= 0}">   
+        <td class="tagButt butt" id="furryB"    ng-click="setFilter('tag', 'Furry')"    ng-class="{'selected': tag.list.indexOf('Furry') >= 0}">
             <p class="buttText">Furry</p>               </td>
-        <td class="tagButt butt" id="mlpB"      ng-click="setFilter('tag', 'MLP')"      ng-class="{'selected': tag.list.indexOf('MLP') >= 0}">     
+        <td class="tagButt butt" id="mlpB"      ng-click="setFilter('tag', 'MLP')"      ng-class="{'selected': tag.list.indexOf('MLP') >= 0}">
             <p class="buttText">MLP</p>                 </td>
-        <td class="tagButt butt" id="pokemonB"  ng-click="setFilter('tag', 'Pokemon')"  ng-class="{'selected': tag.list.indexOf('Pokemon') >= 0}"> 
+        <td class="tagButt butt" id="pokemonB"  ng-click="setFilter('tag', 'Pokemon')"  ng-class="{'selected': tag.list.indexOf('Pokemon') >= 0}">
             <p class="buttText">Pokemon</p>             </td>
-        <td class="tagButt butt" id="wowB"      ng-click="setFilter('tag', 'Warcraft')"      ng-class="{'selected': tag.list.indexOf('Warcraft') >= 0}">     
+        <td class="tagButt butt" id="wowB"      ng-click="setFilter('tag', 'Warcraft')"      ng-class="{'selected': tag.list.indexOf('Warcraft') >= 0}">
             <p class="buttText">Warcraft</p>            </td>
-        <td class="tagButt butt" id="otherB"    ng-click="setFilter('tag', 'Other')"    ng-class="{'selected': tag.list.indexOf('Other') >= 0}">   
+        <td class="tagButt butt" id="otherB"    ng-click="setFilter('tag', 'Other')"    ng-class="{'selected': tag.list.indexOf('Other') >= 0}">
             <p class="buttText">Other</p>               </td>
     </tr></table>
 
     <table class="buttonContainingTable"><tr>
-        <td class="tagButt butt" id="catAllB"   ng-click="setFilter('cat', 'All')"      ng-class="{'selected': cat.all}">  
+        <td class="tagButt butt" id="catAllB"   ng-click="setFilter('cat', 'All')"      ng-class="{'selected': cat.all}">
             <p id="allTextTag" class="buttText">All</p> </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'M')"        ng-class="{'selected': cat.list.indexOf('M') >= 0}">   
+        <td class="catButt butt"                ng-click="setFilter('cat', 'M')"        ng-class="{'selected': cat.list.indexOf('M') >= 0}">
             <p class="buttText">M</p>       </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'F')"        ng-class="{'selected': cat.list.indexOf('F') >= 0}">     
+        <td class="catButt butt"                ng-click="setFilter('cat', 'F')"        ng-class="{'selected': cat.list.indexOf('F') >= 0}">
             <p class="buttText">F</p>       </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'MF')"       ng-class="{'selected': cat.list.indexOf('MF') >= 0}">     
+        <td class="catButt butt"                ng-click="setFilter('cat', 'MF')"       ng-class="{'selected': cat.list.indexOf('MF') >= 0}">
             <p class="buttText">MF</p>      </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'MM')"       ng-class="{'selected': cat.list.indexOf('MM') >= 0}"> 
+        <td class="catButt butt"                ng-click="setFilter('cat', 'MM')"       ng-class="{'selected': cat.list.indexOf('MM') >= 0}">
             <p class="buttText">MM</p>      </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'FF')"       ng-class="{'selected': cat.list.indexOf('FF') >= 0}"> 
+        <td class="catButt butt"                ng-click="setFilter('cat', 'FF')"       ng-class="{'selected': cat.list.indexOf('FF') >= 0}">
             <p class="buttText">FF</p>      </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'MF+')"      ng-class="{'selected': cat.list.indexOf('MF+') >= 0}">   
+        <td class="catButt butt"                ng-click="setFilter('cat', 'MF+')"      ng-class="{'selected': cat.list.indexOf('MF+') >= 0}">
             <p class="buttText">MF+</p>     </td>
-        <td class="catButt butt"                ng-click="setFilter('cat', 'I')"        ng-class="{'selected': cat.list.indexOf('I') >= 0}">   
+        <td class="catButt butt"                ng-click="setFilter('cat', 'I')"        ng-class="{'selected': cat.list.indexOf('I') >= 0}">
             <p class="buttText">I</p>       </td>
 
     <table style="margin-bottom: 3px;"><tr>
@@ -127,14 +127,14 @@
         <td class="sortButt butt" id="dateButt" ng-click="setSort('Recently added')" ng-class="{'selected': sort == 'id'}">
             <p class="buttText">Recently updated</p>
         </td>
-        <td class="sortButt butt" id="userRatinggButt" ng-click="setSort('User rating')" ng-class="{'selected': sort == 'userRating'}"> 
+        <td class="sortButt butt" id="userRatinggButt" ng-click="setSort('User rating')" ng-class="{'selected': sort == 'userRating'}">
             <p class="buttText">User rating</p>
         </td>
-        <td class="sortButt butt" id="yourRatingButt" ng-click="setSort('Your rating')" ng-class="{'selected': sort == 'yourRating'}">  
+        <td class="sortButt butt" id="yourRatingButt" ng-click="setSort('Your rating')" ng-class="{'selected': sort == 'yourRating'}">
             <p class="buttText">Your rating</p>
         </td>
     </tr></table>
-</div> 
+</div>
 
 <div style="text-align: center;">
     <table class="bigSmallButtTable buttonContainingTable hide-when-mobile" style="margin-right: 40px;">
@@ -183,7 +183,7 @@
         ng-repeat="co in shownComicsList"
         ng-class="{'dark-colors': !brightColors, 'smallThumbContainer': thumbSizes=='small'}">
 
-        <a ng-href="/{{co.name}}">  
+        <a ng-href="/{{co.name}}">
             <img class="comicThumbImg" ng-src="comics/{{co.name}}/s.jpg" ng-class="comicThumbImgStyle"/>
         </a>
         <a ng-href="/{{co.name}}">

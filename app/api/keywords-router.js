@@ -149,8 +149,8 @@ module.exports = function (app, mysqlPool) {
           connection.query(alreadySuggestedQuery, [comicId, suggestedKeyword], (err, results) => {
             if (err) { return returnError('Database query error', res, connection, err) }
             if (results.length > 0) {
-              if (results[0].Processed == 1 && results[0].Approved == 0) { return returnError(200, 'This has already been suggested for this comic, and was not approved.', res, connection, err) }
-              if (results[0].Processed == 0) { return returnError(200, 'This has already been suggested for this comic, pending approval!', res, connection, err) }
+              if (results[0].Processed == 1 && results[0].Approved == 0) { return returnError('This has already been suggested for this comic, and was not approved.', res, connection, err) }
+              if (results[0].Processed == 0) { return returnError('This has already been suggested for this comic, pending approval!', res, connection, err) }
             }
 
             connection.query(insertQuery, [comicId, suggestedKeyword, extension, user], (err, results) => {

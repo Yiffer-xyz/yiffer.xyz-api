@@ -1,11 +1,21 @@
 
-<h1>Tittel!!</h1>
+<h1>The spank bank tm</h1>
 <p ng-click="editMode = !editMode" style="text-align: center;" class="link-color">Toggle edit mode</p>
+<p ng-click="sortDate()" style="text-align: center;" class="link-color">Sort by date</p>
+<p ng-click="sortRating()" style="text-align: center;" class="link-color">Sort by rating</p>
+<p ng-click="togglePp()" style="text-align: center;" class="link-color">Toggle ppp</p>
+
+<span >
+	<p style="margin: 2px 30px;">Rule: Each month may have a max of <b>8</b> images.</p>
+	<p style="margin: 2px 30px;">Images found one month may be uploaded the next month if the 8 slots for the current month are filled.</p>
+	<br/>
+	<p style="margin: 2px 30px;">Rule: Rating can be increased for any image at any time, but can only be decreased up to 6 months from the added date. This is to preserve some sense of how "good" it was during the time it was most relevant.. or something like that.</p>
+</span>
 
 <div class="ragListContainer" style="margin-top: 20px;">
-  <div ng-repeat="image in imageList track by $index" class="ragListThumb">
+  <div ng-repeat="image in imageList track by $index" class="ragListThumb" ng-if="!pp || image.pp">
     <a ng-href="{{'listRagImages/thumbs/' + image.id + '.jpg'}}" target="_blank">
-      <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}"/>
+      <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}"/ ng-click=logClick(image.id)>
     </a>
     <p><b>{{image.rating}}</b></p>
     <p>{{image.artist}}</p>

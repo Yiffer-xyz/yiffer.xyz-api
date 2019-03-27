@@ -312,6 +312,7 @@ angular.module('ModPanelCtrl', ['ngCookies', 'ngFileUpload']).controller('ModPan
 			for (var comic of res) {
 				if (!comic.finished) { $scope.wipComicsList.push(comic) }
 			}
+			$scope.allComicsList.sort((a, b) => { return a.name > b.name ? 1 : -1 })
 		})
 	}
 
