@@ -12,7 +12,7 @@ let cors = require('cors')
 
 app.use(cors())
 
-mongoose.connect(db.url)
+mongoose.connect(db.url, {useNewUrlParser: true})
 
 require('./config/passport')(passport)
 
