@@ -20,7 +20,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async getAllKeywords (req, res) {
-    let query = 'SELECT KeywordName AS keyword, Description AS description FROM Keyword'
+    let query = 'SELECT ComicKeyword.Keyword AS keyword, COUNT(*) AS count FROM Comic INNER JOIN ComicKeyword ON (Id=ComicId) GROUP BY ComicKeyword.Keyword ORDER BY count DESC'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)
