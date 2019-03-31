@@ -1,8 +1,4 @@
-let authorizedUsers = require('../../config/autorized-users.json')
-
-let FileSystemFacade = require('../fileSystemFacade')
 let BaseRouter = require('./baseRouter')
-
 
 module.exports = class KeywordsRouter extends BaseRouter {
 	constructor (app, databaseFacade) {
