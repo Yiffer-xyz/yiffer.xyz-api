@@ -37,11 +37,16 @@ module.exports = function (app, passport) {
         return res.json({success: false, message: info})
       }
 
-      req.login(user, function (err) {
+      req.login(user, function (err) { //todo can remove?
         if (err) return next(err)
 
         req.session.user = { username: user.username }
-        return res.json({success: true, message: user.username})
+        return res.json({success: true, userData: {
+          username: user.Username,
+          userType: user.UserType,
+          donator: user.Donator,
+          createdTime: user.CreatedTime
+        }})
       })
     })(req, res, next)
   })
@@ -59,7 +64,12 @@ module.exports = function (app, passport) {
         if (err) return next(err)
 
         req.session.user = { username: user.username }
-        return res.json({success: true, message: user.username})
+        return res.json({success: true, userData: {
+          username: user.Username,
+          userType: user.UserType,
+          donator: user.Donator,
+          createdTime: user.CreatedTime
+        }})
       })
     })(req, res, next)
   })

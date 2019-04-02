@@ -4,10 +4,7 @@ let mysql = require('mysql')
 let mysqlSettings = require('../config/db-config.json')
 let mysqlPool = mysql.createPool(mysqlSettings)
 
-let DatabaseFacade = require('./databaseFacade')
-let databaseFacade = new DatabaseFacade(mysqlPool)
-
-module.exports = function (app, passport) {
+module.exports = function (app, passport, databaseFacade) {
   require('./auth')(app, passport)
   require('./admin')(app, passport)
 
