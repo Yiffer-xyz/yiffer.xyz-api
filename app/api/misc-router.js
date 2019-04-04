@@ -1,6 +1,9 @@
 let FileSystemFacade = require('../fileSystemFacade')
 let BaseRouter = require('./baseRouter')
 
+let multiparty = require('connect-multiparty')
+let multipartyMiddelware = multiparty()
+
 module.exports = class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade) {
 		super()
@@ -16,6 +19,7 @@ module.exports = class MiscRouter extends BaseRouter {
 	
 		this.app.get ('/api/comicpagechanges', (req, res) => this.getComicPageChanges(req, res))
 		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
+		this.app.post('/api/insertcomicpage', multipartyMiddelware, (req, res) => this.insertComicPage(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -95,7 +99,28 @@ module.exports = class MiscRouter extends BaseRouter {
 		}
 	}
 
+	async insertComicPage (req, res) {
+		let [comicName, comicId, newPageFile, insertAfterPageNumber] =
+			[req.body.comicName, req.body.comicId, req.body.newPageFile, req.body.insertAfterPageNumber]
+		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
+		try {
+			let comicFiles = (await FileSystemFacade.listDir(comicFolderPath, 'Error listing comic directory'))
+				.filter(f => f!='s.jpg').sort()
+			for (var i=comicFiles.length-1; i>=insertAfterPageNumber; i--) {
+				await FileSystemFacade.renameFile(
+					`${comicFolderPath}/${getPageName(i)}.jpg`,
+					`${comicFolderPath}/${getPageName(i+1)}.jpg`,
+					'Error renaming existing image files'
+				)
+			}
+			
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
 	getPageName (pageNumber) {
-		return pageNumber<10 ? '0'+pageNumber : pageNumber
+		return pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
 	}
 }

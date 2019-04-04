@@ -31,7 +31,7 @@ function authorizeDonator (req) {
   })
 }
 
-module.exports = function (app, passport) {
+module.exports = function (app) {
   app.get('/authorizeDonator', function (req, res) {
 
     if (!req.session || !req.session.user) { return res.json({donator: false, key: false}) }

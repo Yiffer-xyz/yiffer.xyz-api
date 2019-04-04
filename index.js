@@ -2,13 +2,23 @@ let port = 8012
 
 let express = require('express')
 let bodyParser = require('body-parser')
-let mongoose = require('mongoose')
-let passport = require('passport')
-let sessions = require('express-session')
-let RedisStore = require('connect-redis')(sessions)
-let db = require('./config/db')
+
 let app = express()
 let cors = require('cors')
+
+let session = require('express-session')
+const redis = require('redis')
+const redisStore = require('connect-redis')(session)
+
+const redisClient = redis.createClient()
+app.use(session({
+  secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
+  name: '_redisPractice',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false },
+  store: new redisStore({ host: 'localhost', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
+}));
 
 let mysql = require('mysql')
 let mysqlSettings = require('./config/db-config.json')
@@ -19,22 +29,12 @@ let databaseFacade = new DatabaseFacade(mysqlPool)
 
 app.use(cors())
 
-mongoose.connect(db.url, {useNewUrlParser: true})
-
-require('./config/passport')(passport, databaseFacade)
-
-let sessionsSetup = require('./config/sessions-setup')
-app.use(sessionsSetup)
-
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 
 app.use(express.static('./public'))
 
-app.use(passport.initialize())
-app.use(passport.session())
-
-require('./app/routes')(app, passport, databaseFacade)
+require('./app/routes')(app, databaseFacade)
 
 app.listen(port)
 console.log('Magic happens on port ' + port)

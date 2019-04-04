@@ -1,12 +1,10 @@
 let fs = require('fs')
 let archiver = require('archiver')
 let pythonShell = require('python-shell')
-let authorizedUsers = require('../../config/autorized-users.json')
 let multiparty = require('connect-multiparty')
 let multipartyMiddelware = multiparty()
 
 module.exports = function (app, mysqlPool) {
-
   app.get ('/api/comics', getComicList)
   app.get ('/api/comics/:name', getComicByName)
   app.get ('/api/comics/:name/userRating', getComicUserRatingByName)
@@ -22,8 +20,7 @@ module.exports = function (app, mysqlPool) {
 	app.post('/api/pendingcomics/:id/addkeywords', addKeywordsToPendingComic)
 	app.post('/api/pendingcomics/:id/removekeywords', removeKeywordsFromPendingComic)
 	app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, addPagesToPendingComic)
-
-
+	
   function getComicList (req, res, next) {
 		let query = ''
 		let queryParams = []
@@ -127,9 +124,9 @@ module.exports = function (app, mysqlPool) {
 		let fileList = sortNewComicImages(req.files.pageFile)
 		let hasThumbnailPage = !!req.files.thumbnailFile
 
-		let allComicFoldersList = fs.readdirSync(comicFolderPath)
+		let allComicFoldersList = fs.readdirSync(__dirname + '/../../../client/public/comics')
 		if (allComicFoldersList.indexOf(req.body.comicName) >= 0) {
-			return returnError('Directory of a comic with this name already exists!', res, null, err)
+			return returnError('Directory of a comic with this name already exists!', res, null, null)
 		}
 
 		try {
@@ -151,12 +148,11 @@ module.exports = function (app, mysqlPool) {
 			return returnError('Error creating new directory or writing new files to disc', res, null, err)
 		}
 
-		pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
+		pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/scripts/Server/app'}, (err, results) => { //todo scriptpath
 			if (err) { return returnError('Python processing new pages failed', res, null, err) }
-
-			let insertQuery = 'INSERT INTO PendingComic (ModName, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+			let insertQuery = 'INSERT INTO PendingComic (ModUser, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [
-				'malann',// BIG todo req.session.user.username
+				req.session.user.id,
 				req.body.comicName,
 				Number(req.body.artistId),
 				req.body.cat,
@@ -394,7 +390,7 @@ module.exports = function (app, mysqlPool) {
 		catch (err) { return returnError('Error parsing or writing the new files to disc', res, null, err) }
 
 		pythonShell.PythonShell.run('process_new_pages.py',
-			{mode: 'text', args: [req.body.comicName, amountOfPagesAdded], scriptPath: 'C:/progg/server/app'}, (err, results) => { //todo scriptpath
+			{mode: 'text', args: [req.body.comicName, amountOfPagesAdded], scriptPath: 'C:/scripts/Server/app'}, (err, results) => { //todo scriptpath
 			if (err) { return returnError('Python processing new pages failed', res, null, err) }
 
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'PendingComic' : 'Comic'} SET NumberOfPages = ? WHERE Id = ?`
