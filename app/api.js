@@ -79,25 +79,32 @@ app.get('/listRagGetImages', (req, res) => {
 })
 
 app.post('/listRagLogClick', (req, res) => {
-  if (req.session && req.session.user) {
+  if (req.session && req.session.user && req.session.user.username == 'malann') {
     return
   }
-  else {
-    let imageId = req.body.imageId
-    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
-    let query = 'INSERT INTO ListLog (imageId, userIp) VALUES (?, ?)' 
-
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(query, [imageId, ip], (err, results) => {
-        if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
-        res.json({status: 'ok'})
-        connection.release()
-      })
-    })
+  let user
+  let imageId = req.body.imageId
+  if (req.session && req.session.user) {
+    user = req.session.user.username
   }
+  else {
+    user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
+  }
+  let query = 'INSERT INTO ListLog (imageId, userIp) VALUES (?, ?)' 
+
+  mysqlPool.getConnection((err, connection) => {
+    connection.query(query, [imageId, user], (err, results) => {
+      if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+      res.json({status: 'ok'})
+      connection.release()
+    })
+  })
 })
 
 app.post('/listRagAssignRating', (req, res) => {
+  if (!req.session || !req.session.user || !req.session.user.username || req.session.user.username != 'malann') {
+    return
+  }
   let imageId = req.body.id
   let newRating = req.body.newRating
   let query = 'UPDATE ListRagImage SET Rating = ? WHERE Id = ?'

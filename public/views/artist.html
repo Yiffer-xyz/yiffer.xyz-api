@@ -12,10 +12,11 @@
 
 <div id="imagesDiv">
 <div class="artistThumbContainer" 
+     ng-if="comicList.length"
      ng-repeat="comic in comicList" 
      ng-class="{'dark-colors': !brightColors, 'thumb-container-bright-colors': brightColors}">
     <a ng-href="/{{comic}}">
-        <img src="comics/{{comic}}/s.jpg"/">
+        <img src="comics/{{comic}}/s.jpg"/>
     </a>
     <p class="comicNameP" style="text-align: center; padding: 6px 0;">{{comic}}</p>
     <p></p>
@@ -36,7 +37,7 @@
 <h2 style="margin-top: 20px;">Mod's favorite non-comic images by this artist</h2>
 
 <div id="imagesDiv" style="margin-bottom: 30px;">
-<div class="artist-fav-img-container" 
+<div class="artist-fav-img-container" ng-if="modFavoriteImages.length"
      ng-repeat="modName in modFavoriteImages"
      ng-class="{'dark-colors': !brightColors, 'thumb-container-bright-colors': brightColors}">
         <img src="/mod-favorites/{{modName}}/{{artistName}}.jpg" ng-click="openImage(modName)" class="hover-cursor-pointer thumb-image-artist" style="align-self: center;">
