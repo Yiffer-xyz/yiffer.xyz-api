@@ -13,6 +13,25 @@
 
 <p style="text-align: center;" class="mobile-padding"><span class="rainbow2">Donate?</span> <a ng-href="/donate">Check it out</a>~</p>
 
+<div class="poll-div" ng-if="pollQuestions.length>0 && !pollHidden">
+    <p style="text-align: center;">We're in the process of redesigning this website.
+        Care to answer {{pollQuestions.length==1 ? 'this one question' : 'these '+pollQuestions.length+' questions'}} and help out?</p>
+    <p ng-click="dismissPoll()" class="link-color">Dismiss</p>
+
+    <div ng-repeat="question in pollQuestions" class="poll-question">
+        <p class="question-header">{{question.title}}</p>
+        <div class="question-answer-container">
+            <div ng-repeat="answer in question.answers"
+                ng-class="{'selected-answer': answer.isSelected, 'answer': true}"
+                ng-click="setSelectedAnswer(question, answer)">
+                {{answer.text}}
+            </div>
+        </div>
+    </div>
+
+    <button ng-click="submitPoll()" class="comic-vote-or-login" style="margin-top: 8px;">Submit</button>
+</div>
+
 <div id="modal-overlay"></div><!-- the overlay element -->
 <div class="modal" id="modal-1">
     <div class="modal-content">

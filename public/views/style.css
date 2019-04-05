@@ -1147,3 +1147,66 @@ a.kofi-button:active {
   padding-bottom: 4px;
   background-color: #555;
 }
+
+
+/* POLLLLLLLLLLLLLLLLLLLLLLLLL */
+.answer {
+  border: 2px solid #aaa;
+  padding: 6px;
+  font-size: 13px;
+  margin: 2px;
+  height: 100%;
+  font-weight: 300;
+}
+.answer:hover {
+  cursor: pointer;
+}
+
+.selected-answer {
+  border-color: #ee1185;
+  
+}
+
+.question-header {
+  text-align: center;
+}
+
+.poll-div {
+  background: #ee118510;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 4px solid #aaa;
+  margin: auto;
+  margin: 8px auto;
+}
+
+.poll-question {
+  display: flex;
+  margin-top: 14px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.question-answer-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media all and (max-width: 795px) {
+  .poll-question {
+    font-size: 13px;
+  }
+  .answer {
+    font-size: 12px;
+  }
+}
+
+.dark-colors .poll-div {
+    background: #ee118535;
+}

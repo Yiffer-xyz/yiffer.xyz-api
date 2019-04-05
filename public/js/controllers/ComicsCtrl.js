@@ -76,6 +76,59 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
     if (anchorScroll) { $anchorScroll() }
   }
 
+  // poll
+  $scope.pollHidden = false || $cookies.get('showPoll')
+
+  $scope.pollQuestions = [
+    {
+      title: 'Q1: How would you react to a few ads being introduced to this site?',
+      name: 'Ads',
+      answers: [
+        {isSelected: false, text: 'Would keep using the site'},
+        {isSelected: false, text: 'Would use the site less'},
+        {isSelected: false, text: 'Would stop using the site'},
+      ]
+    },
+    {
+      title: 'Q2: We\'re considering reworking the voting system. What would you like the most?',
+      name: 'Votingsystem',
+      answers: [
+        {isSelected: false, text: 'Keep the 1-to-10 system of today'},
+        {isSelected: false, text: 'Make it 1-3 stars (like Inkbunny, for example)'},
+        {isSelected: false, text: 'Discard all numbered ratings, only have a \'favorite\' option'},
+        {isSelected: false, text: 'I don\'t use the voting system / no opinion'},
+      ]
+    }
+  ]
+
+  $scope.setSelectedAnswer = function (question, clickedAnswer) {
+    for (var answer of question.answers) {
+      if (answer.text == clickedAnswer.text) {
+        answer.isSelected = true
+      }
+      else {
+        answer.isSelected = false
+      }
+    }
+  }
+
+  $scope.submitPoll = function () {
+    let questionAnswers = $scope.pollQuestions
+      .map(q => ({title: q.title, name: q.name, answer: q.answers.find(a => a.isSelected)}))
+      .filter(qa => qa.answer != undefined)
+      .map(qa => ({title: qa.title, name: qa.name, answer: qa.answer.text}))
+    $http.post('/api/answerPoll', {questionAnswers: questionAnswers})
+    $scope.pollHidden = true
+    $cookies.put('showPoll', false)
+  }
+
+  $scope.dismissPoll = function () {
+    console.log('dismiss bith')
+    $scope.pollHidden = true
+    $http.post('/api/answerPoll', {dismissPoll: true})
+    $cookies.put('showPoll', false)
+  }
+
   function setPageNumberOne () {
     $scope.currentPage = 1
   }

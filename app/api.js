@@ -79,25 +79,32 @@ app.get('/listRagGetImages', (req, res) => {
 })
 
 app.post('/listRagLogClick', (req, res) => {
-  if (req.session && req.session.user) {
+  if (req.session && req.session.user && req.session.user.username == 'malann') {
     return
   }
-  else {
-    let imageId = req.body.imageId
-    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
-    let query = 'INSERT INTO ListLog (imageId, userIp) VALUES (?, ?)' 
-
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(query, [imageId, ip], (err, results) => {
-        if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
-        res.json({status: 'ok'})
-        connection.release()
-      })
-    })
+  let user
+  let imageId = req.body.imageId
+  if (req.session && req.session.user) {
+    user = req.session.user.username
   }
+  else {
+    user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
+  }
+  let query = 'INSERT INTO ListLog (imageId, userIp) VALUES (?, ?)' 
+
+  mysqlPool.getConnection((err, connection) => {
+    connection.query(query, [imageId, user], (err, results) => {
+      if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+      res.json({status: 'ok'})
+      connection.release()
+    })
+  })
 })
 
 app.post('/listRagAssignRating', (req, res) => {
+  if (!req.session || !req.session.user || !req.session.user.username || req.session.user.username != 'malann') {
+    return
+  }
   let imageId = req.body.id
   let newRating = req.body.newRating
   let query = 'UPDATE ListRagImage SET Rating = ? WHERE Id = ?'
@@ -109,6 +116,45 @@ app.post('/listRagAssignRating', (req, res) => {
       archiveNewRating(imageId, newRating)
     })
   })
+})
+
+
+app.post('/answerPoll', async (req, res) => {
+  console.log(req.body)
+  let user = (req.session && req.session.user) ? req.session.user.username : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : 'none')
+  if (!req.body.dismissPoll) {
+    let questionAnswers = req.body.questionAnswers
+  
+    let query = 'INSERT INTO surveyresponse (User, QuestionDescription, QuestionResponse, QuestionName) VALUES (?, ?, ?, ?)'
+    let queryParams = questionAnswers.map(qa => [user, qa.title, qa.answer, qa.name])
+    
+    mysqlPool.getConnection(async (err, connection) => {
+      try {
+        for (var queryParam of queryParams) {
+          await mysqlPool.query(query, queryParam)
+        }
+      }
+      catch (err) {
+        console.log(err)
+      }
+      connection.release()
+      res.end('ok')
+    })
+  }
+  else {
+    let query = 'INSERT INTO surveyresponse (User, QuestionDescription, QuestionResponse, QuestionName) VALUES (?, ?, ?, ?)'
+    let queryParams = [user, 'X', 'dismiss', 'X']
+    mysqlPool.getConnection(async (err, connection) => {
+    try {
+      await mysqlPool.query(query, queryParams)
+    }
+      catch (err) {
+      console.log(err)
+    } 
+      connection.release()
+      res.end('ok')
+  })
+  }
 })
 
 
