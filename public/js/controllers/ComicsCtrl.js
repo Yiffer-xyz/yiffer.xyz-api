@@ -90,7 +90,7 @@ angular.module('ComicsCtrl', ['ngCookies']).controller('ComicsController', ['$sc
       ]
     },
     {
-      title: 'Q2: We\'re considering reworking the voting system. What would you like the most?',
+      title: 'Q2: We\'re considering reworking the voting system. What would you like the most? Regardless of option, some "user rating" sorting would still be possible, whether it be by fav-count or average rating.',
       name: 'Votingsystem',
       answers: [
         {isSelected: false, text: 'Keep the 1-to-10 system of today'},
