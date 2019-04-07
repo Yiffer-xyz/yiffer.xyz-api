@@ -1,0 +1,33 @@
+{
+  "name": "yifferxyz",
+  "version": "1.0.0",
+  "description": "Code is messy!! Newer code is all right, but some parts are 3+ years old!",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ragnarob/yifferXyz.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ragnarob/yifferXyz/issues"
+  },
+  "homepage": "https://github.com/ragnarob/yifferXyz#readme",
+  "dependencies": {
+    "archiver": "^3.0.0",
+    "bcrypt-nodejs": "0.0.3",
+    "body-parser": "^1.18.3",
+    "connect-multiparty": "^2.2.0",
+    "connect-redis": "^3.4.1",
+    "express": "^4.16.4",
+    "express-session": "^1.15.6",
+    "mongoose": "^5.4.22",
+    "mysql": "^2.16.0",
+    "passport": "^0.4.0",
+    "passport-local": "^1.0.0",
+    "python-shell": "^1.0.7"
+  }
+}

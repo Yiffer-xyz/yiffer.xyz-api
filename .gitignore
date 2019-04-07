@@ -2,8 +2,8 @@
 config/
 meta_tools/
 node_modules/
-package.json
 *.txt
+package-lock.json
 public/021njnwjfusjkfn89c23nfsnfkas/
 public/mod-favorites/
 public/listRagImages/
