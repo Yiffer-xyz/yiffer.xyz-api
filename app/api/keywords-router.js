@@ -36,14 +36,14 @@ module.exports = class KeywordsRouter extends BaseRouter {
 
 		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, Keyword) IN ('
 		let queryParams = []
-		for (keyword of keywords) {
+		for (let keyword of keywords) {
 			deleteQuery += '(?, ?), '
 			queryParams.push(comicId, keyword)
 		}
 		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
 
     try {
-      await this.databaseFacade.execute(query, queryParams)
+      await this.databaseFacade.execute(deleteQuery, queryParams)
       res.json({success: true})
     }
     catch (err) {
@@ -64,7 +64,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
 		insertQuery = insertQuery.substring(0, insertQuery.length-2)
 
     try {
-      await this.databaseFacade.execute(query, queryParams)
+      await this.databaseFacade.execute(insertQuery, queryParams)
       res.json({success: true})
     }
     catch (err) {

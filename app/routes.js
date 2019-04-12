@@ -7,10 +7,12 @@ let mysqlPool = mysql.createPool(mysqlSettings)
 module.exports = function (app, databaseFacade) {
   require('./admin')(app)
 
-  require('./api/comics-router')(app, mysqlPool)
+  // require('./api/comics-router')(app, mysqlPool)
   require('./api/artist-router')(app, mysqlPool)
   require('./api/modpanel-router')(app, mysqlPool)
 
+  let ComicsRouter = require('./api/comics-router')
+  new ComicsRouter(app, databaseFacade)
 	let MiscRouter = require('./api/misc-router')
   new MiscRouter(app, databaseFacade)
   let KeywordsRouter = require('./api/keywords-router')

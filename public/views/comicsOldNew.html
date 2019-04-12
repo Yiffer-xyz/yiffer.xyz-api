@@ -1,18 +1,53 @@
 
-<h1>Tittel!!</h1>
-<p ng-click="editMode = !editMode" style="text-align: center;" class="link-color">Toggle edit mode</p>
+<h1>The spank bank tm</h1>
+<p style="margin: 20px auto; max-width: 70%; text-align: center;">Rule: Rating can be increased for any image at any time, but can only be decreased up to 6 months from the added date. This is to preserve some sense of how "good" it was during the time it was most relevant.. or something like that.</p>
+
+<p style="text-align: center; font-weight: bold;">Style explanation:</p>
+<span style="display: flex; flex-direction: row; justify-content: center;" class="style-explanation">
+  <div class="ragListThumb old-thumb">This is an image older than 6 months. Will mostly keep its rating, can only increase.</div>
+  <div class="ragListThumb medium-thumb">This is an image younger than 6 months. Rating can and probably will change.</div>
+  <div class="ragListThumb ending-thumb">This is an image in its last month of being editable, and will become "permanent" like the first style next month.</div>
+  <div class="ragListThumb new-thumb">Finally, this is a fresh image that's been added this month.</div>
+</span>
+
+<div class="list-rag-buttons">
+  <button class="resize-button" ng-click="editMode = !editMode" ng-if="isAdmin==true">Toggle edit mode</button>
+  <button class="resize-button" ng-click="sortDate()">Sort by date</button>
+  <button class="resize-button" ng-click="sortRating()">Sort by rating</button>
+  <button class="resize-button" ng-click="sortComeCount()">Sort by cum count</button>
+</div>
+
+<div class="list-rag-buttons" style="margin: 0;">
+    <button ng-if="!recordingCome" class="resize-button" ng-click="toggleRecordComeClick()"
+            style="background-color: #ee1185; color: white; padding: 10px 20px;">
+      Record CUMMING to an image!</button>
+    <p ng-if="recordingCome">Allright, click the image you came to! Or
+      <button class="resize-button" ng-click="toggleRecordComeClick()">cancel</button></p>
+</div>
 
 <div class="ragListContainer" style="margin-top: 20px;">
-  <div ng-repeat="image in imageList track by $index" class="ragListThumb">
-    <a ng-href="{{'listRagImages/thumbs/' + image.id + '.jpg'}}" target="_blank">
-      <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}"/>
+  <div ng-repeat="image in imageList track by $index" ng-click="comeImageClicked(image)" 
+       ng-class="[image.thumbClass, {'ragListThumb': true, 'thumbComeClicked': currentComeConfirmImage==image, 'ragListThumbPointer': recordingCome}]"
+       ng-if="!pp || image.pp">
+    <a ng-href="{{'listRagImages/thumbs/' + image.id + '.jpg'}}" target="_blank" ng-if="!recordingCome">
+      <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}" ng-click="logClick(image.id)">
     </a>
-    <p><b>{{image.rating}}</b></p>
-    <p>{{image.artist}}</p>
-    <p>{{image.added}}</p>
+
+    <img ng-src="{{'listRagImages/big/' + image.id + '.jpg'}}" ng-if="recordingCome">
+
+    <p style="margin-top: 3px; font-size: 18px;"><b>{{image.rating}}</b></p>
+    <p>Cum count: {{image.comeCount || 0}}</p>
+    <p style="font-size: 12px;">{{image.artist}}</p>
+    <p style="font-size: 12px;">{{image.added}}</p>
     <div style="display: flex; flex-direction: row;" ng-show="editMode">
       <input ng-model="image.newRating" style="width: 35px;"/>
       <button ng-click="assignRating(image)">OK</button>
+    </div>
+
+    <div ng-if="currentComeConfirmImage==image && recordingCome" 
+         style="display: flex; flex-direction: column; align-items: center;">
+      <button ng-click="confirmCome(image)" class="resize-button" style="background-color: #ee1185; margin: 16px 0;">
+        CONFIRM cum<br/>as {{username}}</button>
     </div>
   </div>
 </div>  

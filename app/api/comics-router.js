@@ -2,6 +2,7 @@ let pythonShell = require('python-shell')
 let multiparty = require('connect-multiparty')
 let multipartyMiddelware = multiparty()
 let FileSystemFacade = require('../fileSystemFacade')
+let BaseRouter = require('./baseRouter')
 
 module.exports = class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade) {
@@ -144,7 +145,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		}
 		if (!!thumbnailFile) {
 			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
-			await FileSystemFacade.writeFile(comicFolderPath + '/s.jpg', fileContents, , 'Error writing thumbnail file to disk')
+			await FileSystemFacade.writeFile(comicFolderPath + '/s.jpg', fileContents, 'Error writing thumbnail file to disk')
 		}
 	
 		await pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/scripts/Server/app'})
@@ -477,11 +478,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 //   console.log('Zipping ' + comicName + '!')
 // }
 
-// function authorizeAdmin (req, res, next) { // todo !!
-//   // if (!req.session || !req.session.user) { return false }
-//   // if (authorizedUsers.admins.indexOf(req.session.user.username) === -1) { return false }
-//   next()
-// }
+function authorizeAdmin (req, res, next) { // todo !!
+  // if (!req.session || !req.session.user) { return false }
+  // if (authorizedUsers.admins.indexOf(req.session.user.username) === -1) { return false }
+  next()
+}
 
 
 // function authorizeMod (req) { // todo !! gj;re til next
