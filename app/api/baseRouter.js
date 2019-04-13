@@ -14,9 +14,13 @@ module.exports = class BaseRouter {
 		}
 	}
 
-	authorizeMod (req) { //todo
-		if (!req.session || !req.session.user) { return false }
-		// if (authorizedUsers.mods.indexOf(req.session.user.username) === -1) { return false }
+	authorizeMod (req, res, next) { //todo
+		if (!req.session || !req.session.user) {
+			res.json({error: 'Not logged in'})
+		}
+		else {
+			
+		}
 		return true
 	}
 

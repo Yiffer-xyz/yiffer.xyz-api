@@ -280,6 +280,111 @@ module.exports = class ComicsRouter extends BaseRouter {
 		}
 	}
 
+	async processPendingComic (req, res) {
+		let comicId = req.params.id
+		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
+		let getKeywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
+		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
+		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, Finished, Artist) VALUES (?, ?, ?, ?, ?, ?)'
+		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
+
+		try {
+			let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
+			comicData = comicData[0]
+			if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res) }
+
+			let keywords = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
+			if (results.length === 0) { return returnError('No tags added', res, connection, err) }
+			keywords = keywords.map(k => k.Keyword)
+
+			let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
+			await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
+
+			await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
+
+			let insertKeywordsQueryParams = []
+			for (var keyword of keywords) { 
+				insertKeywordsQuery += `(?, ?), `
+				insertKeywordsQueryParams.push(newComicId)
+				insertKeywordsQueryParams.push(keyword)
+			}
+			insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
+			await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
+
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async addThumbnailToPendingComic (req, res) {
+		let [thumbnailFile, comicName, comicId] = 
+			[req.files.thumbnailFile, req.body.comicName, req.params.id]
+		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
+
+		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
+			return returnError('File must exist and be .jpg or .png', res)
+		}
+
+		try {
+			let directoryContents = await FileSystemFacade.listDir(comicFolderPath)
+			if (directoryContents.indexOf('s.jpg') >= 0) {
+				await FileSystemFacade.deleteFile(comicFolderPath + '/s.jpg', 'Error deleting old thumbnail')
+			}
+			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
+			await FileSystemFacade.writeFile(comicFolderPath+'/s.jpg', fileContents, 'Error writing new thumbnail file')
+
+			let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Id = ?'
+			await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async addKeywordsToPendingComic (req, res) {
+		let [comicId, keywords] = [req.params.id, req.body.keywords]
+		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
+		let addKeywordsQueryParams = []
+		for (let keyword of keywords) {
+			addKeywordsQuery += '(?, ?), '
+			addKeywordsQueryParams.push(comicId)
+			addKeywordsQueryParams.push(keyword)
+		}
+		addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
+
+		try {
+			await this.databaseFacade.execute(addKeywordsQuery, addKeywordsQueryParams)
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async removeKeywordsFromPendingComic (req, res) {
+		let [comicId, keywords] = [req.params.id, req.body.keywords]
+		let removeKeywordsQuery = 'DELETE FROM PendingComicKeyword WHERE (ComicId, Keyword) IN ('
+		let removeKeywordsQueryParams = []
+		for (let keyword of req.body.keywords) {
+			removeKeywordsQuery += '(?, ?), '
+			removeKeywordsQueryParams.push(comicId)
+			removeKeywordsQueryParams.push(keyword)
+		}
+		removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
+
+		try {
+			await this.databaseFacade.execute(removeKeywordsQuery, removeKeywordsQueryParams)
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+
+	}
 
 	sortNewComicImages (requestFiles) {
 		return [...requestFiles].sort((file1, file2) => file1.name>file2.name ? 1 : -1)
@@ -297,185 +402,6 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 }
 
-module.exports = function (app, mysqlPool) {
-
-
-	function processPendingComic (req, res, next) {
-		let comicId = req.params.id
-		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
-		let getKeywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
-		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
-		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, Finished, Artist) VALUES (?, ?, ?, ?, ?, ?)'
-		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
-		mysqlPool.getConnection((err, connection) => {
-			connection.query(getFullPendingComicDataQuery, [comicId], (err, results) => {
-				if (err) { return returnError('Database error: Error getting the pending comic\'s data', res, connection, err) }
-				let comicData = results[0]
-				if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res, connection, err) }
-
-				connection.query(getKeywordsQuery, [comicId], (err, results) => {
-					if (err) { return returnError('Database error: Error getting tags from pending comic', res, connection, err) }
-					if (results.length === 0) { return returnError('No tags added', res, connection, err) }
-					let keywords = results.map(keywordObj => keywordObj.Keyword)
-					let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
-					connection.query(insertIntoComicQuery, updatePendingComicsQueryParams, (err, results) => {
-						if (err) { return returnError('Database error: Error adding new comic to the database', res, connection, err) }
-						let newComicId = results.insertId
-						
-						connection.query(updatePendingComicsQuery, [comicId], (err, results) => {
-							if (err) { return returnError('Database error: Error updating pending comic processed status', res, connection, err) }	
-
-							let insertKeywordsQueryParams = []
-							for (var keyword of keywords) { 
-								insertKeywordsQuery += `(?, ?), `
-								insertKeywordsQueryParams.push(newComicId)
-								insertKeywordsQueryParams.push(keyword)
-							}
-							insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
-							connection.query(insertKeywordsQuery, insertKeywordsQueryParams, (err, results) => {
-								if (err) { return returnError('Database error: Error transferring tags from pending to new comic', res, connection, err) }	
-
-								res.json({success: true})
-								connection.release()
-							})
-						})
-					})
-				})
-			})
-		})
-	}
-
-
-	async function addThumbnailToPendingComic (req, res, next) {
-		let thumbnailFile = req.files.thumbnailFile
-		let comicName = req.body.comicName
-		let comicId = req.params.id
-		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
-
-		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
-			return returnError('File must exist and be .jpg or .png', res, null, null)
-		}
-
-		try {
-			let directoryContents = fs.readdirSync(comicFolderPath)
-			if (directoryContents.indexOf('s.jpg') >= 0) {
-				fs.unlinkSync(comicFolderPath + '/s.jpg')
-			}
-			let fileContents = fs.readFileSync(thumbnailFile.path)
-			await fs.writeFileSync(comicFolderPath+'/s.jpg', fileContents)
-		}
-		catch (err) {
-			return returnError('Error deleting old thumbnail or writing new one to disc', res, null, err)
-		}
-
-		let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Id = ?'
-		mysqlPool.getConnection((err, connection) => {
-			connection.query(updateComicDataQuery, [comicId], (err) => {
-				if (err) { return returnError('Error updating comic data to reflect new thumbnail added', res, connection, err) }
-				res.json({success: true})
-				connection.release()
-			})
-		})
-	}
-
-	
-	function addKeywordsToPendingComic (req, res, next) {
-		let comicId = req.params.id
-		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
-		let addKeywordsQueryParams = []
-		for (var keyword of req.body.keywords) {
-			addKeywordsQuery += '(?, ?), '
-			addKeywordsQueryParams.push(comicId)
-			addKeywordsQueryParams.push(keyword)
-		}
-		addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
-
-		mysqlPool.getConnection((err, connection) => {
-			connection.query(addKeywordsQuery, addKeywordsQueryParams, (err) => {
-				if (err) { return returnError('Error inserting the keywords into the database', res, connection, err) }
-				res.json({success: true})
-				connection.release()
-			})
-		})
-	}
-
-
-	function removeKeywordsFromPendingComic (req, res, next) {
-		let comicId = req.params.id
-		let removeKeywordsQuery = 'DELETE FROM PendingComicKeyword WHERE (ComicId, Keyword) IN ('
-		let removeKeywordsQueryParams = []
-		for (var keyword of req.body.keywords) {
-			removeKeywordsQuery += '(?, ?), '
-			removeKeywordsQueryParams.push(comicId)
-			removeKeywordsQueryParams.push(keyword)
-		}
-		removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
-
-		mysqlPool.getConnection((err, connection) => {
-			connection.query(removeKeywordsQuery, removeKeywordsQueryParams, (err) => {
-				if (err) { return returnError('Error removing the keywords from the database', res, connection, err) }
-				res.json({success: true})
-				connection.release()
-			})
-		})
-	}
-
-
-
-
-}
-
-
-function renameComic (oldComicName, newComicName) {
-	return new Promise(resolve => {
-		fs.rename(`${__dirname}/../../../client/public/comics/${oldComicName}`, `${__dirname}/../../../client/public/comics/${newComicName}`, (err) => {
-			if (err) { resolve({success: false, error: err}) }
-			else { resolve({success: true}) }
-		})
-	})
-}
-
-
-async function parseAndWriteNewFiles (comicFolderPath, requestFiles) {
-	return new Promise( async resolve => {
-		fs.readdir(comicFolderPath, (err, files) => {
-			let oldNumberOfPages = files.filter(f => f!='s.jpg').length
-			let newFilesWithNames = []
-			if (requestFiles.hasOwnProperty('fieldName')) { // one file only
-				newFilesWithNames.push({filename: getPageName(oldNumberOfPages+1, requestFiles.path), file: requestFiles})
-			}
-			else {
-				requestFiles = [...requestFiles].sort((f1, f2) => f1>f2 ? 1 : -1)
-				for (var i=0; i<requestFiles.length; i++) {
-					newFilesWithNames.push({filename: getPageName(oldNumberOfPages+i+1, requestFiles[i].path), file: requestFiles[i]})
-				}
-			}
-
-			for (var newFile of newFilesWithNames) {
-				fs.writeFileSync(`${comicFolderPath}/${newFile.filename}`, fs.readFileSync(newFile.file.path))
-			}
-
-			resolve([newFilesWithNames.length, oldNumberOfPages + newFilesWithNames.length])
-		})
-	})
-}
-
-
-function zipComic (comicName, isNewComic) {
-  let zipFilePath = __dirname + '/../../public/021njnwjfusjkfn89c23nfsnfkas/' + comicName + '.zip'
-  if (!isNewComic) {
-    console.log('Deleting file ' + zipFilePath)
-    fs.unlinkSync(zipFilePath)
-  }
-
-  let outputStream = fs.createWriteStream(zipFilePath)
-  let archive = archiver('zip', {zlib: {level: 9}})
-
-  archive.pipe(outputStream)
-  archive.directory(__dirname + '/../../public/comics/'+ comicName +'/', false)
-  archive.finalize()
-  console.log('Zipping ' + comicName + '!')
-}
 
 function authorizeAdmin (req, res, next) { // todo !!
   if (!req.session || !req.session.user) { return false }
@@ -483,35 +409,3 @@ function authorizeAdmin (req, res, next) { // todo !!
   next()
 }
 
-
-function authorizeMod (req) { // todo !! gj;re til next
-  // if (!req.session || !req.session.user) { return false }
-  // if (authorizedUsers.mods.indexOf(req.session.user.username) === -1) { return false }
-  return true
-}
-
-
-function logComicUpdate (req, mysqlPool) {
-  let comicName = req.body.comicName
-  let modName = req.session.user.username
-  let query = 'INSERT INTO TagLog (TagNames, ComicName, Username) VALUES (?, ?, ?)'
-  mysqlPool.getConnection((err, connection) => {
-    connection.query(query, ['>>ADD iMAGE<<', comicName, modName], (err, rows) => {
-      if (err) { return returnError(null, null, connection, err) }
-      connection.release()
-    })
-  })
-}
-
-
-function getPageName (pageNumber, filePathName) {
-  let pageNumberString = (pageNumber < 10) ? ('0' + pageNumber) : (pageNumber)
-  let pagePostfix = filePathName.substring(filePathName.length - 4)
-  if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
-  return pageNumberString + pagePostfix
-}
-
-
-function sortNewComicImages (requestFiles) {
-	return [...requestFiles].sort((file1, file2) => file1.name>file2.name ? 1 : -1)
-}
