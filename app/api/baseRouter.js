@@ -1,4 +1,9 @@
 module.exports = class BaseRouter {
+	constructor (app, databaseFacade) {
+		this.app = app
+		this.databaseFacade = databaseFacade
+	}
+
 	// todo refactor. take only err and res?
 	returnError (errorMessage, res, err) {
 		if (err) { console.log(err) }
@@ -14,14 +19,46 @@ module.exports = class BaseRouter {
 		}
 	}
 
-	authorizeMod (req, res, next) { //todo
-		if (!req.session || !req.session.user) {
-			res.json({error: 'Not logged in'})
+	async authorizeMod (req, res, next) {
+		let authorized = await this.authorize(req, res, 'moderator')
+		if (authorized === true) { next() }
+	}
+
+	async authorizeAdmin (req, res, next) {
+		let authorized = await this.authorize(req, res, 'admin')
+		if (authorized === true) { next() }
+	}
+
+	async authorize(req, res, role) {
+		try {
+			if (!req.session || !req.session.user) {
+				return res.json({error: 'Not logged in'})
+			}
+			else {
+				let query = 'SELECT * FROM User2 WHERE Username=?'
+				let userData = await this.databaseFacade.execute(query, [req.session.user.username])
+				if (role === 'moderator') {
+					if (userData[0].UserType === 'moderator' || userData[0].UserType === 'admin') {
+						return true
+					}
+					else {
+						res.json({error: 'Unauthorized'})
+					}
+				}
+				else if (role === 'admin') {
+					if (userData[0].UserType === 'admin') {
+						return true
+					}
+					else {
+						res.json({error: 'Unauthorized'})
+					}
+				}
+			}
 		}
-		else {
-			
+		catch (err) {
+			res.json({error: 'Error authorizing user'})
+			console.log(err)
 		}
-		return true
 	}
 
 	// todo logging of errors

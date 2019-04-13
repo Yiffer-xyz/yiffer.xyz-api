@@ -2,9 +2,7 @@ let BaseRouter = require('./baseRouter')
 
 module.exports = class KeywordsRouter extends BaseRouter {
 	constructor (app, databaseFacade) {
-		super()
-		this.app = app
-		this.databaseFacade = databaseFacade
+		super(app, databaseFacade)
 		this.setupRoutes()
   }
   

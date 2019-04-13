@@ -3,9 +3,7 @@ let bcrypt = require('bcrypt')
 
 module.exports = class AuthenticationRouter extends BaseRouter {
   constructor (app, databaseFacade) {
-    super()
-    this.app = app
-    this.databaseFacade = databaseFacade
+    super(app, databaseFacade)
     this.setupRoutes()
   }
 
