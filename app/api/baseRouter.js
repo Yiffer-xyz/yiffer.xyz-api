@@ -19,6 +19,16 @@ module.exports = class BaseRouter {
 		}
 	}
 
+	async authorizeUser (req, res, next) {
+		let user = this.getUser(req)
+		if (!user) {
+			res.json({error: 'Not logged in'})
+		}
+		else {
+			next()
+		}
+	}
+
 	async authorizeMod (req, res, next) {
 		let authorized = await this.authorize(req, res, 'moderator')
 		if (authorized === true) { next() }

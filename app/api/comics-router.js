@@ -16,6 +16,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		this.app.post('/api/comics', multipartyMiddelware, (req, res) => this.createComic(req, res))
 		this.app.post('/api/comics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, isPendingComic=false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
+		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		
 		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
@@ -237,6 +238,24 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let query = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
 			let queryParams = [newName, newCat, newTag, newFinished, newArtistName, comicId]
 			await this.databaseFacade.execute(query, queryParams)
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async rateComic (req, res) {
+		console.log(req.body)
+		let [comicId, rating] = [req.params.id, req.body.rating]
+		let user = this.getUser(req)
+		let deleteQuery = 'DELETE FROM ComicVote WHERE Username = ? AND ComicId = ?'
+		let deleteQueryParams = [user.username, comicId]
+		let insertQuery = 'INSERT INTO ComicVote (Username, ComicId, Vote) VALUES (?, ?, ?)'
+		let insertQueryParams = [user.username, comicId, rating]
+		try {
+			await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'Error deleting old rating')
+			await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Error assigning new rating')
 			res.json({success: true})
 		}
 		catch (err) {
