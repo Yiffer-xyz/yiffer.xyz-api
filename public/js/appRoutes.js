@@ -70,3 +70,10 @@ angular.module('appRoutes', []).config(['$routeProvider', '$locationProvider', f
     $locationProvider.hashPrefix('!');
 
 }])
+.run(['$rootScope', '$location', '$window', 
+  function ($rootScope, $location, $window) {
+    $window.ga('create', 'UA-86960625-2', 'auto')
+    $rootScope.$on('$routeChangeSuccess', function () {
+      $window.ga('send', 'pageview', $location.path())
+  })
+}])

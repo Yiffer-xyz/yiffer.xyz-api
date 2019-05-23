@@ -11,10 +11,42 @@
 </span>
 
 <div class="list-rag-buttons">
-  <button class="resize-button" ng-click="editMode = !editMode" ng-if="isAdmin==true">Toggle edit mode</button>
+  <button class="resize-button" ng-click="toggleEditMode()" ng-if="isAdmin==true">Toggle edit mode</button>
   <button class="resize-button" ng-click="sortDate()">Sort by date</button>
   <button class="resize-button" ng-click="sortRating()">Sort by rating</button>
   <button class="resize-button" ng-click="sortComeCount()">Sort by cum count</button>
+  <button class="resize-button" ng-click="toggleAddImage()" ng-if="isAdmin==true">+ New image</button>
+</div>
+
+<div ng-show="addImageMode" style="display: flex; flex-direction: column;">
+  <div >
+    <form>
+      <button ngf-select ng-model="newImage" name="uploadNewPageFile" ngf-pattern="'image/*'" ngf-accept="'image/*'" ngf-max-size="100MB" class="button-neutral">Select file</button>
+    </form>
+  </div>
+  <table>
+    <tr>
+      <td>Artist</td>
+      <td><input type="text" ng-model="newImageArtist"/></td>
+    </tr>
+    <tr>
+      <td>Rating</td>
+      <td><input type="number" ng-model="newImageRating"/></td>
+    </tr>
+    <tr>
+      <td>Added</td>
+      <td><input type="date" ng-model="newImageAdded"/></td>
+    </tr>
+    <tr>
+      <td>Ppp</td>
+      <td><input type="number" ng-model="newImagePpp"/></td>
+    </tr>
+  </table>
+  <div class="mod-panel-flexbox-small-vertical">
+    <button ng-show="newImage" ng-click="uploadImage()" class="button-green">
+      Submit {{newImage.name}}
+    </button>
+  </div>
 </div>
 
 <div class="list-rag-buttons" style="margin: 0;">
@@ -39,9 +71,10 @@
     <p>Cum count: {{image.comeCount || 0}}</p>
     <p style="font-size: 12px;">{{image.artist}}</p>
     <p style="font-size: 12px;">{{image.added}}</p>
-    <div style="display: flex; flex-direction: row;" ng-show="editMode">
+    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; margin-top:2px" ng-if="editMode">
       <input ng-model="image.newRating" style="width: 35px;"/>
-      <button ng-click="assignRating(image)">OK</button>
+      <button class="resize-button" ng-click="assignRating(image)" style="margin-top:1px;">OK</button>
+      <button class="resize-button" ng-click="deleteImage(image)" style="margin-top:4px;">Delete image</button>
     </div>
 
     <div ng-if="currentComeConfirmImage==image && recordingCome" 

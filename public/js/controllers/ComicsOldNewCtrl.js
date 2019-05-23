@@ -1,16 +1,72 @@
-angular.module('ComicsOldNewCtrl', []).controller('ComicsOldNewController', ['$scope', '$http', '$window', function ($scope, $http, $window) {
+angular.module('ComicsOldNewCtrl', []).controller('ComicsOldNewController', ['$scope', '$http', '$window', 'Upload', function ($scope, $http, $window, Upload) {
 
   $scope.editMode = false
   $scope.pp = false
   $scope.qq = false
   $scope.isAdmin = false 
-  // document.getElementById('theBody').classList.add('dark-colors')
   $scope.imageList = []
   $scope.recordingCome = false
   $scope.currentComeConfirmImage = undefined
   $scope.username = 'guest'
   
-  
+  $scope.newImage = undefined
+  $scope.addImageMode = false
+
+  $scope.newImage = undefined
+  $scope.newImageRating = 0
+  $scope.newImageAdded = new Date()
+  $scope.newImagePpp = 0
+
+  $scope.toggleAddImage = function () {
+    $scope.addImageMode = true
+  }
+ 
+  $scope.toggleEditMode = function () {
+    $scope.editMode = !$scope.editMode
+  }
+
+  $scope.uploadImage = function () {
+    let uploadData = {
+      file: $scope.newImage,
+      artist: $scope.newImageArtist,
+      added: $scope.newImageAdded,
+      ppp: $scope.newImagePpp,
+      rating: $scope.newImageRating
+    }
+    console.log(uploadData)
+		Upload.upload({
+			url: '/api/listRagAddImage',
+			data: uploadData
+		})
+		.then(
+			function (res) {
+        init()
+        clearNewImageFields()
+			},
+			function (res) {},
+			function (evt) {}
+		)
+  }
+
+  $scope.imageDeleteCount = {id: undefined, count: 0}
+  $scope.deleteImage = function (image) {
+    if (image.id == $scope.imageDeleteCount.id && $scope.imageDeleteCount.count == 1) {
+      $http.post('/api/listRagDeleteImage', {id: image.id})
+        .then(res => init())
+      $scope.imageDeleteCount = {id: undefined, count: 0}
+    }
+    else {
+      $scope.imageDeleteCount = {id: image.id, count: 1}
+    }
+  }
+
+  function clearNewImageFields () {
+    $scope.newImage = undefined
+    $scope.newImageArtist = ''
+    $scope.newImageRating = 0
+    $scope.newImageAdded = new Date()
+    $scope.newImagePpp = 0
+  } 
   
   $scope.assignRating = function (image) {
     $http({
@@ -25,19 +81,15 @@ angular.module('ComicsOldNewCtrl', []).controller('ComicsOldNewController', ['$s
 
   monthsToClass = function (m) {
     if (m==0) {
-      // return '#9d145c'
       return 'new-thumb'
     }
     else if (m<=5) {
-      // return '#d8d8d8'
       return 'medium-thumb'
     }
     else if (m==6) {
-      // return '#7d4040'
       return 'ending-thumb'
     }
     else {
-      // return '#333'
       return 'old-thumb'
     }
   }
@@ -45,6 +97,7 @@ angular.module('ComicsOldNewCtrl', []).controller('ComicsOldNewController', ['$s
   prettyDate = inputDateString => (new Date(inputDateString)).toDateString().substring(4)
 
   function init () {
+    $scope.imageList = []
     $http.get('/api/listRagGetImages').success((data) => {
       let today = new Date()
       for (var x of data) {
@@ -55,7 +108,7 @@ angular.module('ComicsOldNewCtrl', []).controller('ComicsOldNewController', ['$s
         $scope.imageList.push(x)
       }
     
-      $scope.sortRating()
+      $scope.sortDate()
     })
   }
 

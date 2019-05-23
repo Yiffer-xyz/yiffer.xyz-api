@@ -8,6 +8,8 @@ var mysql = require('mysql')
 var mysqlSettings = require('../config/db-config.json')
 var mysqlPool = mysql.createPool(mysqlSettings)
 
+let pythonShell = require('python-shell')
+
 var authorizedUsers = require('../config/autorized-users.json')
 
 
@@ -65,6 +67,50 @@ function returnError (errorCode, errorMessage, res, mysqlConnection, err) {
   if (res) { res.json({ error: errorMessage }) }
   if (mysqlConnection) { mysqlConnection.release() }
 }
+
+
+app.post('/listRagDeleteImage', (req, res) => {
+  let query = 'DELETE FROM ListRagImage WHERE Id=?'
+  mysqlPool.getConnection((err, connection) => {
+    connection.query(query, [req.body.id], (err, results) => {
+      res.json('ok')
+    })
+  })
+})
+
+
+app.post('/listRagAddImage', multipartyMiddelware, (req, res) => {
+  let [imageFile, artist, rating, added, ppp] =
+    [req.files.file, req.body.artist, req.body.rating, req.body.added, req.body.ppp]
+  added = added.substr(0, 10) + ' ' + added.substr(11,5)
+  let maxIdQuery = 'SELECT MAX(Id) AS maxId FROM ListRagImage'
+  let insertQuery = 'INSERT INTO ListRagImage (Id, Artist, Rating, Added, Pup) VALUES (?, ?, ?, ?, ?)'
+  
+  mysqlPool.getConnection((err, connection) => {
+    connection.query(maxIdQuery, (err, results) => {
+      if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+      let maxId = results[0].maxId
+
+      let insertQueryParams = [maxId+1, artist, rating, added, ppp]
+      connection.query(insertQuery, insertQueryParams, (err) => {
+        if (err) { return returnError(500, 'MySql error: ' + err.toString(), res, connection, err) }
+        connection.release()
+
+        let imagesPath = __dirname + '/../public/listRagImages'
+        
+        fs.readFile(imageFile.path, (err, data) => {
+          if (err) {return returnError(500, 'FS error: ' + err.toString(), res, null, err)}
+          fs.writeFile(`${imagesPath}/thumbs/${maxId+1}.jpg`, data, err => {
+            if (err) {return returnError(500, 'FS error: ' + err.toString(), res, null, err)}
+            fs.writeFile(`${imagesPath}/big/${maxId+1}.jpg`, data, err => {
+              if (err) {return returnError(500, 'FS error: ' + err.toString(), res, null, err)}
+            })
+          })
+        })
+      })
+    })
+  })
+})
 
 
 app.get('/listRagGetImages', (req, res) => {
