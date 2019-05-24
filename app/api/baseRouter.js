@@ -31,12 +31,12 @@ module.exports = class BaseRouter {
 
 	async authorizeMod (req, res, next) {
 		let authorized = await this.authorize(req, res, 'moderator')
-		if (authorized === true) { next() }
+		return authorized === true
 	}
 
 	async authorizeAdmin (req, res, next) {
 		let authorized = await this.authorize(req, res, 'admin')
-		if (authorized === true) { next() }
+		return authorized === true
 	}
 
 	async authorize(req, res, role) {

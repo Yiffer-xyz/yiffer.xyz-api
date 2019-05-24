@@ -2,6 +2,7 @@ let pythonShell = require('python-shell')
 let multiparty = require('connect-multiparty')
 let multipartyMiddelware = multiparty()
 let FileSystemFacade = require('../fileSystemFacade')
+let PythonShellFacade = require('../pythonShellFacade')
 let BaseRouter = require('./baseRouter')
 
 module.exports = class ComicsRouter extends BaseRouter {
@@ -97,9 +98,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 			return this.returnError('Unauthorized', res)
 		}
 		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
-		let [comicName, artistId, cat, tag, isFinished, keywords] = 
-			[req.body.comicName, Number(req.body.artistId), req.body.cat, 
-				req.body.tag,req.body.finished==='true', req.body.keywords]
+		let [comicName, artistId, cat, tag, isFinished, keywords, nextComic, previousComic] = 
+			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag,req.body.finished==='true', 
+			 req.body.keywords, Number(req.body.nextComic), Number(req.body.previousComic)]
 		let userId = req.session.user.id
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		let hasThumbnail = !!thumbnailFile
@@ -117,12 +118,16 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let result = await this.writeNewComicFiles(fileList, comicFolderPath, thumbnailFile)
 			if (result.error) { return this.returnError(result.error, res) }
 
+			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
+
 			let insertQuery = 'INSERT INTO PendingComic (ModUser, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0]
 			let insertResult = await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Database error creating new comic')
 			let comicId = insertResult.insertId
 
 			await this.addKeywordsToComic(keywords, comicId)
+
+			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
 			res.json({success: true})
 		}
@@ -146,18 +151,17 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
 			await FileSystemFacade.writeFile(comicFolderPath + '/s.jpg', fileContents, 'Error writing thumbnail file to disk')
 		}
-	
-		await pythonShell.PythonShell.run('process_new_comic.py', {mode: 'text', args: [req.body.comicName], scriptPath: 'C:/scripts/Server/app'})
 		return {error: false}
 	}
 
-	async addKeywordsToComic(commaSeparatedKeywordString, comicId) {
+	async addKeywordsToComic (commaSeparatedKeywordString, comicId) {
+		if (!commaSeparatedKeywordString || commaSeparatedKeywordString.length==0) { return }
 		let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
-		let insertKeywordsParams = []
+		let insertKeywordsQueryParams  = []
 		for (var keyword of commaSeparatedKeywordString.split(',')) {
 			insertKeywordsQuery += `(?, ?), `
-			insertKeywordsParams.push(comicId)
-			insertKeywordsParams.push(keyword)
+			insertKeywordsQueryParams .push(comicId)
+			insertKeywordsQueryParams .push(keyword)
 		}
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Database error adding tags')
@@ -220,8 +224,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async updateComicDetails (req, res) {
-		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName] = 
-			[req.params.id, req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished, req.body.artist]
+		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName, previousComic, nextComic] = 
+			[Number(req.params.id), req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished,
+			 req.body.artist, Number(req.body.previousComic), Number(req.body.nextComic)] //todo prevand next
 
 		if (!newName || !newCat || !newTag || newFinished==undefined || !newArtistName) {
 			return returnError('Missing fields', res, null, null)
@@ -238,10 +243,41 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let query = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
 			let queryParams = [newName, newCat, newTag, newFinished, newArtistName, comicId]
 			await this.databaseFacade.execute(query, queryParams)
+
+			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
+
 			res.json({success: true})
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async updatePrevAndNextComicLinks (comicId, previousComic, nextComic) {
+		if (previousComic) {
+			let updateQuery = 'UPDATE ComicLink SET FirstComic=? WHERE LastComic=?'
+			let updateResults = await this.databaseFacade.execute(updateQuery, [previousComic, comicId], 'Error updating comic link')
+			if (updateResults.affectedRows == 0) {
+				let insertQuery = 'INSERT INTO ComicLink (FirstComic, LastComic) VALUES (?, ?)'
+				await this.databaseFacade.execute(insertQuery, [previousComic, comicId], 'Error adding comic link')
+			}
+		}
+		else {
+			let deleteQuery = 'DELETE FROM ComicLink WHERE LastComic=?'
+			await this.databaseFacade.execute(deleteQuery, [comicId], 'Error removing comic link')
+		}
+
+		if (nextComic) {
+			let updateQuery = 'UPDATE ComicLink SET LastComic=? WHERE FirstComic=?'
+			let updateResults = await this.databaseFacade.execute(updateQuery, [nextComic, comicId], 'Error updating comic link')
+			if (updateResults.affectedRows == 0) {
+				let insertQuery = 'INSERT INTO ComicLink (FirstComic, LastComic) VALUES (?, ?)'
+				await this.databaseFacade.execute(insertQuery, [comicId, previousComic], 'Error adding comic link')
+			}
+		}
+		else {
+			let deleteQuery = 'DELETE FROM ComicLink WHERE FirstComic=?'
+			await this.databaseFacade.execute(deleteQuery, [comicId], 'Error removing comic link')
 		}
 	}
 
@@ -264,9 +300,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, ModName AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, T3.Keywords AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) LEFT JOIN (SELECT PendingComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM PendingComicKeyword GROUP BY PendingComicKeyword.ComicId) AS T3 ON (T3.ComicId=PendingComic.Id) WHERE Processed=0'
+		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User2.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, T3.Keywords AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User2 ON (User2.Id=ModUser) LEFT JOIN (SELECT PendingComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM PendingComicKeyword GROUP BY PendingComicKeyword.ComicId) AS T3 ON (T3.ComicId=PendingComic.Id) WHERE Processed=0'
 		try {
-			let comics = this.databaseFacade.execute(query)
+			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
 				if (!comic.keywords) { comic.keywords = [] }
 				else { comic.keywords = comic.keywords.split(',') }

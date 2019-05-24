@@ -30,7 +30,7 @@ module.exports = class FileSystemFacade {
 
 	static async readFile (filePath, errorMessage='File system error: Error reading file') {
 		return new Promise(async (resolve, reject) => {
-			fs.readFile(filePath, (fileContent, err) => {
+			fs.readFile(filePath, (err, fileContent) => {
 				if (err) { reject({error: err, message: errorMessage}) }
 				else { resolve(fileContent) }
 			})
