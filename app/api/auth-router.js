@@ -1,5 +1,5 @@
-let BaseRouter = require('./baseRouter')
-let bcrypt = require('bcrypt')
+const BaseRouter = require('./baseRouter')
+const bcrypt = require('bcrypt')
 
 module.exports = class AuthenticationRouter extends BaseRouter {
   constructor (app, databaseFacade) {
@@ -57,11 +57,16 @@ module.exports = class AuthenticationRouter extends BaseRouter {
       if (!this.validateUsername(username)) {
         return this.returnError('Invalid username', res)
       }
+
+      password = await bcrypt.hash(password, 8)
       let insertQuery = 'INSERT INTO User2 (Username, Password) VALUES (?, ?)'
       let insertQueryParams = [username, password]
       let result = await this.databaseFacade.execute(insertQuery, insertQueryParams)
+
       let getNewUserQuery = 'SELECT * FROM User2 WHERE Id = ?'
       let userResponse = await this.databaseFacade.execute(getNewUserQuery, [result.insertId])
+      userResponse = userResponse[0]
+      
       let userData = {
         username: userResponse.Username,
         id: userResponse.Id,
