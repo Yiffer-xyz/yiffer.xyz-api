@@ -1,8 +1,8 @@
 const BaseRouter = require('./baseRouter')
 
 module.exports = class ArtistRouter extends BaseRouter {
-  constructor (app, databaseFacade) {
-		super(app, databaseFacade)
+  constructor (app, databaseFacade, modLogger) {
+		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
   }
   
@@ -64,7 +64,7 @@ module.exports = class ArtistRouter extends BaseRouter {
     try {
       let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
       if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
-      let insertResult = await this.mysqlPool.execute(query, [artistName], 'Error adding artist')
+      let insertResult = await this.databaseFacade.execute(query, [artistName], 'Error adding artist')
       res.json(insertResult.insertId)
     }
 		catch (err) {
@@ -81,8 +81,8 @@ module.exports = class ArtistRouter extends BaseRouter {
     let queryParams = []
 
     for (var typedLink of typedLinks) {
-      query += `(${artistId}, ${typedLink.linkUrl}, ${typedLink.linkType}), `
-      queryParams.push(typedLink.linkUrl, typedLink.linkType)
+      query += `(?, ?, ?), `
+      queryParams.push(artistId, typedLink.linkUrl, typedLink.linkType)
     }
     query = query.substring(0, query.length-2)
     

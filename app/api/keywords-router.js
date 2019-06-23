@@ -1,8 +1,8 @@
 let BaseRouter = require('./baseRouter')
 
 module.exports = class KeywordsRouter extends BaseRouter {
-	constructor (app, databaseFacade) {
-		super(app, databaseFacade)
+	constructor (app, databaseFacade, modLogger) {
+		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
   }
   
@@ -114,6 +114,9 @@ module.exports = class KeywordsRouter extends BaseRouter {
       res.json({success: true})
     }
     catch (err) {
+      if (err.error.sqlMessage && err.error.sqlMessage.includes('Duplicate')) {
+        return this.returnError('Error adding tag: tag already exists on comic. Just reject this one please.', res)
+      }
       return this.returnError(err.message, res, err.error)
     }
   }

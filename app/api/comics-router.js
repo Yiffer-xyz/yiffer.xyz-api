@@ -5,8 +5,8 @@ const PythonShellFacade = require('../pythonShellFacade')
 const BaseRouter = require('./baseRouter')
 
 module.exports = class ComicsRouter extends BaseRouter {
-	constructor (app, databaseFacade) {
-		super(app, databaseFacade)
+	constructor (app, databaseFacade, modLogger) {
+		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
 	}
 
@@ -129,6 +129,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
 			res.json({success: true})
+			this.addModLog(req, 'Comic', `Add ${comicName}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -188,6 +189,8 @@ module.exports = class ComicsRouter extends BaseRouter {
 				queryParams, 'Database error: Error updating number of pages')
 			
 			res.json({success: true})
+			this.addModLog(req, 'Comic', `Append ${newFilesWithNames.length} pages to ${comicName}`)
+
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -243,6 +246,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
 			res.json({success: true})
+			this.addModLog(req, 'Comic', `Update details of ${comicName}`, queryParams.slice(0,-1).join(', '))
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -362,6 +366,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
 
 			res.json({success: true})
+
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -389,6 +396,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.databaseFacade.execute(updateComicDataQuery, [comicId])
 
 			res.json({success: true})
+			this.addModLog(req, 'Pending comic', `Add thumbnail to ${comicName}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -409,6 +417,8 @@ module.exports = class ComicsRouter extends BaseRouter {
 		try {
 			await this.databaseFacade.execute(addKeywordsQuery, addKeywordsQueryParams)
 			res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.join(', '))
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -429,6 +439,8 @@ module.exports = class ComicsRouter extends BaseRouter {
 		try {
 			await this.databaseFacade.execute(removeKeywordsQuery, removeKeywordsQueryParams)
 			res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Pending comic', `Remove ${keywords.length} keywords to ${comicName}`, keywords.join(', '))
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)

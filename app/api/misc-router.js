@@ -5,8 +5,8 @@ let multiparty = require('connect-multiparty')
 let multipartyMiddelware = multiparty()
 
 module.exports = class MiscRouter extends BaseRouter {
-	constructor (app, databaseFacade) {
-		super(app, databaseFacade)
+	constructor (app, databaseFacade, modLogger) {
+		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
 	}
 

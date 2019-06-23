@@ -1,13 +1,19 @@
 module.exports = class BaseRouter {
-	constructor (app, databaseFacade) {
+	constructor (app, databaseFacade, modLogger) {
 		this.app = app
 		this.databaseFacade = databaseFacade
+		this.modLogger = modLogger
 	}
 
 	// todo refactor. take only err and res?
 	returnError (errorMessage, res, err) {
 		if (err) { console.log(err) }
-		if (res) { res.json({ error: errorMessage }) }
+		try {
+			if (res) { res.json({ error: errorMessage }) }
+		}
+		catch (err) {
+			console.log('Error returning error', err)
+		}
 	}
 
 	getUser (req) {
@@ -71,5 +77,8 @@ module.exports = class BaseRouter {
 		}
 	}
 
+	addModLog (req, actionType, ationDescription, actionDetails) {
+		this.modLogger.addModLog(req, actionType, ationDescription, actionDetails)
+	}
 	// todo logging of errors
 }

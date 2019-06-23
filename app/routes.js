@@ -1,28 +1,30 @@
 var api = require('./api')
 
-let mysql = require('mysql')
-let mysqlSettings = require('../config/db-config.json')
-let mysqlPool = mysql.createPool(mysqlSettings)
+const mysql = require('mysql')
+const mysqlSettings = require('../config/db-config.json')
+const mysqlPool = mysql.createPool(mysqlSettings)
+const ModLogger = require('./mod-logger')
 
 module.exports = function (app, databaseFacade) {
   require('./admin')(app)
-
   require('./api/modpanel-router')(app, mysqlPool)
 
+  const modLogger = new ModLogger(app, databaseFacade)
+
   let ComicsRouter = require('./api/comics-router')
-  new ComicsRouter(app, databaseFacade)
-  
+  new ComicsRouter(app, databaseFacade, modLogger)
+
 	let MiscRouter = require('./api/misc-router')
-  new MiscRouter(app, databaseFacade)
-  
+  new MiscRouter(app, databaseFacade, modLogger)
+
   let KeywordsRouter = require('./api/keywords-router')
-  new KeywordsRouter(app, databaseFacade)
-  
+  new KeywordsRouter(app, databaseFacade, modLogger)
+
   let AuthRouter = require('./api/auth-router')
   new AuthRouter(app, databaseFacade)
-  
+
   let ArtistRouter = require('./api/artist-router')
-  new ArtistRouter(app, databaseFacade)
+  new ArtistRouter(app, databaseFacade, modLogger)
 
   app.use('/api', api)
   app.get('*', function (req, res) {
