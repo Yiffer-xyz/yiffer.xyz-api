@@ -1,136 +1,98 @@
-let fs = require('fs')
-let pythonShell = require('python-shell')
-let authorizedUsers = require('../../config/autorized-users.json')
-let multiparty = require('connect-multiparty')
-let multipartyMiddelware = multiparty()
+const BaseRouter = require('./baseRouter')
 
-module.exports = function (app, mysqlPool) {
-  app.get ('/api/artists', getAllArtists)
-  app.get ('/api/artists/:name', getArtistByName)
-  app.post('/api/artists/', createArtist)
-  app.post('/api/artistLinks', addArtistLinks)
-  app.post('/api/artistFavImage', multipartyMiddelware, addArtistModFavoriteImage)
-
-
-  function getAllArtists (req, res, next) {
-    let query = 'SELECT Id AS id, Name AS name FROM Artist'
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(query, (err, results) => {
-				if (err) { return returnError('Database error: Error fetching artists', res, connection, err) }
-        res.json(results)
-        connection.release()
-      })
-    })
+module.exports = class ArtistRouter extends BaseRouter {
+  constructor (app, databaseFacade) {
+		super(app, databaseFacade)
+		this.setupRoutes()
+  }
+  
+  setupRoutes () {
+    this.app.get ('/api/artists', (req, res) => this.getAllArtists(req, res))
+    this.app.get ('/api/artists/:name', (req, res) => this.getArtistByName(req, res))
+    this.app.post('/api/artists', (req, res) => this.addArtist(req, res))
+    this.app.post('/api/artistlinks', (req, res) => this.addArtistLinks(req, res))
   }
 
+  async getAllArtists (req, res) {
+    try {
+      let query = 'SELECT Id AS id, Name AS name FROM Artist'
+      let results = await this.databaseFacade.execute(query)
+      res.json(results)
+    }
+		catch (err) {
+      return this.returnError(err.message, res, err.error)
+		}
+  }
 
-  function getArtistByName (req, res, next) {
+  async getArtistByName (req, res) {
     let artistName = req.params.name
-    let queryComic = 'SELECT Comic.Name FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) WHERE Artist.Name = ? ORDER BY Comic.Name DESC'
-    let queryLinks = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM ArtistLink INNER JOIN Artist ON (Artist.Id = ArtistLink.ArtistId) WHERE Artist.Name = ?'
+    let artistIdQuery = 'SELECT Id from Artist where Name = ?'
+    let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM ArtistLink WHERE ArtistId = ?'
 
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(queryComic, [artistName], (err, results) => {
-        if (err) { return returnError('Database query error', res, connection, err) }
-        if (results.length === 0) { return returnError('404', res, connection, null) }  // todo change to real 404
-
-        let finalReturn = {comicList: [], linkList: []}
-        for (var r in results) { finalReturn.comicList.push(results[r].Name) }
-
-        connection.query(queryLinks, [artistName], (err, results) => {
-          if (err) { return returnError('Database query error', res, connection, err) }
-          finalReturn.linkList = results
-
-          let modFavorites = getModFavImagesForArtist(artistName)
-          finalReturn.modFavoriteList = modFavorites
-
-          res.json(finalReturn)
-          connection.release()
-        })
-      })
-    })  
-  }
-
-
-  function getModFavImagesForArtist (artistName) {
-    let modNames = fs.readdirSync(__dirname + '/../../public/mod-favorites/')
-    let artistsWithFavImage = []
-    for (var modName of modNames) {
-      let favoriteImages = fs.readdirSync(__dirname + `/../../public/mod-favorites/${modName}`)
-      if (favoriteImages.indexOf(artistName + '.jpg') >= 0) { artistsWithFavImage.push(modName) }
+    let user = this.getUser(req)
+    let comicsQuery
+    let comicsQueryParams = []
+    if (user) {
+      comicsQuery = 'SELECT T1.ComicId AS id, T1.ComicName AS name, T1.Cat AS cat, T1.Tag AS tag, T1.ArtistName AS artist, T1.Updated AS updated, T1.Created AS created, T1.Finished AS finished, T1.NumberOfPages AS numberOfPages, T1.Snitt AS userRating, T2.YourVote AS yourRating, T3.Keywords AS keywords FROM (( SELECT Comic.Id AS ComicId, Comic.Name AS ComicName, Cat, Artist.Name as ArtistName, Tag, Updated, Created, Finished, NumberOfPages, AVG(Vote) AS Snitt FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Artist.Id = ? GROUP BY Comic.Name, Comic.Id) AS T1 LEFT JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T3 ON (T1.ComicId = T3.ComicId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE User = ?) AS T2 ON (T1.ComicId = T2.ComicId)) ORDER BY id'
+      comicsQueryParams = [user.id]
     }
-    return artistsWithFavImage
-  }
-
-
-  function createArtist (req, res, next) {
-    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, null) }
-      
-    let newArtistName = req.body.artistName
-    let insertArtistQuery = 'INSERT INTO Artist (Name) VALUES (?)'
-
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(insertArtistQuery, [newArtistName], (err, results) => {
-        if (err) { return returnError('Database query error: '+err.toString(), res, connection, err) }
-        res.json({ message: 'Successfully added artist ' + newArtistName })
-        connection.release()
-      })
-    })
-  }
-
-
-  function addArtistLinks (req, res, next) {
-    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
-    let artistId = req.body.artistId
-    let artistLinks = req.body.artistLinks
-    if (!artistId && artistLinks.length == 0) { return returnError('Missing field(s)', res, null, null) }
-    let typedLinkList = extractLinkTypesFromLinkUrls(artistLinks)
-
-    let addLinksQuery = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
-    let addLinksParams = []
-
-    for (var i=0; i<typedLinkList.length; i++) {
-      if (i!=0) { addLinksQuery += ', ' }
-      addLinksQuery += `(${artistId}, ?, ?)`
-      addLinksParams.push(typedLinkList[i].linkUrl)
-      addLinksParams.push(typedLinkList[i].linkType)
+    else {
+      comicsQuery = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, T1.Keywords AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) WHERE Artist.Id=3 LEFT JOIN (SELECT ComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM ComicKeyword GROUP BY ComicKeyword.ComicId) AS T1 ON (T1.ComicId = Comic.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Artist.Id=? GROUP BY name, id ORDER BY id'
     }
 
-    mysqlPool.getConnection((err, connection) => {
-      connection.query(addLinksQuery, addLinksParams, (err, results) => {
-        if (err) { return returnError('Database query error: '+err.toString(), res, connection, err) }
-        res.json({message: 'Successfully added links'})
-        connection.release()
-      })
-    })
+    try {
+      let artistId = await this.databaseFacade.execute(artistIdQuery, [artistName], 'Error getting artist id')
+      artistId = artistId[0].Id
+      comicsQueryParams.splice(0, 0, artistId)
+      let links = await this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links')
+      let comics = await this.databaseFacade.execute(comicsQuery, comicsQueryParams, 'Error getting artist comics')
+      for (var comic of comics) {
+				if (!comic.keywords) { comic.keywords = [] }
+				else { comic.keywords = comic.keywords.split(',') }
+      }
+      res.json({links: links, comics: comics})
+    }
+		catch (err) {
+      return this.returnError(err.message, res, err.error)
+		}
   }
 
-
-  function addArtistModFavoriteImage (req, res, next) {
-    if (!authorizeMod(req)) { return returnError('Unauthorized or no access', res, null, err) }
-    if (!req.files || !req.files.file || !req.body.artistName) { return returnError('Missing field(s)', res, null, err) }
-
-    let imageFile = req.files.file.path
+  async addArtist (req, res) {
     let artistName = req.body.artistName
-    let modName = req.session.user.username
-    let fileEnding = imageFile.substring(imageFile.length-4)
-    if ((fileEnding != '.jpg') && (fileEnding != '.png')) { 
-      return returnError('File type must be png or jpg', res, null, null)
+    let alreadyExistsQuery = 'SELECT * FROM Artist WHERE Name = ?'
+    let query = 'INSERT INTO Artist (Name) VALUES (?)'
+    try {
+      let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
+      if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
+      let insertResult = await this.mysqlPool.execute(query, [artistName], 'Error adding artist')
+      res.json(insertResult.insertId)
     }
+		catch (err) {
+      return this.returnError(err.message, res, err.error)
+		}
+  }
 
-    fs.readFile(imageFile, (err, fileData) => {
-      if (err) { return returnError('Error reading the uploaded file: ' + err.toString(), res, null, err) }
+  async addArtistLinks (req, res) {
+    let [artistId, links] = [req.body.artistId, req.body.links]
+    if (!artistId || links.length==0) { return this.returnError('Missing field(s)', res) }
+    let typedLinks = extractLinkTypesFromLinkUrls(links)
 
-      fs.writeFile(__dirname + `/../../public/mod-favorites/${modName}/${artistName}${fileEnding}`, fileData, (err) => {
-        if (err) { return returnError('Error writing the uploaded file: ' + err.toString(), res, null, err) }
+    let query = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
+    let queryParams = []
 
-        // if (fileEnding == '.png') { convertImageToJpg(`/public/mod-favorites/${modName}/${artistName}${fileEnding}`) }
-        if (fileEnding == '.png') { 
-          convertImageToJpg('/public/mod-favorites/' + modName + '/' + artistName + fileEnding)
-        }
-        res.json({message: 'Successfully added new fav image!'})
-      })
-    })
+    for (var typedLink of typedLinks) {
+      query += `(${artistId}, ${typedLink.linkUrl}, ${typedLink.linkType}), `
+      queryParams.push(typedLink.linkUrl, typedLink.linkType)
+    }
+    query = query.substring(0, query.length-2)
+    
+    try {
+      await this.databaseFacade.execute(query, queryParams, 'Error adding links')
+      res.json({success: true})
+    }
+		catch (err) {
+      return this.returnError(err.message, res, err.error)
+		}
   }
 }
 
@@ -139,6 +101,7 @@ function extractLinkTypesFromLinkUrls (linkList) {
   let typedLinkList = []
   for (var link of linkList) {
     if (link.indexOf('furaffinity') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'furaffinity'}) }
+    else if (link.indexOf('e621') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'e621'}) }
     else if (link.indexOf('inkbunny') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'inkbunny'}) }
     else if (link.indexOf('patreon') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'patreon'}) }
     else if (link.indexOf('tumblr') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'tumblr'}) }
@@ -152,31 +115,4 @@ function extractLinkTypesFromLinkUrls (linkList) {
     else { typedLinkList.push({linkUrl: link, linkType: 'website'}) }
   }
   return typedLinkList
-}
-
-function convertImageToJpg (pathToImage) {
-  pythonShell.run('convert_file_to_jpg.py', {mode: 'text', args: [pathToImage], scriptPath: '/home/rag/mnet/app'}, (err, results) => {
-    if (err) { console.log(err) }
-  })
-}
-
-
-function returnError (errorMessage, res, mysqlConnection, err) {
-  if (err) { console.log(err) }
-  res.json({ error: errorMessage })
-  if (mysqlConnection) { mysqlConnection.release() }
-}
-
-
-function authorizeAdmin (req) {
-  if (!req.session || !req.session.user) { return false }
-  if (authorizedUsers.admins.indexOf(req.session.user.username) === -1) { return false }
-  return true
-}
-
-
-function authorizeMod (req) { 
-  if (!req.session || !req.session.user) { return false }
-  if (authorizedUsers.mods.indexOf(req.session.user.username) === -1) { return false }
-  return true
 }
