@@ -1,9 +1,8 @@
-let pythonShell = require('python-shell')
-let multiparty = require('connect-multiparty')
-let multipartyMiddelware = multiparty()
-let FileSystemFacade = require('../fileSystemFacade')
-let PythonShellFacade = require('../pythonShellFacade')
-let BaseRouter = require('./baseRouter')
+const multiparty = require('connect-multiparty')
+const multipartyMiddelware = multiparty()
+const FileSystemFacade = require('../fileSystemFacade')
+const PythonShellFacade = require('../pythonShellFacade')
+const BaseRouter = require('./baseRouter')
 
 module.exports = class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade) {
@@ -15,7 +14,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
 		this.app.post('/api/comics', multipartyMiddelware, (req, res) => this.createComic(req, res))
-		this.app.post('/api/comics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, isPendingComic=false))
+		this.app.post('/api/comics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		
@@ -25,7 +24,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, isPendingComic=true))
+		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, true))
 	}
 	
 	async getComicList (req, res) {
@@ -174,17 +173,14 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let requestFiles = req.files.newPages
 
 		try {
-			let existingFiles = await this.FileSystemFacade.readdir(comicFolderPath)
+			let existingFiles = await FileSystemFacade.listDir(comicFolderPath)
 			let existingNumberOfPages = existingFiles.filter(f => f != 's.jpg').length
 
 			let newFilesWithNames = this.parseRequestFiles(requestFiles, existingNumberOfPages)
 
 			await this.writeAppendedComicPageFiles(comicFolderPath, newFilesWithNames)
 			
-			// todo python facade
-			await pythonShell.PythonShell.run('process_new_pages.py',
-				{mode: 'text', args: [comicName, newFilesWithNames.length],
-				scriptPath: 'C:/scripts/Server/app'})
+			await PythonShellFacade.run('process_new_pages.py', [comicName, newFilesWithNames.length])
 
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'PendingComic' : 'Comic'} SET NumberOfPages = ? WHERE Id = ?`
 			let queryParams = [existingNumberOfPages + newFilesWithNames.length, comicId]
@@ -199,7 +195,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	parseRequestFiles (requestFiles, existingNumberOfPages) {
-		if (this.isOneFileOnly(requestFiles)) {
+		if (isOneFileOnly(requestFiles)) {
 			return [{
 				filename: this.getPageName(existingNumberOfPages+1, requestFiles.path),
 				file: requestFiles
@@ -216,9 +212,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 	async writeAppendedComicPageFiles (comicFolderPath, fileList) {
 		for (let file of fileList) {
-			let fileData = await this.FileSystemFacade.readFile(file.file.path,
+			let fileData = await FileSystemFacade.readFile(file.file.path,
 				`Error parsing uploaded file (${file.name})`) // todo make sure this is  filename
-			await this.FileSystemFacade.writeFile(`${comicFolderPath}/${file.filename}`,
+			await FileSystemFacade.writeFile(`${comicFolderPath}/${file.filename}`,
 				fileData, `Error writing file to disc (${file.name})`) // todo make sure this is  filename
 		}
 	}
@@ -290,7 +286,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let insertQueryParams = [user.id, comicId, rating]
 		try {
 			await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'Error deleting old rating')
-			await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Error assigning new rating')
+			if (rating > 0) {
+				await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Error assigning new rating')
+			}
 			res.json({success: true})
 		}
 		catch (err) {
@@ -319,7 +317,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let keywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
-			if (results.length === 0) { return this.returnError('No pending comic with that name', res) }
+			if (comicData.length === 0) { return this.returnError('No pending comic with that name', res) }
 			comicData = comicData[0]
 
 			let keywords = await this.databaseFacade.execute(keywordsQuery, [comicData.id])
@@ -448,12 +446,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 		if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
 		return pageNumberString + pagePostfix
 	}
-
-	isOneFileOnly (requestFilesObject) {
-		return requestFilesObject.hasOwnProperty('fieldname')
-	}
 }
 
+function isOneFileOnly (requestFilesObject) {
+	return requestFilesObject.hasOwnProperty('fieldName')
+}
 
 function authorizeAdmin (req, res, next) { // todo !!
   if (!req.session || !req.session.user) { return false }
