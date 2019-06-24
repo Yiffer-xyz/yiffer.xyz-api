@@ -17,11 +17,12 @@ module.exports = class ComicsRouter extends BaseRouter {
 		this.app.post('/api/comics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
+		this.app.post('/api/comics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToComic(req, res, false))
 		
 		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id', authorizeAdmin, (req, res) => this.processPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, true))
@@ -376,28 +377,30 @@ module.exports = class ComicsRouter extends BaseRouter {
 		}
 	}
 
-	async addThumbnailToPendingComic (req, res) {
+	async addThumbnailToComic (req, res, isPendingComic) {
 		let [thumbnailFile, comicName, comicId] = 
 			[req.files.thumbnailFile, req.body.comicName, req.params.id]
 		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
-
 		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
-			return returnError('File must exist and be .jpg or .png', res)
+			return this.returnError('File must exist and be .jpg or .png', res)
 		}
 
 		try {
 			let directoryContents = await FileSystemFacade.listDir(comicFolderPath)
-			if (directoryContents.indexOf('s.jpg') >= 0) {
+			let preExistingThumbnail = directoryContents.indexOf('s.jpg') >= 0
+			if (preExistingThumbnail) {
 				await FileSystemFacade.deleteFile(comicFolderPath + '/s.jpg', 'Error deleting old thumbnail')
 			}
 			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
 			await FileSystemFacade.writeFile(comicFolderPath+'/s.jpg', fileContents, 'Error writing new thumbnail file')
 
-			let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Id = ?'
-			await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+			if (isPendingComic) {
+				let updateComicDataQuery = 'UPDATE PendingComic SET HasThumbnail = 1 WHERE Id = ?'
+				await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+			}
 
 			res.json({success: true})
-			this.addModLog(req, 'Pending comic', `Add thumbnail to ${comicName}`)
+			this.addModLog(req, isPendingComic?'Pending comic':'Comic', `Add thumbnail to ${comicName}`, `Had old thumbnail: ${preExistingThumbnail}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
