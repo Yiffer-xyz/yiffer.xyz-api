@@ -246,6 +246,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
 			res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
 			this.addModLog(req, 'Comic', `Update details of ${comicName}`, queryParams.slice(0,-1).join(', '))
 		}
 		catch (err) {

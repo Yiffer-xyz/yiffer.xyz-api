@@ -43,6 +43,8 @@ module.exports = class KeywordsRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(deleteQuery, queryParams)
       res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Keyword', `Remove ${keywords.length} from ${comicName}`, keywords.join(', '))
     }
     catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -64,6 +66,8 @@ module.exports = class KeywordsRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(insertQuery, queryParams)
       res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Keyword', `Add ${keywords.length} to ${comicName}`, keywords.join(', '))
     }
     catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -76,6 +80,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(query, queryParams)
       res.json({success: true})
+			this.addModLog(req, 'Keyword', `Add ${req.body.keyword}`)
     }
     catch (err) {
       return this.returnError(err.message, res, err.error)
@@ -84,10 +89,10 @@ module.exports = class KeywordsRouter extends BaseRouter {
 
   async addKeywordSuggestion (req, res) {
     let [comicId, suggestedKeyword, extension] = [req.body.comicId, req.body.keyword, req.body.extension ? 1 : 0]
-    let user
-    // if (req.session && req.session.user) { user = req.session.user.username }
-		// else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
-		user = 'todo ragnar todo'
+    let user = this.getUser(req)
+    if (user) { user = user.username }
+    else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
+
     let query = 'INSERT INTO KeywordSuggestion (ComicId, Keyword, Extension, User) VALUES (?, ?, ?, ?)'
     let queryParams = [comicId, suggestedKeyword, extension ? 1:0, user]
     try {
@@ -112,6 +117,8 @@ module.exports = class KeywordsRouter extends BaseRouter {
       }
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Database error: Error updating suggested tags')
       res.json({success: true})
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			this.addModLog(req, 'Keyword', `${isApproved ? 'Approve' : 'Reject'} ${keyword} for ${comicName}`)
     }
     catch (err) {
       if (err.error.sqlMessage && err.error.sqlMessage.includes('Duplicate')) {

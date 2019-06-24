@@ -66,6 +66,7 @@ module.exports = class ArtistRouter extends BaseRouter {
       if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
       let insertResult = await this.databaseFacade.execute(query, [artistName], 'Error adding artist')
       res.json(insertResult.insertId)
+			this.addModLog(req, 'Artist', `Add ${artistName}`)
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error)
@@ -89,6 +90,8 @@ module.exports = class ArtistRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(query, queryParams, 'Error adding links')
       res.json({success: true})
+      let artistName = (await this.databaseFacade.execute('SELECT Name FROM Artist WHERE Id=?', [artistId]))[0].Name
+			this.addModLog(req, 'Artist', `Add ${typedLinks.length} links to ${artistName}`, links.join(', '))
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error)

@@ -14,10 +14,12 @@ module.exports = class MiscRouter extends BaseRouter {
 		this.app.get ('/api/comicsuggestions', (req, res) => this.getComicSuggestions(req, res))
 		this.app.post('/api/comicsuggestions', (req, res) => this.addComicSuggestion(req, res))
 		this.app.post('/api/comicsuggestions/process', (req, res) => this.processComicSuggestion(req, res))
+
+		this.app.get ('/api/modlog', (req, res) => this.getModLog(req, res))
 	
-		this.app.get ('/api/comicpagechanges', (req, res) => this.getComicPageChanges(req, res))
 		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
 		this.app.post('/api/insertcomicpage', multipartyMiddelware, (req, res) => this.insertComicPage(req, res))
+		this.app.post('/api/deletecomicpage', (req, res) => this.deletecomicpage(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -50,19 +52,18 @@ module.exports = class MiscRouter extends BaseRouter {
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Database error')
 			res.json({success: true})
+			let suggestionDetails = (await this.databaseFacade.execute('SELECT Name, ArtistName, Description FROM ComicSuggestion WHERE Id=?', [req.body.suggestionId]))[0]
+			this.addModLog(req, 'Comic suggestion', `${req.body.isApproved ? 'Approve' : 'Reject'} ${suggestionDetails.Name}`, `${suggestionDetails.Name} by ${suggestionDetails.ArtistName}, description: ${suggestionDetails.Description}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
 		}
 	}
 
-	async getComicPageChanges (req, res) {
-		let query = 'SELECT MAX(Timestamp) AS lastUpdated FROM ComicPageChanges WHERE ComicId = ?'
-		let queryParams = [req.query.id]
-		try {
-			let result = await this.databaseFacade.execute(query, queryParams, 'Database error')
-			if (results.length===0) { res.json({lastUpdated: null}) }
-			else { res.json(results[0]) }
+	async getModLog (req, res) {
+		let query = 'SELECT user2.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM modlog INNER JOIN user2 ON (modlog.UserId=user2.Id) ORDER BY Timestamp DESC'
+		try { 
+			let result = await this.databaseFacade.execute(query)
 			res.json(result)
 		}
 		catch (err) {
@@ -76,9 +77,6 @@ module.exports = class MiscRouter extends BaseRouter {
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		let pageName1 = this.getPageName(pageNumber1)
 		let pageName2 = this.getPageName(pageNumber2)
-		
-		let query = 'INSERT INTO ComicPageChanges (ComicId) VALUES (?)'
-		let queryParams = [comicId]
 
 		try {
 			await FileSystemFacade.renameFile(`${comicFolderPath}/${pageName1}.jpg`, 
@@ -87,10 +85,11 @@ module.exports = class MiscRouter extends BaseRouter {
 				`${comicFolderPath}/${pageName1}.jpg`, 'Error renaming second file')
 			await FileSystemFacade.renameFile(`${comicFolderPath}/temp.jpg`,
 				`${comicFolderPath}/${pageName2}.jpg`, 'Error renaming first file')
+
+				console.log('sholw dowkr')
 			
-			await this.databaseFacade.execute(query, queryParams,
-				'Database error: Error updating comic page change timestamp')
 			res.json({success: true})
+			this.addModLog(req, 'Comic', `Swap pages in ${comicName}`, `Page ${pageNumber1} and ${pageNumber2}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -99,19 +98,57 @@ module.exports = class MiscRouter extends BaseRouter {
 
 	async insertComicPage (req, res) {
 		let [comicName, comicId, newPageFile, insertAfterPageNumber] =
-			[req.body.comicName, req.body.comicId, req.body.newPageFile, req.body.insertAfterPageNumber]
+			[req.body.comicName, req.body.comicId, req.files.newPageFile, Number(req.body.insertAfterPageNumber)]
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
+		if (!newPageFile || (newPageFile.path.indexOf('.jpg')===-1 && newPageFile.path.indexOf('.png')===-1)) {
+			return this.returnError('File must exist and be .jpg or .png', res)
+		}
 		try {
 			let comicFiles = (await FileSystemFacade.listDir(comicFolderPath, 'Error listing comic directory'))
 				.filter(f => f!='s.jpg').sort()
-			for (var i=comicFiles.length-1; i>=insertAfterPageNumber; i--) {
+			for (var i=comicFiles.length; i>=insertAfterPageNumber+1; i--) {
+				console.log(`Renaming ${this.getPageName(i)} to ${this.getPageName(i+1)}`)
 				await FileSystemFacade.renameFile(
-					`${comicFolderPath}/${getPageName(i)}.jpg`,
-					`${comicFolderPath}/${getPageName(i+1)}.jpg`,
+					`${comicFolderPath}/${this.getPageName(i)}.jpg`,
+					`${comicFolderPath}/${this.getPageName(i+1)}.jpg`,
 					'Error renaming existing image files'
 				)
 			}
-			
+
+			let fileContents = await FileSystemFacade.readFile(newPageFile.path)
+			await FileSystemFacade.writeFile(`${comicFolderPath}/${this.getPageName(insertAfterPageNumber+1)}.jpg`, fileContents, 'Error writing new file')
+
+			let query = 'UPDATE comic SET NumberOfPages=? WHERE Id=?'
+			let queryParams = [comicFiles.length+1, comicId]
+			await this.databaseFacade.execute(query, queryParams, 'Error updating number of pages')
+
+			res.json({success: true})
+			this.addModLog(req, 'Comic', `Insert page in ${comicName}`, `Page at position ${insertAfterPageNumber+1}`)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async deletecomicpage (req, res) {
+		let [comicName, comicId, pageNumber] = [req.body.comicName, req.body.comicId, req.body.pageNumber]
+		let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id = ?'
+		let updateQuery = 'UPDATE comic SET NumberOfPages = ? WHERE Id = ?'
+		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
+		try {
+			let numberOfPages = (await this.databaseFacade.execute(numberOfPagesQuery, [comicId]))[0].NumberOfPages
+			let queryParams = [numberOfPages-1, comicId]
+
+			await FileSystemFacade.deleteFile(`${comicFolderPath}/${this.getPageName(pageNumber)}.jpg`)
+			for (var i=pageNumber+1; i<=numberOfPages; i++) {
+				await FileSystemFacade.renameFile(`${comicFolderPath}/${this.getPageName(i)}.jpg`,
+																					`${comicFolderPath}/${this.getPageName(i-1)}.jpg`)
+			}
+
+			await this.databaseFacade.execute(updateQuery, queryParams, 'Error updating number of pages')
+
+			res.json({success: true})
+			this.addModLog(req, 'Comic', `Delete page in ${comicName}`, `Page ${pageNumber}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
