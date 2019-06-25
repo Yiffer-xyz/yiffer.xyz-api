@@ -16,6 +16,7 @@ module.exports = class MiscRouter extends BaseRouter {
 		this.app.post('/api/comicsuggestions/process', (req, res) => this.processComicSuggestion(req, res))
 
 		this.app.get ('/api/modlog', (req, res) => this.getModLog(req, res))
+		this.app.get ('/api/modscores', (req, res) => this.getModScores(req, res))
 	
 		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
 		this.app.post('/api/insertcomicpage', multipartyMiddelware, (req, res) => this.insertComicPage(req, res))
@@ -69,6 +70,90 @@ module.exports = class MiscRouter extends BaseRouter {
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
 		}
+	}
+
+	async getModScores (req, res) {
+		let query = 'SELECT modlog.ActionType, modlog.ActionDescription, user2.Username FROM modlog INNER JOIN user2 ON (user2.Id=modlog.UserId)'
+		try {
+			let logs = await this.databaseFacade.execute(query)
+			
+			let userScores = {}
+			for (var log of logs) {
+				if (!(log.Username in userScores)) { userScores[log.Username] = 0 }
+				userScores[log.Username] += this.getActionScore(log.ActionType, log.ActionDescription)
+			}
+			let userScoreList = Object.keys(userScores).map(us => 
+				new Object({'username': us, 'score': userScores[us]}))
+			userScoreList.sort((a, b) => a.score > b.score ? 1 : -1)
+			res.json(userScoreList)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	getActionScore (actionType, actionDescription) {
+		if (actionType === 'Comic') {
+			if (actionDescription.includes('Append')) {
+				return 30
+			}
+			if (actionDescription.includes('Update details of')) {
+				return 15
+			}
+			if (actionDescription.includes('Add thumbnail to')) {
+				return 20
+			}
+			if (actionDescription.includes('Swap pages')) {
+				return 20
+			}
+			if (actionDescription.includes('Insert page')) {
+				return 20
+			}
+			if (actionDescription.includes('Delete page')) {
+				return 20
+			}
+		}
+		else if (actionType === 'Create comic') {
+			return 100
+		}
+		else if (actionType === 'Pending comic') {
+			if (actionDescription.includes('Approve ')) {
+				return 15
+			}
+			if (actionDescription.includes('Add thumbnail to')) {
+				return 20
+			}
+			if (actionDescription.includes(' keywords to ') || actionDescription.includes(' keywords from ')) {
+				return 10
+			}
+		}
+		else if (actionType === 'Artist') {
+			if (actionDescription.includes('Add ')) {
+				return 10
+			}
+			if (actionDescription.includes(' links to ')) {
+				return 20
+			}
+		}
+		else if (actionType === 'Keyword') {
+			if (actionDescription.includes('Remove') && actionDescription.includes(' from ')) {
+				return 10
+			}
+			if (actionDescription.includes('Add') && actionDescription.includes(' to ')) {
+				return 10
+			}
+			if (actionDescription.includes('Add')) {
+				return 20
+			}
+			if (actionDescription.includes('Approve') || actionDescription.includes('Reject')) {
+				return 5
+			}
+		}
+		else {
+			console.log(actionType, actionDescription)
+			return -1000
+		}
+		return 0
 	}
 
 	async swapComicPages (req, res) {
