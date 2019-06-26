@@ -117,7 +117,7 @@ module.exports = class MiscRouter extends BaseRouter {
 			return 100
 		}
 		else if (actionType === 'Pending comic') {
-			if (actionDescription.includes('Approve ')) {
+			if (actionDescription.includes('Approve ') || actionDescription.includes('Reject ')) {
 				return 15
 			}
 			if (actionDescription.includes('Add thumbnail to')) {

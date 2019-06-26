@@ -21,7 +21,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		
 		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id', authorizeAdmin, (req, res) => this.processPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id', (req, res) => this.processPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
@@ -337,44 +337,63 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async processPendingComic (req, res) {
-		let comicId = req.params.id
+		let [comicId, isApproved] = [req.params.id, req.body.isApproved]
+		try {
+			if (isApproved) {
+				await this.approvePendingComic(res, comicId)
+			}
+			else {
+				await this.rejectPendingComic(res, comicId)
+			}
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+	
+	async approvePendingComic (res, comicId) {
 		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
 		let getKeywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
 		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, Finished, Artist) VALUES (?, ?, ?, ?, ?, ?)'
 		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
 
-		try {
-			let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
-			comicData = comicData[0]
-			if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res) }
+		let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
+		comicData = comicData[0]
+		if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res) }
 
-			let keywords = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
-			if (results.length === 0) { return returnError('No tags added', res, connection, err) }
-			keywords = keywords.map(k => k.Keyword)
+		let keywords = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
+		if (keywords.length === 0) { return returnError('No tags added', res, connection, err) }
+		keywords = keywords.map(k => k.Keyword)
 
-			let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
-			await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
+		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
+		await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
 
-			await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
+		await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
 
-			let insertKeywordsQueryParams = []
-			for (var keyword of keywords) { 
-				insertKeywordsQuery += `(?, ?), `
-				insertKeywordsQueryParams.push(newComicId)
-				insertKeywordsQueryParams.push(keyword)
-			}
-			insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
-			await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
-
-			res.json({success: true})
-
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
+		let insertKeywordsQueryParams = []
+		for (var keyword of keywords) { 
+			insertKeywordsQuery += `(?, ?), `
+			insertKeywordsQueryParams.push(comicId)
+			insertKeywordsQueryParams.push(keyword)
 		}
-		catch (err) {
-			return this.returnError(err.message, res, err.error)
-		}
+		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
+		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
+
+		res.json({success: true})
+
+		let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+		this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
+	}
+
+	async rejectPendingComic (res, comicId) {
+		let query = 'UPDATE PendingComic SET Processed=1, Approved=0 WHERE Id=?'
+		let queryParams = [comicId]
+		await this.databaseFacade.execute(query, queryParams, 'Error rejecting comic')
+		res.json({success: true})
+		
+		let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+		this.addModLog(req, 'Pending comic', `Reject ${comicName}`)
 	}
 
 	async addThumbnailToComic (req, res, isPendingComic) {
@@ -466,11 +485,5 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 function isOneFileOnly (requestFilesObject) {
 	return requestFilesObject.hasOwnProperty('fieldName')
-}
-
-function authorizeAdmin (req, res, next) { // todo !!
-  if (!req.session || !req.session.user) { return false }
-  if (authorizedUsers.admins.indexOf(req.session.user.username) === -1) { return false }
-  next()
 }
 
