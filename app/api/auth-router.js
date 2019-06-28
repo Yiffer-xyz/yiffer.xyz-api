@@ -11,21 +11,16 @@ module.exports = class AuthenticationRouter extends BaseRouter {
     this.app.post('/login', (req, res) => this.login(req, res))
     this.app.post('/register', (req, res) => this.register(req, res))
     this.app.get ('/logout', (req, res) => this.logout(req, res))
+    this.app.post('/changepassword', this.authorizeUser.bind(this), (req, res) => this.changePassword(req, res))
+    this.app.post('/changeusername', this.authorizeUser.bind(this), (req, res) => this.changeUsername(req, res))
   }
 
   async login (req, res) {
-    let query = 'SELECT * FROM User2 WHERE Username = ?'
     let [username, password] = [req.body.username, req.body.password]
     try {
-      let userResponse = await this.databaseFacade.execute(query, [username])
-      if (userResponse.length == 0) {
-        return this.returnError('Wrong username', res)
-      }
-      userResponse = userResponse[0]
-      let passwordMatch = await bcrypt.compare(password, userResponse.Password)
-
-      if (!passwordMatch) {
-        return this.returnError('Wrong password', res)
+      let userResponse = await this.authenticate(username, password)
+      if ('error' in userResponse) {
+        return this.returnError(userResponse.error, res)
       }
       else {
         let userData = {
@@ -41,6 +36,20 @@ module.exports = class AuthenticationRouter extends BaseRouter {
     catch (err) {
       return this.returnError(err.message || 'Server error', res, err.error || err)
     }
+  }
+
+  async authenticate (username, password) {
+    let query = 'SELECT * FROM user2 WHERE Username = ?'
+    let userResult = await this.databaseFacade.execute(query, [username])
+    if (userResult.length === 0) {
+      return {error: 'Wrong username'}
+    }
+    userResult = userResult[0]
+    let passwordMatch = await bcrypt.compare(password, userResult.Password)
+    if (!passwordMatch) {
+      return {error: 'Wrong password'}
+    }
+    return userResult
   }
   
   async register (req, res) {
@@ -66,7 +75,7 @@ module.exports = class AuthenticationRouter extends BaseRouter {
       let getNewUserQuery = 'SELECT * FROM User2 WHERE Id = ?'
       let userResponse = await this.databaseFacade.execute(getNewUserQuery, [result.insertId])
       userResponse = userResponse[0]
-      
+
       let userData = {
         username: userResponse.Username,
         id: userResponse.Id,
@@ -84,6 +93,51 @@ module.exports = class AuthenticationRouter extends BaseRouter {
   logout (req, res) {
     req.session.destroy()
     res.end('ok')
+  }
+
+  async changePassword (req, res) {
+    let [username, oldPassword, newPassword] = 
+      [req.session.user.username, req.body.oldPassword, req.body.newPassword]
+    if (!this.validatePassword(newPassword)) {
+      return this.returnError('Invalid new password', res)
+    }
+    try {
+      let userDataResponse = await this.authenticate(username, oldPassword)
+      if ('error' in userDataResponse) {
+        return this.returnError(userDataResponse.error, res)
+      }
+
+      newPassword = await bcrypt.hash(newPassword, 8)
+      let updateQuery = 'UPDATE user2 SET Password=? WHERE Id=?'
+      let updateQueryParams = [newPassword, userDataResponse.Id]
+      await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating password in database')
+      res.json({success: true})
+    }
+    catch (err) {
+      return this.returnError(err.message || 'Server error', res, err.error || err)
+    }
+  }
+
+  async changeUsername (req, res) {
+    let [currentUsername, newUsername, password] = 
+      [req.session.user.username, req.body.newUsername, req.body.password]
+    if (!this.validateUsername(newUsername)) {
+      return this.returnError('New username invalid', res)
+    }
+    try {
+      let userResponse = await this.authenticate(currentUsername, password)
+      if ('error' in userDataResponse) {
+        return this.returnError(userDataResponse.error, res)
+      }
+
+      let updateQuery = 'UPDATE user2 SET Username=? WHERE Id=?'
+      let updateQueryParams = [newUsername, userResponse.Id]
+      await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating username in database')
+      res.json({success: true})
+    }
+    catch (err) {
+      return this.returnError(err.message || 'Server error', res, err.error || err)
+    }
   }
 
   validatePassword (password) {
