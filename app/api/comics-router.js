@@ -337,7 +337,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async processPendingComic (req, res) {
-		let [comicId, isApproved] = [req.params.id, req.body.isApproved]
+		let [comicId, isApproved] = [Number(req.params.id), req.body.isApproved]
 		try {
 			if (isApproved) {
 				await this.approvePendingComic(res, comicId)
