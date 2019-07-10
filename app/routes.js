@@ -1,14 +1,9 @@
-var api = require('./api')
-
 const mysql = require('mysql')
 const mysqlSettings = require('../config/db-config.json')
 const mysqlPool = mysql.createPool(mysqlSettings)
 const ModLogger = require('./mod-logger')
 
 module.exports = function (app, databaseFacade) {
-  require('./admin')(app)
-  require('./api/modpanel-router')(app, mysqlPool)
-
   const modLogger = new ModLogger(app, databaseFacade)
 
   let ComicsRouter = require('./api/comics-router')
@@ -26,7 +21,6 @@ module.exports = function (app, databaseFacade) {
   let ArtistRouter = require('./api/artist-router')
   new ArtistRouter(app, databaseFacade, modLogger)
 
-  app.use('/api', api)
   app.get('*', function (req, res) {
     res.sendFile('views/index.html', {root: './public'})
   })
