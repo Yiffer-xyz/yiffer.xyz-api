@@ -104,7 +104,7 @@ function extractLinkTypesFromLinkUrls (linkList) {
   let typedLinkList = []
   for (var link of linkList) {
     if (link.indexOf('furaffinity') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'furaffinity'}) }
-    else if (link.indexOf('e621') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'e621'}) }
+    else if (link.indexOf('621') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'e621'}) }
     else if (link.indexOf('inkbunny') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'inkbunny'}) }
     else if (link.indexOf('patreon') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'patreon'}) }
     else if (link.indexOf('tumblr') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'tumblr'}) }
