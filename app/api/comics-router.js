@@ -78,7 +78,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			queryParams = [comicName, user.id]
 		}
 		else {
-			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
+			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
 			queryParams = [comicName, comicName]
 		}
 
