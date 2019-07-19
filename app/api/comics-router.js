@@ -74,11 +74,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let user = this.getUser(req)
 
 		if (user) {
-			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, ComicVote.Vote AS yourRating FROM (SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id) AS T1 LEFT JOIN ComicVote ON (ComicVote.ComicId = T1.id) WHERE ComicVote.UserId = ?'
+			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, ComicVote.Vote AS yourRating FROM (SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, Comic.Cat AS cat, Comic.Tag AS tag, Comic.Created, Comic.Updated FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN ComicVote ON (ComicVote.ComicId = T1.id) WHERE ComicVote.UserId = ?'
 			queryParams = [comicName, user.id]
 		}
 		else {
-			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
+			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, Comic.Cat AS cat, Comic.tag AS tag, Comic.Created AS created, Comic.Updated AS updated, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
 			queryParams = [comicName, comicName]
 		}
 
@@ -298,9 +298,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 	async rateComic (req, res) {
 		let [comicId, rating] = [Number(req.params.id), Number(req.body.rating)]
 		let user = this.getUser(req)
-		let deleteQuery = 'DELETE FROM ComicVote WHERE User = ? AND ComicId = ?'
+		let deleteQuery = 'DELETE FROM ComicVote WHERE UserId = ? AND ComicId = ?'
 		let deleteQueryParams = [user.id, comicId]
-		let insertQuery = 'INSERT INTO ComicVote (User, ComicId, Vote) VALUES (?, ?, ?)'
+		let insertQuery = 'INSERT INTO ComicVote (UserId, ComicId, Vote) VALUES (?, ?, ?)'
 		let insertQueryParams = [user.id, comicId, rating]
 		try {
 			await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'Error deleting old rating')
