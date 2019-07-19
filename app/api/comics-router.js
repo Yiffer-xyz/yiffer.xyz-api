@@ -110,9 +110,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 			return this.returnError('Unauthorized', res)
 		}
 		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
-		let [comicName, artistId, cat, tag, isFinished, keywords, nextComic, previousComic] = 
+		let [comicName, artistId, cat, tag, isFinished, keywordIds, nextComic, previousComic] = 
 			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag,req.body.finished==='true', 
-			 req.body.keywords, Number(req.body.nextComic), Number(req.body.previousComic)]
+			 req.body.keywordIds, Number(req.body.nextComic), Number(req.body.previousComic)]
 		let userId = req.session.user.id
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		let hasThumbnail = !!thumbnailFile
@@ -137,7 +137,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let insertResult = await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Database error creating new comic')
 			let comicId = insertResult.insertId
 
-			await this.addKeywordsToComic(keywords, comicId)
+			await this.addKeywordsToComic(keywordIds, comicId)
 
 			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
@@ -167,14 +167,14 @@ module.exports = class ComicsRouter extends BaseRouter {
 		return {error: false}
 	}
 
-	async addKeywordsToComic (commaSeparatedKeywordString, comicId) {
-		if (!commaSeparatedKeywordString || commaSeparatedKeywordString.length==0) { return }
+	async addKeywordsToComic (keywordIds, comicId) {
+		if (!keywordIds || keywordIds.length==0) { return }
 		let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
 		let insertKeywordsQueryParams  = []
-		for (var keyword of commaSeparatedKeywordString.split(',')) {
+		for (var keywordId of keywordIds) {
 			insertKeywordsQuery += `(?, ?), `
 			insertKeywordsQueryParams .push(comicId)
-			insertKeywordsQueryParams .push(keyword)
+			insertKeywordsQueryParams .push(Number(keywordId))
 		}
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Database error adding tags')
@@ -315,7 +315,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User2.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, T3.Keywords AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User2 ON (User2.Id=ModUser) LEFT JOIN (SELECT PendingComicKeyword.ComicId AS ComicId, GROUP_CONCAT(Keyword SEPARATOR \',\') AS Keywords FROM PendingComicKeyword GROUP BY PendingComicKeyword.ComicId) AS T3 ON (T3.ComicId=PendingComic.Id) WHERE Processed=0'
+		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User ON (User.Id=PendingComic.Moderator) LEFT JOIN PendingComicKeyword ON (PendingComicKeyword.ComicId = PendingComic.Id) INNER JOIN Keyword ON (Keyword.Id = PendingComicKeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
@@ -332,14 +332,14 @@ module.exports = class ComicsRouter extends BaseRouter {
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
 		let comicDataQuery = 'SELECT Artist.Name AS artistName, PendingComic.Id AS id, PendingComic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) WHERE PendingComic.Name = ?'
-		let keywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
+		let keywordsQuery = 'SELECT KeywordName AS name, Keyword.Id AS id FROM PendingComicKeyword INNER JOIN Keyword ON (PendingComicKeyword.KeywordId = Keyword.Id) WHERE PendingComicKeyword.ComicId = ?'
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
 			if (comicData.length === 0) { return this.returnError('No pending comic with that name', res) }
 			comicData = comicData[0]
 
 			let keywords = await this.databaseFacade.execute(keywordsQuery, [comicData.id])
-			comicData.keywords = keywords.map(k => k.Keyword)
+			comicData.keywords = keywords.map(k => ({name: k.name, id: k.id}))
 
 			res.json(comicData)
 		}
@@ -365,18 +365,18 @@ module.exports = class ComicsRouter extends BaseRouter {
 	
 	async approvePendingComic (res, comicId) {
 		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
-		let getKeywordsQuery = 'SELECT Keyword FROM PendingComicKeyword WHERE ComicId = ?'
+		let getKeywordsQuery = 'SELECT KeywordId FROM PendingComicKeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
 		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, Finished, Artist) VALUES (?, ?, ?, ?, ?, ?)'
-		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
+		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES '
 
 		let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
 		comicData = comicData[0]
 		if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res) }
 
-		let keywords = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
-		if (keywords.length === 0) { return returnError('No tags added', res, connection, err) }
-		keywords = keywords.map(k => k.Keyword)
+		let keywordIds = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
+		if (keywordIds.length === 0) { return returnError('No tags added', res, connection, err) }
+		keywordIds = keywordIds.map(k => k.KeywordId)
 
 		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
 		await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
@@ -384,10 +384,10 @@ module.exports = class ComicsRouter extends BaseRouter {
 		await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
 
 		let insertKeywordsQueryParams = []
-		for (var keyword of keywords) { 
+		for (var keywordId of keywordIds) { 
 			insertKeywordsQuery += `(?, ?), `
 			insertKeywordsQueryParams.push(comicId)
-			insertKeywordsQueryParams.push(keyword)
+			insertKeywordsQueryParams.push(keywordId)
 		}
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
@@ -440,12 +440,12 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 	async addKeywordsToPendingComic (req, res) {
 		let [comicId, keywords] = [req.params.id, req.body.keywords]
-		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
+		let addKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, KeywordId) VALUES '
 		let addKeywordsQueryParams = []
-		for (let keyword of keywords) {
+		for (let keywordObject of keywords) {
 			addKeywordsQuery += '(?, ?), '
 			addKeywordsQueryParams.push(comicId)
-			addKeywordsQueryParams.push(keyword)
+			addKeywordsQueryParams.push(keywordObject.id)
 		}
 		addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
 
@@ -453,7 +453,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.databaseFacade.execute(addKeywordsQuery, addKeywordsQueryParams)
 			res.json({success: true})
 			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.join(', '))
+			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -462,12 +462,12 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 	async removeKeywordsFromPendingComic (req, res) {
 		let [comicId, keywords] = [req.params.id, req.body.keywords]
-		let removeKeywordsQuery = 'DELETE FROM PendingComicKeyword WHERE (ComicId, Keyword) IN ('
+		let removeKeywordsQuery = 'DELETE FROM PendingComicKeyword WHERE (ComicId, KeywordId) IN ('
 		let removeKeywordsQueryParams = []
 		for (let keyword of req.body.keywords) {
 			removeKeywordsQuery += '(?, ?), '
 			removeKeywordsQueryParams.push(comicId)
-			removeKeywordsQueryParams.push(keyword)
+			removeKeywordsQueryParams.push(keyword.id)
 		}
 		removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
 
@@ -475,7 +475,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			await this.databaseFacade.execute(removeKeywordsQuery, removeKeywordsQueryParams)
 			res.json({success: true})
 			let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Pending comic', `Remove ${keywords.length} keywords from ${comicName}`, keywords.join(', '))
+			this.addModLog(req, 'Pending comic', `Remove ${keywords.length} keywords from ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
