@@ -36,7 +36,7 @@ module.exports = class MiscRouter extends BaseRouter {
 
 	async addComicSuggestion (req, res) {
 		let query = 'INSERT INTO ComicSuggestion (Name, ArtistName, Description, User) VALUES (?, ?, ?, ?)'
-		let user = 'todo ragnar todo'
+    let user = this.getUser(req) || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 		let queryParams = [req.body.comicName, req.body.artist, req.body.comment, user]
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Database error')
@@ -62,7 +62,7 @@ module.exports = class MiscRouter extends BaseRouter {
 	}
 
 	async getModLog (req, res) {
-		let query = 'SELECT user2.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM modlog INNER JOIN user2 ON (modlog.UserId=user2.Id) ORDER BY Timestamp DESC'
+		let query = 'SELECT User.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM ModLog INNER JOIN User ON (ModLog.User=User.Id) ORDER BY Timestamp DESC'
 		try { 
 			let result = await this.databaseFacade.execute(query)
 			res.json(result)
@@ -73,7 +73,7 @@ module.exports = class MiscRouter extends BaseRouter {
 	}
 
 	async getModScores (req, res) {
-		let query = 'SELECT modlog.ActionType, modlog.ActionDescription, user2.Username FROM modlog INNER JOIN user2 ON (user2.Id=modlog.UserId)'
+		let query = 'SELECT ModLog.ActionType, ModLog.ActionDescription, User.Username FROM ModLog INNER JOIN User ON (User.Id=ModLog.User)'
 		try {
 			let logs = await this.databaseFacade.execute(query)
 			

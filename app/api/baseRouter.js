@@ -11,8 +11,8 @@ module.exports = class BaseRouter {
 		try {
 			if (res) { res.json({ error: errorMessage }) }
 		}
-		catch (err) {
-			console.log('Error returning error', err)
+		catch (err2) {
+			console.log('Error returning error', err2)
 		}
 	}
 
@@ -51,7 +51,7 @@ module.exports = class BaseRouter {
 				return res.json({error: 'Not logged in'})
 			}
 			else {
-				let query = 'SELECT * FROM User2 WHERE Username=?'
+				let query = 'SELECT * FROM User WHERE Username=?'
 				let userData = await this.databaseFacade.execute(query, [req.session.user.username])
 				if (role === 'moderator') {
 					if (userData[0].UserType === 'moderator' || userData[0].UserType === 'admin') {

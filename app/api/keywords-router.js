@@ -18,7 +18,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async getAllKeywords (req, res) {
-    let query = 'SELECT Keyword.KeywordName AS name, Keyword.Id AS id, COUNT(*) AS count FROM ComicKeyword INNER JOIN Keyword ON (Keyword.Id = ComicKeyword.KeywordId) GROUP BY Keyword.Id ORDER BY count DESC'
+    let query = 'SELECT Keyword.KeywordName AS name, Keyword.Id AS id, COUNT(*) AS count FROM Keyword LEFT JOIN ComicKeyword ON (Keyword.Id = ComicKeyword.KeywordId) GROUP BY Keyword.Id ORDER BY name'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)
@@ -55,7 +55,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
     let [comicId, keywords] = [req.body.comicId, req.body.keywords]
     if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
 
-    let insertQuery = 'INSERT INTO ComicKeyword (ComicId, Keyword) VALUES '
+    let insertQuery = 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES '
     let queryParams = []
     for (var keyword of keywords) {
 			insertQuery += '(?, ?), '
@@ -70,6 +70,9 @@ module.exports = class KeywordsRouter extends BaseRouter {
 			this.addModLog(req, 'Keyword', `Add ${keywords.length} to ${comicName}`, keywords.map(kw => kw.name).join(', '))
     }
     catch (err) {
+      if (err.error.code === 'ER_DUP_ENTRY') {
+        return this.returnError('Some tags already exist on this comic', res)
+      }
 			return this.returnError(err.message, res, err.error)
     }
   }
@@ -89,9 +92,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
 
   async addKeywordSuggestion (req, res) {
     let [comicId, suggestedKeyword, isAddingKeyword] = [req.body.comicId, req.body.keyword, req.body.extension ? 1 : 0]
-    let user = this.getUser(req)
-    if (user) { user = user.username }
-    else { user = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null) }
+    let user = this.getUser(req) || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
     let query = 'INSERT INTO KeywordSuggestion (ComicId, KeywordId, Extension, User) VALUES (?, ?, ?, ?)'
     let queryParams = [comicId, suggestedKeyword.id, isAddingKeyword ? 1:0, user]
@@ -129,7 +130,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async getKeywordSuggestions (req, res) {
-    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, Extension AS addKeyword, User AS user, Keyword AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) WHERE Processed = 0SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User AS user, Keyword.KeywordName AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) WHERE Processed = 0'
+    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User AS user, Keyword.KeywordName AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) WHERE Processed = 0'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)

@@ -112,7 +112,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
 		let [comicName, artistId, cat, tag, isFinished, keywordIds, nextComic, previousComic] = 
 			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag,req.body.finished==='true', 
-			 req.body.keywordIds, Number(req.body.nextComic), Number(req.body.previousComic)]
+			 req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
 		let userId = req.session.user.id
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		let hasThumbnail = !!thumbnailFile
@@ -132,14 +132,12 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
 
-			let insertQuery = 'INSERT INTO PendingComic (ModUser, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0]
+			let insertQuery = 'INSERT INTO PendingComic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0, previousComic, nextComic]
 			let insertResult = await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Database error creating new comic')
 			let comicId = insertResult.insertId
 
 			await this.addKeywordsToComic(keywordIds, comicId)
-
-			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
 
 			res.json({success: true})
 			this.addModLog(req, 'Create comic', `Add ${comicName}`)
@@ -168,8 +166,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async addKeywordsToComic (keywordIds, comicId) {
-		if (!keywordIds || keywordIds.length==0) { return }
-		let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, Keyword) VALUES '
+		if (!keywordIds) { return }
+		keywordIds = keywordIds.split(',').map(kwId => Number(kwId))
+		let insertKeywordsQuery = 'INSERT INTO PendingComicKeyword (ComicId, KeywordId) VALUES '
+
+
 		let insertKeywordsQueryParams  = []
 		for (var keywordId of keywordIds) {
 			insertKeywordsQuery += `(?, ?), `
@@ -315,7 +316,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User ON (User.Id=PendingComic.Moderator) LEFT JOIN PendingComicKeyword ON (PendingComicKeyword.ComicId = PendingComic.Id) INNER JOIN Keyword ON (Keyword.Id = PendingComicKeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
+		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User ON (User.Id=PendingComic.Moderator) LEFT JOIN PendingComicKeyword ON (PendingComicKeyword.ComicId = PendingComic.Id) LEFT JOIN Keyword ON (Keyword.Id = PendingComicKeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
@@ -456,6 +457,9 @@ module.exports = class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
+      if (err.error.code === 'ER_DUP_ENTRY') {
+        return this.returnError('Some tags already exist on this comic', res)
+      }
 			return this.returnError(err.message, res, err.error)
 		}
 	}
