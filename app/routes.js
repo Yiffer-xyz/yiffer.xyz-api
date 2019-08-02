@@ -21,6 +21,9 @@ module.exports = function (app, databaseFacade) {
   let ArtistRouter = require('./api/artist-router')
   new ArtistRouter(app, databaseFacade, modLogger)
 
+  let UserRouter = require('./api/user-router')
+  new UserRouter(app, databaseFacade, modLogger)
+
   app.get('*', function (req, res) {
     res.sendFile('views/index.html', {root: './public'})
   })
