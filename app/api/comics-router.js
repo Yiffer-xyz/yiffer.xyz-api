@@ -197,6 +197,12 @@ module.exports = class ComicsRouter extends BaseRouter {
 			
 			await PythonShellFacade.run('process_new_pages.py', [comicName, newFilesWithNames.length])
 
+			if (!isPendingComic) {
+				let updateUpdatedTimeQuery = 'UPDATE Comic SET Updated = NOW() WHERE Id=?'
+				await this.databaseFacade.execute(updateUpdatedTimeQuery, [comicId],
+					'Database error: Error updating comic updated timestamp')
+			}
+
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'PendingComic' : 'Comic'} SET NumberOfPages = ? WHERE Id = ?`
 			let queryParams = [existingNumberOfPages + newFilesWithNames.length, comicId]
 			await this.databaseFacade.execute(updateNumberOfPagesQuery,
@@ -492,7 +498,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 	}
 
 	getPageName (pageNumber, filePathName) {
-		let pageNumberString = (pageNumber < 10) ? ('0' + pageNumber) : (pageNumber)
+		let pageNumberString = pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
 		let pagePostfix = filePathName.substring(filePathName.length - 4)
 		if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
 		return pageNumberString + pagePostfix

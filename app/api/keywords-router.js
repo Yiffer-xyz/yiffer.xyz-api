@@ -96,7 +96,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
     let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
     let query = `INSERT INTO KeywordSuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
-    let queryParams = [comicId, keywordId, isAddingKeyword ? 1:0, user ? user : userIp]
+    let queryParams = [comicId, keywordId, isAddingKeyword ? 1:0, user ? user.id : userIp]
     try {
       await this.databaseFacade.execute(query, queryParams)
       res.json({success: true})
@@ -120,7 +120,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Database error: Error updating suggested tags')
       res.json({success: true})
 			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Keyword', `${isApproved ? 'Approve' : 'Reject'} ${keyword.name} for ${comicName}`)
+      this.addModLog(req, 'Keyword', `${isApproved ? 'Approve' : 'Reject'} ${keyword.name} for ${comicName}`)
     }
     catch (err) {
       if (err.error.sqlMessage && err.error.sqlMessage.includes('Duplicate')) {
@@ -131,7 +131,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async getKeywordSuggestions (req, res) {
-    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User AS user, UserIP AS userIP, Keyword.Id AS keywordId, Keyword.KeywordName AS keywordName FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) WHERE Processed = 0'
+    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User.Username AS user, UserIP AS userIP, Keyword.Id AS keywordId, Keyword.KeywordName AS keywordName FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) LEFT JOIN User ON (KeywordSuggestion.User = User.Id) WHERE Processed = 0'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)
