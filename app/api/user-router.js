@@ -12,7 +12,6 @@ module.exports = class UserRouter extends BaseRouter {
     this.app.get ('/api/users/:id', (req, res) => this.getUser(req, res))
     this.app.post('/api/users/:id', (req, res) => this.updateUser(req, res))
     this.app.post('/api/users/:id/delete', (req, res) => this.deleteUser(req, res))
-    
   }
 
   async searchForUser (req, res) {

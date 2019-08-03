@@ -91,11 +91,12 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async addKeywordSuggestion (req, res) {
-    let [comicId, suggestedKeyword, isAddingKeyword] = [req.body.comicId, req.body.keyword, req.body.extension ? 1 : 0]
-    let user = this.getUser(req) || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+    let [comicId, keywordId, isAddingKeyword] = [req.body.comicId, req.body.keywordId, req.body.isAdding ? 1 : 0]
+    let user = this.getUser(req) 
+    let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
-    let query = 'INSERT INTO KeywordSuggestion (ComicId, KeywordId, Extension, User) VALUES (?, ?, ?, ?)'
-    let queryParams = [comicId, suggestedKeyword.id, isAddingKeyword ? 1:0, user]
+    let query = `INSERT INTO KeywordSuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
+    let queryParams = [comicId, keywordId, isAddingKeyword ? 1:0, user ? user : userIp]
     try {
       await this.databaseFacade.execute(query, queryParams)
       res.json({success: true})
@@ -106,11 +107,11 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async processKeywordSuggestion (req, res) {
-		let [suggestionId, comicId, keyword, extension, isApproved] = 
-			[req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
+		let [suggestionId, comicId, keyword, isAdding, isApproved] = 
+      [req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
     let updateQuery = 'UPDATE KeywordSuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
     let updateQueryParams = [isApproved ? 1 : 0, suggestionId]
-    let insertQuery = extension ? 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND KeywordId = ?'
+    let insertQuery = isAdding ? 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND KeywordId = ?'
     let insertQueryParams = [comicId, keyword.id]
     try {
       if (isApproved) {
@@ -130,7 +131,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
   }
 
   async getKeywordSuggestions (req, res) {
-    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User AS user, Keyword.KeywordName AS keyword FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) WHERE Processed = 0'
+    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User AS user, UserIP AS userIP, Keyword.Id AS keywordId, Keyword.KeywordName AS keywordName FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) WHERE Processed = 0'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)

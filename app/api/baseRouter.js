@@ -21,7 +21,7 @@ module.exports = class BaseRouter {
 			return req.session.user
 		}
 		else {
-			return undefined
+			return null
 		}
 	}
 
