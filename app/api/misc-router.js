@@ -115,7 +115,7 @@ module.exports = class MiscRouter extends BaseRouter {
 			}
 		}
 		else if (actionType === 'Create comic') {
-			return 100
+			return 170
 		}
 		else if (actionType === 'Pending comic') {
 			if (actionDescription.includes('Approve ') || actionDescription.includes('Reject ')) {
@@ -149,6 +149,9 @@ module.exports = class MiscRouter extends BaseRouter {
 			if (actionDescription.includes('Approve') || actionDescription.includes('Reject')) {
 				return 5
 			}
+		}
+		else if (actionType === 'Comic suggestion') {
+			return 15
 		}
 		else {
 			console.log(actionType, actionDescription)

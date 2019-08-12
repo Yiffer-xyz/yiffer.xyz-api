@@ -34,11 +34,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let queryParams
 		let user = this.getUser(req)
 		if (user) {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) INNER JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
 			queryParams = [user.id]
 		}
 		else {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) INNER JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
 		}
 
 		try {
@@ -74,11 +74,11 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let user = this.getUser(req)
 
 		if (user) {
-			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, ComicVote.Vote AS yourRating FROM (SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, Comic.Cat AS cat, Comic.Tag AS tag, Comic.Created, Comic.Updated FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN ComicVote ON (ComicVote.ComicId = T1.id AND ComicVote.UserId = ?)'
+			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, ComicVote.Vote AS yourRating FROM (SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, Comic.Cat AS cat, Comic.Tag AS tag, Comic.Created, Comic.Updated FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) LEFT JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN ComicVote ON (ComicVote.ComicId = T1.id AND ComicVote.UserId = ?)'
 			queryParams = [comicName, user.id]
 		}
 		else {
-			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, Comic.Cat AS cat, Comic.tag AS tag, Comic.Created AS created, Comic.Updated AS updated, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) INNER JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
+			comicDataQuery = 'SELECT Comic.Name AS name, Comic.NumberOfPages as numberOfPages, Artist.Name AS artist, Comic.Id AS id, Comic.Cat AS cat, Comic.tag AS tag, Comic.Created AS created, Comic.Updated AS updated, NULL AS yourRating, AVG(ComicVote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId = Comic.Id) LEFT JOIN Keyword ON (ComicKeyword.KeywordId = Keyword.Id) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Comic.Name = ? GROUP BY numberOfPages, artist, id'
 			queryParams = [comicName, comicName]
 		}
 
@@ -359,10 +359,10 @@ module.exports = class ComicsRouter extends BaseRouter {
 		let [comicId, isApproved] = [Number(req.params.id), req.body.isApproved]
 		try {
 			if (isApproved) {
-				await this.approvePendingComic(res, comicId)
+				await this.approvePendingComic(req, res, comicId)
 			}
 			else {
-				await this.rejectPendingComic(res, comicId)
+				await this.rejectPendingComic(req, res, comicId)
 			}
 		}
 		catch (err) {
@@ -370,7 +370,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 		}
 	}
 	
-	async approvePendingComic (res, comicId) {
+	async approvePendingComic (req, res, comicId) {
 		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
 		let getKeywordsQuery = 'SELECT KeywordId FROM PendingComicKeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
@@ -379,40 +379,42 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 		let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
 		comicData = comicData[0]
-		if (!!comicData.hasThumbnail) { return returnError('Pending comic has no thumbnail', res) }
+		if (!!comicData.hasThumbnail) { return this.returnError('Pending comic has no thumbnail', res) }
 
 		let keywordIds = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
-		if (keywordIds.length === 0) { return returnError('No tags added', res, connection, err) }
+		if (keywordIds.length === 0) { return this.returnError('No tags added', res, connection, err) }
 		keywordIds = keywordIds.map(k => k.KeywordId)
 
 		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
-		await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
-
+		let insertResult = await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
 		await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
+
+		let newComicId = insertResult.insertId
 
 		let insertKeywordsQueryParams = []
 		for (var keywordId of keywordIds) { 
 			insertKeywordsQuery += `(?, ?), `
-			insertKeywordsQueryParams.push(comicId)
+			insertKeywordsQueryParams.push(newComicId)
 			insertKeywordsQueryParams.push(keywordId)
 		}
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
 
-		res.json({success: true})
-
 		let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
 		this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
+
+		res.json({success: true})
 	}
 
-	async rejectPendingComic (res, comicId) {
+	async rejectPendingComic (req, res, comicId) {
 		let query = 'UPDATE PendingComic SET Processed=1, Approved=0 WHERE Id=?'
 		let queryParams = [comicId]
 		await this.databaseFacade.execute(query, queryParams, 'Error rejecting comic')
-		res.json({success: true})
 		
 		let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
 		this.addModLog(req, 'Pending comic', `Reject ${comicName}`)
+
+		res.json({success: true})
 	}
 
 	async addThumbnailToComic (req, res, isPendingComic) {
