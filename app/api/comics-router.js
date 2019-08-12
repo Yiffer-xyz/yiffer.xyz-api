@@ -293,7 +293,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let updateResults = await this.databaseFacade.execute(updateQuery, [nextComic, comicId], 'Error updating comic link')
 			if (updateResults.affectedRows == 0) {
 				let insertQuery = 'INSERT INTO ComicLink (FirstComic, LastComic) VALUES (?, ?)'
-				await this.databaseFacade.execute(insertQuery, [comicId, previousComic], 'Error adding comic link')
+				await this.databaseFacade.execute(insertQuery, [comicId, nextComic], 'Error adding comic link')
 			}
 		}
 		else {

@@ -24,7 +24,7 @@ module.exports = class MiscRouter extends BaseRouter {
 	}
 
 	async getComicSuggestions (req, res) {
-		let query = 'SELECT Id AS id, Name AS name, ArtistName AS artist, Description AS description, User AS user FROM ComicSuggestion WHERE Processed=0 ORDER BY Timestamp DESC'
+		let query = 'SELECT ComicSuggestion.Id AS id, Name AS name, ArtistName AS artist, Description AS description, User.username AS user, ComicSuggestion.UserIP AS userIP FROM ComicSuggestion LEFT JOIN User ON (ComicSuggestion.User = User.Id) WHERE Processed=0 ORDER BY Timestamp DESC'
 		try {
 			let result = await this.databaseFacade.execute(query, null, 'Database query error')
 			res.json(result)
@@ -35,9 +35,10 @@ module.exports = class MiscRouter extends BaseRouter {
 	}
 
 	async addComicSuggestion (req, res) {
-		let query = 'INSERT INTO ComicSuggestion (Name, ArtistName, Description, User) VALUES (?, ?, ?, ?)'
-    let user = this.getUser(req) || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
-		let queryParams = [req.body.comicName, req.body.artist, req.body.comment, user]
+		let user = this.getUser(req)
+		let userParam = this.user ? this.user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+		let query = `INSERT INTO ComicSuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
+		let queryParams = [req.body.comicName, req.body.artist, req.body.comment, userParam]
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Database error')
 			res.json({success: true})
