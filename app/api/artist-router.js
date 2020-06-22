@@ -10,12 +10,12 @@ module.exports = class ArtistRouter extends BaseRouter {
     this.app.get ('/api/artists', (req, res) => this.getAllArtists(req, res))
     this.app.get ('/api/artists/:name', (req, res) => this.getArtistByName(req, res))
     this.app.post('/api/artists', (req, res) => this.addArtist(req, res))
-    this.app.post('/api/artistlinks', (req, res) => this.addArtistLinks(req, res))
+    this.app.post('/api/artists/:id', (req, res) => this.updateArtist(req, res))
   }
 
   async getAllArtists (req, res) {
     try {
-      let query = 'SELECT Id AS id, Name AS name FROM Artist'
+      let query = 'SELECT Id AS id, Name AS name, PatreonName AS patreonName, E621Name AS e621Name FROM Artist'
       let results = await this.databaseFacade.execute(query)
       res.json(results)
     }
@@ -26,7 +26,7 @@ module.exports = class ArtistRouter extends BaseRouter {
 
   async getArtistByName (req, res) {
     let artistName = req.params.name
-    let artistIdQuery = 'SELECT Id from Artist where Name = ?'
+    let artistDataQuery = 'SELECT Id, E621Name, PatreonName from Artist where Name = ?'
     let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM ArtistLink WHERE ArtistId = ?'
 
     let user = this.getUser(req)
@@ -41,8 +41,10 @@ module.exports = class ArtistRouter extends BaseRouter {
     }
 
     try {
-      let artistId = await this.databaseFacade.execute(artistIdQuery, [artistName], 'Error getting artist id')
-      artistId = artistId[0].Id
+      let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
+      let artistId = artistData[0].Id
+      let [artistE621Name, artistPatreonName] = [artistData[0].E621Name, artistData[0].PatreonName]
+
       comicsQueryParams.push(artistId)
       let links = await this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links')
       let comics = await this.databaseFacade.execute(comicsQuery, comicsQueryParams, 'Error getting artist comics')
@@ -50,7 +52,15 @@ module.exports = class ArtistRouter extends BaseRouter {
 				if (!comic.keywords) { comic.keywords = [] }
 				else { comic.keywords = comic.keywords.split(',') }
       }
-      res.json({links: links, comics: comics})
+
+      let allArtistData = {
+        'links': links,
+        'e621Name': artistE621Name || null,
+        'patreonName': artistPatreonName || null,
+        'comics': comics
+      }
+
+      res.json(allArtistData)
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error)
@@ -58,14 +68,16 @@ module.exports = class ArtistRouter extends BaseRouter {
   }
 
   async addArtist (req, res) {
-    let artistName = req.body.artistName
+    let [artistName, e621Name, patreonName] = [req.body.artistName, req.body.e621Name, req.body.patreonName]
     let alreadyExistsQuery = 'SELECT * FROM Artist WHERE Name = ?'
-    let query = 'INSERT INTO Artist (Name) VALUES (?)'
+    let query = 'INSERT INTO Artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
     try {
       let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
       if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
-      let insertResult = await this.databaseFacade.execute(query, [artistName], 'Error adding artist')
+
+      let insertResult = await this.databaseFacade.execute(query, [artistName, e621Name, patreonName], 'Error adding artist')
       res.json(insertResult.insertId)
+
 			this.addModLog(req, 'Artist', `Add ${artistName}`)
     }
 		catch (err) {
@@ -73,25 +85,32 @@ module.exports = class ArtistRouter extends BaseRouter {
 		}
   }
 
-  async addArtistLinks (req, res) {
-    let [artistId, links] = [req.body.artistId, req.body.links]
-    if (!artistId || links.length==0) { return this.returnError('Missing field(s)', res) }
+  async updateArtist (req, res) {
+    let artistId = req.params.id
+    let [artistName, e621Name, patreonName, links] = [req.body.artistName, req.body.e621Name, req.body.patreonName, req.body.links]
+
     let typedLinks = extractLinkTypesFromLinkUrls(links)
 
-    let query = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
-    let queryParams = []
+    let updateQuery = 'UPDATE Artist SET Name=?, E621Name=?, PatreonName=? WHERE Id=?'
+    let deleteLinksQuery = 'DELETE FROM ArtistLink WHERE ArtistId=?'
+    let insertLinksQuery = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
+    let insertLinksParams = []
 
-    for (var typedLink of typedLinks) {
-      query += `(?, ?, ?), `
-      queryParams.push(artistId, typedLink.linkUrl, typedLink.linkType)
+    if (links.length > 0) {
+      for (var typedLink of typedLinks) {
+        insertLinksQuery += `(?, ?, ?), `
+        insertLinksParams.push(artistId, typedLink.linkUrl, typedLink.linkType)
+      }
+      insertLinksQuery = insertLinksQuery.substring(0, insertLinksQuery.length-2)
     }
-    query = query.substring(0, query.length-2)
-    
+
     try {
-      await this.databaseFacade.execute(query, queryParams, 'Error adding links')
+      await this.databaseFacade.execute(updateQuery, [artistName, e621Name, patreonName, artistId], 'Error updating artist')
+      await this.databaseFacade.execute(deleteLinksQuery, [artistId], 'Error removing old links')
+      if (links.length > 0) {
+        await this.databaseFacade.execute(insertLinksQuery, insertLinksParams, 'Error adding links')
+      }
       res.json({success: true})
-      let artistName = (await this.databaseFacade.execute('SELECT Name FROM Artist WHERE Id=?', [artistId]))[0].Name
-			this.addModLog(req, 'Artist', `Add ${typedLinks.length} links to ${artistName}`, links.join(', '))
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error)
@@ -104,9 +123,7 @@ function extractLinkTypesFromLinkUrls (linkList) {
   let typedLinkList = []
   for (var link of linkList) {
     if (link.indexOf('furaffinity') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'furaffinity'}) }
-    else if (link.indexOf('621') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'e621'}) }
     else if (link.indexOf('inkbunny') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'inkbunny'}) }
-    else if (link.indexOf('patreon') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'patreon'}) }
     else if (link.indexOf('tumblr') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'tumblr'}) }
     else if (link.indexOf('twitter') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'twitter'}) }
     else if (link.indexOf('furrynetwork') >= 0) { typedLinkList.push({linkUrl: link, linkType: 'furrynetwork'}) }
