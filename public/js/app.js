@@ -1,1 +1,0 @@
-var app = angular.module('Yiffer', ['ngRoute', 'ngCookies', 'appRoutes', 'ComicsCtrl', 'ComicsDetailCtrl', 'ComicsOldCtrl', 'ArtistCtrl', 'ModPanelCtrl', 'ContactCtrl', 'ComicsOldNewCtrl', 'PendingComicPreviewCtrl', 'ngFileUpload'])
