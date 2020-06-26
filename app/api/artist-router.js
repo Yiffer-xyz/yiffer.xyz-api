@@ -111,6 +111,8 @@ module.exports = class ArtistRouter extends BaseRouter {
         await this.databaseFacade.execute(insertLinksQuery, insertLinksParams, 'Error adding links')
       }
       res.json({success: true})
+
+			this.addModLog(req, 'Artist', `Update ${artistName} info`)
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error)
