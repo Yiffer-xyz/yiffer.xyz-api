@@ -22,6 +22,9 @@ module.exports = class MiscRouter extends BaseRouter {
 		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
 		this.app.post('/api/insertcomicpage', multipartyMiddelware, (req, res) => this.insertComicPage(req, res))
 		this.app.post('/api/deletecomicpage', (req, res) => this.deletecomicpage(req, res))
+
+		this.app.post('/api/log-route', (req, res) => this.logRoute(req, res))
+		this.app.post('/api/log-event', (req, res) => this.logEvent(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -287,6 +290,32 @@ module.exports = class MiscRouter extends BaseRouter {
 
 			res.json({success: true})
 			this.addModLog(req, 'Comic', `Delete page in ${comicName}`, `Page ${pageNumber}`)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async logEvent (req, res) {
+		let query = 'INSERT INTO eventlog (event, description) VALUES (?, ?)'
+		let queryParams = [req.body.event, req.body.description]
+
+		try {
+			await this.databaseFacade.execute(query, queryParams, 'Error logging event')
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async logRoute (req, res) {
+		let query = 'INSERT INTO routelog (route, description, session) VALUES (?, ?, ?)'
+		let queryParams = [req.body.route, req.body.description, req.sessionID]
+
+		try {
+			await this.databaseFacade.execute(query, queryParams, 'Error logging route')
+			res.json({success: true})
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)

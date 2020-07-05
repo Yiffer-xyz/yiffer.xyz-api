@@ -80,5 +80,4 @@ module.exports = class BaseRouter {
 	addModLog (req, actionType, ationDescription, actionDetails) {
 		this.modLogger.addModLog(req, actionType, ationDescription, actionDetails)
 	}
-	// todo logging of errors
 }

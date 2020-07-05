@@ -14,7 +14,7 @@ module.exports = class KeywordsRouter extends BaseRouter {
     this.app.post('/api/keywordsuggestions/process', (req, res) => this.processKeywordSuggestion(req, res))
     this.app.post('/api/keywordsuggestions', (req, res) => this.addKeywordSuggestion(req, res))
     this.app.get ('/api/keywordsuggestions', (req, res) => this.getKeywordSuggestions(req, res))
-    this.app.post('/api/keywords/log', (req, res) => this.logKeywordSearch(req, res))
+    this.app.post('/api/keywords/log', (req, res) => this.logKeywordClick(req, res))
   }
 
   async getAllKeywords (req, res) {
@@ -141,13 +141,11 @@ module.exports = class KeywordsRouter extends BaseRouter {
     }
   }
 
-  async logKeywordSearch (req, res) {
-    let keyword = req.body.keyword
-    if (!keyword) { return }
-    let query = 'UPDATE KeywordSearches SET Count = Count + 1 WHERE Keyword = ?'
-    let queryParams = [keyword]
+  async logKeywordClick (req, res) {
+    let query = 'INSERT INTO keywordclick (keywordId, isFromCard, count) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE count=count+1'
+    let queryParams = [req.body.keywordId, req.body.isFromCard]
     try {
-      await this.databaseFacade.execute(query, queryParams)
+      await this.databaseFacade.execute(query, queryParams, 'Error logging tag click')
       res.json({success: true})
     }
     catch (err) {

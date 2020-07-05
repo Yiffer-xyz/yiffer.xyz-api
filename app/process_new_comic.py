@@ -12,5 +12,5 @@ for image in images:
 		continue
 	else:
 		image_path = comic_folder_path + '/' + image
-		Image.open(image_path).convert('RGB').save(image_path[:-4] + '.jpg')
+		Image.open(image_path).convert('RGB').save(image_path[:-4] + '.jpg', quality=90)
 		os.remove(image_path)

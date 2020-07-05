@@ -24,7 +24,7 @@ module.exports = function (app, databaseFacade) {
   let UserRouter = require('./api/user-router')
   new UserRouter(app, databaseFacade, modLogger)
 
-  app.get('*', function (req, res) {
-    res.sendFile('views/index.html', {root: './public'})
-  })
+  // app.get('*', function (req, res) {
+  //   res.sendFile('views/index.html', {root: './public'})
+  // })
 }
