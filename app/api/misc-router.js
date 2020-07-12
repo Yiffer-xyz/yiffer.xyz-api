@@ -5,7 +5,7 @@ import multiparty from 'connect-multiparty'
 let multipartyMiddelware = multiparty()
 
 import dateFns from 'date-fns'
-const { format, compareAsc } = dateFns
+const { startOfMonth, format } = dateFns
 
 export default class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
@@ -357,9 +357,17 @@ export default class MiscRouter extends BaseRouter {
 			let results = await this.databaseFacade.execute(query, null)
 
 			for (let result of results) {
-				// if (interval === '24H') {
-				// 	result.dataKey = 
-				// }
+				let resultDate = new Date(result.dataKey)
+
+				if (interval === '1Y' || interval === 'All') {
+					result.dataKey = format(resultDate, 'MMM yyyy')
+				}
+				else if (interval === '1M' || interval === '1W') {
+					result.dataKey = format(resultDate, 'EEE d. MMM')
+				}
+				else if (interval === '24H') {
+					result.dataKey = format(resultDate, 'EEE HH:00')
+				}
 			}
 
 			res.json(results)
