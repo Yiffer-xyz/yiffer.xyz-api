@@ -3,6 +3,11 @@ const multipartyMiddleware = multiparty()
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter from './baseRouter.js'
 
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
@@ -419,9 +424,9 @@ export default class ComicsRouter extends BaseRouter {
 
 	async addThumbnailToComic (req, res, isPendingComic) {
 		let [thumbnailFile, comicName, comicId] = 
-			[req.files.thumbnailFile, req.body.comicName, req.params.id]
+			[req.files.thumbnailFile, req.body.comicName, Number(req.params.id)]
 		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
-		if (!thumbnailFile || (thumbnailFile.path.indexOf('.jpg')===-1 && thumbnailFile.path.indexOf('.png')===-1)) {
+		if (!thumbnailFile || (!thumbnailFile.path.includes('.jpg') && !thumbnailFile.path.includes('.png'))) {
 			return this.returnError('File must exist and be .jpg or .png', res)
 		}
 

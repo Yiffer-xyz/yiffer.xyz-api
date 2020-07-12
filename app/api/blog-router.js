@@ -16,7 +16,7 @@ export default class MiscRouter extends BaseRouter {
   }
   
   async getCurrentBlog (req, res) {
-    let newestBlogQuery = 'SELECT Title, Importance, Displaydays, Timestamp FROM blog ORDER BY Timestamp DESC LIMIT 1'
+    let newestBlogQuery = 'SELECT Title, Id, Importance, Displaydays, Timestamp FROM blog ORDER BY Timestamp DESC LIMIT 1'
     let returnedBlog = { shouldDisplay: false }
 
     try {
@@ -24,11 +24,12 @@ export default class MiscRouter extends BaseRouter {
       if (newestBlog.length === 1) {
         newestBlog = newestBlog[0]
         if (newestBlog.Displaydays) {
-          let daysSinceBlog = differenceInDays(new Date(newestBlog.Timestamp))
+          let daysSinceBlog = differenceInDays(new Date(), new Date(newestBlog.Timestamp))
           if (daysSinceBlog <= newestBlog.Displaydays) {
             returnedBlog = { 
               shouldDisplay: true,
               title: newestBlog.Title,
+              id: newestBlog.Id,
               importance: newestBlog.Importance
             }
           }
@@ -43,14 +44,14 @@ export default class MiscRouter extends BaseRouter {
   }
   
   async getAllBlogs (req, res) {
-    let query = 'SELECT Title AS title, Username AS author, Importance AS importance, Content AS content, Timestamp AS timestamp FROM blog INNER JOIN user ON (blog.Author=user.Id) ORDER BY Timestamp DESC'
+    let query = 'SELECT blog.Id AS id, Title AS title, Username AS author, Importance AS importance, Content AS content, Timestamp AS timestamp FROM blog INNER JOIN user ON (blog.Author=user.Id) ORDER BY Timestamp DESC'
 
     try {
-      let blogs = await this.databaseFacade.query(query, null, 'Error retrieving blogs')
+      let blogs = await this.databaseFacade.execute(query, null, 'Error retrieving blogs')
       res.json(blogs)
     }
     catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
     }
   }
   
