@@ -4,6 +4,8 @@ let BaseRouter = require('./baseRouter')
 let multiparty = require('connect-multiparty')
 let multipartyMiddelware = multiparty()
 
+import { format, compareAsc } from 'date-fns'
+
 module.exports = class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
@@ -25,6 +27,10 @@ module.exports = class MiscRouter extends BaseRouter {
 
 		this.app.post('/api/log-route', (req, res) => this.logRoute(req, res))
 		this.app.post('/api/log-event', (req, res) => this.logEvent(req, res))
+
+		this.app.get('/api/stats/routes', (req, res) => this.getRouteStats(req, res))
+		this.app.get('/api/stats/visitors', (req, res) => this.getVisitorStats(req, res))
+		this.app.get('/api/stats/comic-views', (req, res) => this.getComicViewStats(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -81,7 +87,7 @@ module.exports = class MiscRouter extends BaseRouter {
 	async processComicSuggestion (req, res) {
 		let [isApproved, shouldShowInList, reason, suggestionId] = 
 			[req.body.isApproved, req.body.shouldShowInList, req.body.reason, req.params.id]
-
+			
 		try {
 			if (isApproved) {
 				await this.processApprovedSuggestion(res, suggestionId)
@@ -90,8 +96,12 @@ module.exports = class MiscRouter extends BaseRouter {
 				await this.processNotApprovedSuggestion(res, suggestionId, shouldShowInList, reason)
 			}
 
-			let suggestionDetails = (await this.databaseFacade.execute('SELECT Name, ArtistName, Description FROM ComicSuggestion WHERE Id=?', [req.body.suggestionId]))[0]
-			this.addModLog(req, 'Comic suggestion', `${req.body.isApproved ? 'Approve' : 'Reject'} ${suggestionDetails.Name}`, `${suggestionDetails.Name} by ${suggestionDetails.ArtistName}, description: ${suggestionDetails.Description}`)
+			let suggestionDetails = (await this.databaseFacade.execute('SELECT Name, ArtistName, Description FROM ComicSuggestion WHERE Id=?', [suggestionId]))[0]
+
+			let actionString = isApproved ? 'Approve' : (shouldShowInList ? 'Reject-list' : 'Reject-spam')
+			let modReasonString = shouldShowInList ? ` \nMod reason: "${reason}".` : ''
+
+			this.addModLog(req, 'Comic suggestion', `${actionString} ${suggestionDetails.Name}`, `${suggestionDetails.Name} by ${suggestionDetails.ArtistName}. User desc: "${suggestionDetails.Description}".${modReasonString}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -322,7 +332,90 @@ module.exports = class MiscRouter extends BaseRouter {
 		}
 	}
 
+	async getVisitorStats (req, res) {
+		let interval = req.query.interval
+		let query
+
+		if (interval === 'All') {
+			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, YEAR(timestamp) AS yr, MONTH(timestamp) AS mnth FROM yifferdb.routelog GROUP BY yr, mnth, session ORDER BY timestamp) AS T1 GROUP BY yr, mnth ORDER BY timestamp DESC'
+		}
+		else if (interval === '1Y') {
+			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, YEAR(timestamp) AS yr, MONTH(timestamp) AS mnth FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 YEAR) GROUP BY yr, mnth, session ORDER BY timestamp) AS T1 GROUP BY yr, mnth ORDER BY timestamp DESC'
+		}
+		else if (interval === '1M') {
+			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, DATE(timestamp) AS dt FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 MONTH) GROUP BY dt, session ORDER BY timestamp) AS T1 GROUP BY dt ORDER BY timestamp DESC'
+		}
+		else if (interval === '1W') {
+			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, DATE(timestamp) AS dt FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 WEEK) GROUP BY dt, session ORDER BY timestamp) AS T1 GROUP BY dt ORDER BY timestamp DESC'
+		}
+		else if (interval === '24H') {
+			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, HOUR(timestamp) AS hr FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 DAY) GROUP BY hr, session ORDER BY timestamp) AS T1 GROUP BY hr ORDER BY timestamp DESC'
+		}
+
+		try {
+			let results = await this.databaseFacade.execute(query, null)
+
+			for (let result of results) {
+				if (interval === '24H') {
+					result.dataKey = 
+				}
+			}
+
+			res.json(results)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async getComicViewStats (req, res) {
+		let interval = req.query.interval
+		let query
+
+		if (interval === 'All') {
+			query = `select COUNT(*) AS count, description AS dataKey from routelog where route='comic' GROUP BY description ORDER BY count DESC`
+		}
+		else {
+			query = `select COUNT(*) AS count, description AS dataKey from routelog where route='comic' AND timestamp>DATE_SUB(now(), INTERVAL ${intervalToIntervalQueryString[interval]}) GROUP BY description ORDER BY count DESC`
+		}
+
+		try {
+			let results = await this.databaseFacade.execute(query, null)
+			res.json(results)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async getRouteStats (req, res) {
+		let interval = req.query.interval
+		let query
+
+		if (interval === 'All') {
+			query = `select COUNT(*) AS count, route AS dataKey from routelog GROUP BY dataKey ORDER BY count DESC`
+		}
+		else {
+			query = `select COUNT(*) AS count, route AS dataKey from routelog where timestamp>DATE_SUB(now(), INTERVAL ${intervalToIntervalQueryString[interval]}) GROUP BY route ORDER BY count DESC`
+		}
+
+		try {
+			let results = await this.databaseFacade.execute(query, null)
+			res.json(results)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error)
+		}
+	}
+
 	getPageName (pageNumber) {
 		return pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
 	}
+}
+
+const intervalToIntervalQueryString = {
+	'24H': '1 DAY',
+	'1W': '1 WEEK',
+	'1M': '1 MONTH',
+	'1Y': '1 YEAR',
 }
