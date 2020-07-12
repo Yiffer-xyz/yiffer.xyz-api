@@ -1,7 +1,7 @@
-import multiparty from 'connect-multiparty';
+import multiparty from 'connect-multiparty'
 const multipartyMiddleware = multiparty()
-import FileSystemFacade from '../fileSystemFacade.js';
-import BaseRouter from './baseRouter.js';
+import FileSystemFacade from '../fileSystemFacade.js'
+import BaseRouter from './baseRouter.js'
 
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {

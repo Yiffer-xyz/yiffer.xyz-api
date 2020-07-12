@@ -5,7 +5,7 @@ import multiparty from 'connect-multiparty'
 let multipartyMiddelware = multiparty()
 
 import dateFns from 'date-fns'
-const { startOfMonth, format } = dateFns
+const { format } = dateFns
 
 export default class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {

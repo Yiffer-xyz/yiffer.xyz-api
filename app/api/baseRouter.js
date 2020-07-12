@@ -6,8 +6,9 @@ export default class BaseRouter {
 	}
 
 	// todo refactor. take only err and res?
-	returnError (errorMessage, res, err) {
+	returnError (errorMessage, res, err, fullErr) {
 		console.log('Error: ', errorMessage)
+		console.log(fullErr)
 	
 		try {
 			if (res) { res.json({ error: errorMessage }) }

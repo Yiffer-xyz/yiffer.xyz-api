@@ -10,6 +10,7 @@ import ArtistRouter from './api/artist-router.js'
 import MiscRouter from './api/misc-router.js'
 import AuthRouter from './api/auth-router.js'
 import KeywordsRouter from './api/keywords-router.js'
+import BlogRouter from './api/blog-router.js'
 
 export default function (app, databaseFacade) {
   const modLogger = new ModLogger(app, databaseFacade)
@@ -20,6 +21,7 @@ export default function (app, databaseFacade) {
   new AuthRouter(app, databaseFacade)
   new ArtistRouter(app, databaseFacade, modLogger)
   new UserRouter(app, databaseFacade, modLogger)
+  new BlogRouter(app, databaseFacade)
   // app.get('*', function (req, res) {
     //   res.sendFile('views/index.html', {root: './public'})
     // })
