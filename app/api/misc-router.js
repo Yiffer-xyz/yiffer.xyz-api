@@ -1,12 +1,13 @@
-let FileSystemFacade = require('../fileSystemFacade')
-let BaseRouter = require('./baseRouter')
+import FileSystemFacade from '../fileSystemFacade.js'
+import BaseRouter from './baseRouter.js'
 
-let multiparty = require('connect-multiparty')
+import multiparty from 'connect-multiparty'
 let multipartyMiddelware = multiparty()
 
-import { format, compareAsc } from 'date-fns'
+import dateFns from 'date-fns'
+const { format, compareAsc } = dateFns
 
-module.exports = class MiscRouter extends BaseRouter {
+export default class MiscRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
@@ -356,9 +357,9 @@ module.exports = class MiscRouter extends BaseRouter {
 			let results = await this.databaseFacade.execute(query, null)
 
 			for (let result of results) {
-				if (interval === '24H') {
-					result.dataKey = 
-				}
+				// if (interval === '24H') {
+				// 	result.dataKey = 
+				// }
 			}
 
 			res.json(results)

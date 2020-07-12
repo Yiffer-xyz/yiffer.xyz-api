@@ -1,6 +1,6 @@
-let BaseRouter = require('./baseRouter')
+import BaseRouter from './baseRouter.js';
 
-module.exports = class KeywordsRouter extends BaseRouter {
+export default class KeywordsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
 		this.setupRoutes()

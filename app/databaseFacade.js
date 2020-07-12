@@ -1,4 +1,4 @@
-module.exports = class DatabaseFacade {
+export default class DatabaseFacade {
 	constructor (mysqlPool) {
 		this.mysqlPool = mysqlPool
 	}

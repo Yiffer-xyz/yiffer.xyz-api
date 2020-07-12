@@ -1,7 +1,8 @@
-const BaseRouter = require('./baseRouter')
-const bcrypt = require('bcrypt')
+import BaseRouter from './baseRouter.js';
+import bcrypt from 'bcrypt'
+const { compare, hash } = bcrypt
 
-module.exports = class AuthenticationRouter extends BaseRouter {
+export default class AuthenticationRouter extends BaseRouter {
   constructor (app, databaseFacade) {
     super(app, databaseFacade)
     this.setupRoutes()
@@ -45,7 +46,7 @@ module.exports = class AuthenticationRouter extends BaseRouter {
       return {error: 'Wrong username'}
     }
     userResult = userResult[0]
-    let passwordMatch = await bcrypt.compare(password, userResult.Password)
+    let passwordMatch = await compare(password, userResult.Password)
     if (!passwordMatch) {
       return {error: 'Wrong password'}
     }
@@ -67,7 +68,7 @@ module.exports = class AuthenticationRouter extends BaseRouter {
         return this.returnError('Invalid username', res)
       }
 
-      password = await bcrypt.hash(password, 8)
+      password = await hash(password, 8)
       let insertQuery = 'INSERT INTO User (Username, Password) VALUES (?, ?)'
       let insertQueryParams = [username, password]
       let result = await this.databaseFacade.execute(insertQuery, insertQueryParams)
@@ -107,7 +108,7 @@ module.exports = class AuthenticationRouter extends BaseRouter {
         return this.returnError(userDataResponse.error, res)
       }
 
-      newPassword = await bcrypt.hash(newPassword, 8)
+      newPassword = await hash(newPassword, 8)
       let updateQuery = 'UPDATE User SET Password=? WHERE Id=?'
       let updateQueryParams = [newPassword, userDataResponse.Id]
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating password in database')

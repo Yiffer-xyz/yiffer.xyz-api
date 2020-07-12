@@ -1,4 +1,4 @@
-module.exports = class ModLogger {
+export default class ModLogger {
   constructor (app, databaseFacade) {
     this.app = app
     this.databaseFacade = databaseFacade

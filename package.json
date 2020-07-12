@@ -19,7 +19,7 @@
   "homepage": "https://github.com/ragnarob/yifferXyz#readme",
   "dependencies": {
     "archiver": "^3.0.0",
-    "bcrypt": "^3.0.5",
+    "bcrypt": "^5.0.0",
     "connect-multiparty": "^2.2.0",
     "connect-redis": "^3.4.1",
     "cors": "^2.8.5",

@@ -1,4 +1,4 @@
-module.exports = class BaseRouter {
+export default class BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		this.app = app
 		this.databaseFacade = databaseFacade

@@ -1,6 +1,6 @@
-const fs = require('fs')
+import fs from 'fs'
 
-module.exports = class FileSystemFacade {
+export default class FileSystemFacade {
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
 		return new Promise(async (resolve, reject) => {
 			fs.rename(oldFilename, newFilename, err => {

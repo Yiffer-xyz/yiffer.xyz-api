@@ -1,30 +1,26 @@
-const mysql = require('mysql')
-const mysqlSettings = require('../config/db-config.json')
-const mysqlPool = mysql.createPool(mysqlSettings)
-const ModLogger = require('./mod-logger')
+import mysql from 'mysql'
+import mysqlSettings from '../config/db-config.js'
+import ModLogger from './mod-logger.js'
 
-module.exports = function (app, databaseFacade) {
+const mysqlPool = mysql.createPool(mysqlSettings) // todo what
+
+import ComicsRouter from './api/comics-router.js'
+import UserRouter from './api/user-router.js'
+import ArtistRouter from './api/artist-router.js'
+import MiscRouter from './api/misc-router.js'
+import AuthRouter from './api/auth-router.js'
+import KeywordsRouter from './api/keywords-router.js'
+
+export default function (app, databaseFacade) {
   const modLogger = new ModLogger(app, databaseFacade)
-
-  let ComicsRouter = require('./api/comics-router')
+  
   new ComicsRouter(app, databaseFacade, modLogger)
-
-	let MiscRouter = require('./api/misc-router')
   new MiscRouter(app, databaseFacade, modLogger)
-
-  let KeywordsRouter = require('./api/keywords-router')
   new KeywordsRouter(app, databaseFacade, modLogger)
-
-  let AuthRouter = require('./api/auth-router')
   new AuthRouter(app, databaseFacade)
-
-  let ArtistRouter = require('./api/artist-router')
   new ArtistRouter(app, databaseFacade, modLogger)
-
-  let UserRouter = require('./api/user-router')
   new UserRouter(app, databaseFacade, modLogger)
-
   // app.get('*', function (req, res) {
-  //   res.sendFile('views/index.html', {root: './public'})
-  // })
+    //   res.sendFile('views/index.html', {root: './public'})
+    // })
 }

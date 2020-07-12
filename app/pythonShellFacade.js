@@ -1,7 +1,7 @@
-let pythonShell = require('python-shell')
+import pythonShell from 'python-shell'
 const scriptPath = 'C:/scripts/Server/app/'
 
-module.exports = class PythonShellFacade {
+export default class PythonShellFacade {
   static async run (scriptName, scriptArgs) {
     return new Promise (async (resolve, reject) => {
       pythonShell.PythonShell.run(scriptPath+scriptName, {mode: 'text', args: scriptArgs}, (err, output) => {

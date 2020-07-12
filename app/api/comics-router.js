@@ -1,10 +1,9 @@
-const multiparty = require('connect-multiparty')
-const multipartyMiddelware = multiparty()
-const FileSystemFacade = require('../fileSystemFacade')
-const PythonShellFacade = require('../pythonShellFacade')
-const BaseRouter = require('./baseRouter')
+import multiparty from 'connect-multiparty';
+const multipartyMiddleware = multiparty()
+import FileSystemFacade from '../fileSystemFacade.js';
+import BaseRouter from './baseRouter.js';
 
-module.exports = class ComicsRouter extends BaseRouter {
+export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
@@ -14,19 +13,19 @@ module.exports = class ComicsRouter extends BaseRouter {
 		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
-		this.app.post('/api/comics', multipartyMiddelware, (req, res) => this.createComic(req, res))
-		this.app.post('/api/comics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, false))
+		this.app.post('/api/comics', multipartyMiddleware, (req, res) => this.createComic(req, res))
+		this.app.post('/api/comics/:id/addpages', multipartyMiddleware, (req, res) => this.addPagesToComic(req, res, false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
-		this.app.post('/api/comics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToComic(req, res, false))
+		this.app.post('/api/comics/:id/addthumbnail', multipartyMiddleware, (req, res) => this.addThumbnailToComic(req, res, false))
 		
 		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id', (req, res) => this.processPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddelware, (req, res) => this.addThumbnailToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddleware, (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddelware, (req, res) => this.addPagesToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddleware, (req, res) => this.addPagesToComic(req, res, true))
 	}
 	
 	async getComicList (req, res) {
@@ -130,7 +129,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 			let result = await this.writeNewComicFiles(fileList, comicFolderPath, thumbnailFile)
 			if (result.error) { return this.returnError(result.error, res) }
 
-			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
+			await run('process_new_comic.py', [req.body.comicName])
 
 			let insertQuery = 'INSERT INTO PendingComic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0, previousComic, nextComic]
@@ -195,7 +194,7 @@ module.exports = class ComicsRouter extends BaseRouter {
 
 			await this.writeAppendedComicPageFiles(comicFolderPath, newFilesWithNames)
 			
-			await PythonShellFacade.run('process_new_pages.py', [comicName, newFilesWithNames.length])
+			await run('process_new_pages.py', [comicName, newFilesWithNames.length])
 
 			if (!isPendingComic) {
 				let updateUpdatedTimeQuery = 'UPDATE Comic SET Updated = NOW() WHERE Id=?'
