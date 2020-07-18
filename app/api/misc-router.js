@@ -1,8 +1,16 @@
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter from './baseRouter.js'
 
-import multiparty from 'connect-multiparty'
-let multipartyMiddelware = multiparty()
+import multer from 'multer'
+var storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads')
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now())
+  }
+})
+var upload = multer({ storage: storage })
 
 import dateFns from 'date-fns'
 const { format } = dateFns
@@ -23,7 +31,7 @@ export default class MiscRouter extends BaseRouter {
 		this.app.get ('/api/modscores', (req, res) => this.getModScores(req, res))
 	
 		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
-		this.app.post('/api/insertcomicpage', multipartyMiddelware, (req, res) => this.insertComicPage(req, res))
+		this.app.post('/api/insertcomicpage', upload.single('newPageFile'), (req, res) => this.insertComicPage(req, res))
 		this.app.post('/api/deletecomicpage', (req, res) => this.deletecomicpage(req, res))
 
 		this.app.post('/api/log-route', (req, res) => this.logRoute(req, res))
@@ -250,9 +258,9 @@ export default class MiscRouter extends BaseRouter {
 
 	async insertComicPage (req, res) {
 		let [comicName, comicId, newPageFile, insertAfterPageNumber] =
-			[req.body.comicName, req.body.comicId, req.files.newPageFile, Number(req.body.insertAfterPageNumber)]
+			[req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
-		if (!newPageFile || (newPageFile.path.indexOf('.jpg')===-1 && newPageFile.path.indexOf('.png')===-1)) {
+		if (!newPageFile || (!newPageFile.originalname.endsWith('jpg') && !newPageFile.originalname.endsWith('png'))) {
 			return this.returnError('File must exist and be .jpg or .png', res)
 		}
 		try {

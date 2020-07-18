@@ -4,6 +4,7 @@ meta_tools/
 node_modules/
 package-lock.json
 *.txt
+uploads/*
 public/021njnwjfusjkfn89c23nfsnfkas/
 public/mod-favorites/
 public/listRagImages/

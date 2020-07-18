@@ -1,5 +1,16 @@
-import multiparty from 'connect-multiparty'
-const multipartyMiddleware = multiparty()
+import PythonShellFacade from '../pythonShellFacade.js'
+
+import multer from 'multer'
+var storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads')
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now())
+  }
+})
+var upload = multer({ storage: storage })
+
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter from './baseRouter.js'
 
@@ -7,6 +18,8 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
 
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
@@ -18,19 +31,19 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
-		this.app.post('/api/comics', multipartyMiddleware, (req, res) => this.createComic(req, res))
-		this.app.post('/api/comics/:id/addpages', multipartyMiddleware, (req, res) => this.addPagesToComic(req, res, false))
+		this.app.post('/api/comics', addComicUploadFormat, (req, res) => this.createComic(req, res))
+		this.app.post('/api/comics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
-		this.app.post('/api/comics/:id/addthumbnail', multipartyMiddleware, (req, res) => this.addThumbnailToComic(req, res, false))
+		this.app.post('/api/comics/:id/addthumbnail', upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
 		
 		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id', (req, res) => this.processPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addthumbnail', multipartyMiddleware, (req, res) => this.addThumbnailToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addthumbnail', upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addpages', multipartyMiddleware, (req, res) => this.addPagesToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
 	}
 	
 	async getComicList (req, res) {
@@ -110,20 +123,26 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async createComic (req, res) {
-		if (!this.authorizeMod(req)) {
-			return this.returnError('Unauthorized', res)
-		}
 		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
 		let [comicName, artistId, cat, tag, isFinished, keywordIds, nextComic, previousComic] = 
 			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag,req.body.finished==='true', 
 			 req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
 		let userId = req.session.user.id
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
-		let hasThumbnail = !!thumbnailFile
+
+		let hasThumbnail = false
+		if (thumbnailFile && thumbnailFile.length === 1) {
+			thumbnailFile = thumbnailFile[0]
+			hasThumbnail = true
+		}
 
 		if (!newFiles) { return this.returnError('No files added', res) }
-		if (newFiles.hasOwnProperty('fieldName')) { return this.returnError('Comic must have more than one page', res) }
-		let fileList = this.sortNewComicImages(newFiles)
+		if (newFiles.length === 1) {
+			FileSystemFacade.deleteFile(newFiles[0].path)
+			return this.returnError('Comic must have more than one page', res)
+		}
+
+		let fileList = newFiles.sort((f1, f2) => f1.f > f2.f ? -1 : 1)
 
 		try {
 			let allComicFoldersList = await FileSystemFacade.listDir(__dirname + '/../../../client/public/comics', 'Error reading comics directory')
@@ -131,10 +150,9 @@ export default class ComicsRouter extends BaseRouter {
 				return this.returnError('Directory of a comic with this name already exists', res)
 			}
 
-			let result = await this.writeNewComicFiles(fileList, comicFolderPath, thumbnailFile)
-			if (result.error) { return this.returnError(result.error, res) }
+			await this.writeNewComicFiles(fileList, comicFolderPath, thumbnailFile)
 
-			await run('process_new_comic.py', [req.body.comicName])
+			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
 
 			let insertQuery = 'INSERT INTO PendingComic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0, previousComic, nextComic]
@@ -144,9 +162,12 @@ export default class ComicsRouter extends BaseRouter {
 			await this.addKeywordsToComic(keywordIds, comicId)
 
 			res.json({success: true})
+			
+			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
 			this.addModLog(req, 'Create comic', `Add ${comicName}`)
 		}
 		catch (err) {
+			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
 			return this.returnError(err.message, res, err.error)
 		}
 	}
@@ -156,16 +177,17 @@ export default class ComicsRouter extends BaseRouter {
 		for (var i=1; i<= fileList.length; i++) {
 			let file = fileList[i-1]
 			let fileContents = await FileSystemFacade.readFile(file.path)
-			let pageName = this.getPageName(i, file.path)
-			if (!pageName) { 
-				return {error: 'Some file is not .jpg or .png!'}
-			}
+
+			let pageName = this.getNewPreProcessedFilePath(i, file)
+			
 			await FileSystemFacade.writeFile(comicFolderPath + '/' + pageName, fileContents, 'Error writing a new file to disk')
 		}
+
 		if (!!thumbnailFile) {
 			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
 			await FileSystemFacade.writeFile(comicFolderPath + '/s.jpg', fileContents, 'Error writing thumbnail file to disk')
 		}
+
 		return {error: false}
 	}
 
@@ -186,20 +208,25 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async addPagesToComic (req, res, isPendingComic) {
-		let [comicName, comicId] = [req.body.comicName, req.params.id]
+		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, req.params.id]
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
-		if (!req.files || !req.files.newPages) { return this.returnError('No files added!', res) }
-		let requestFiles = req.files.newPages
+
+		if (!uploadedFiles || uploadedFiles.length === 0) {
+			return this.returnError('No files added!', res)
+		}
 
 		try {
 			let existingFiles = await FileSystemFacade.listDir(comicFolderPath)
 			let existingNumberOfPages = existingFiles.filter(f => f != 's.jpg').length
 
-			let newFilesWithNames = this.parseRequestFiles(requestFiles, existingNumberOfPages)
+			let files = uploadedFiles.sort((f1, f2) => f1.f > f2.f ? -1 : 1).map((file, i) => ({
+				preProcessedFilePath: this.getNewPreProcessedFilePath(existingNumberOfPages+i+1, file),
+				currentTempPath: file.path
+			}))
 
-			await this.writeAppendedComicPageFiles(comicFolderPath, newFilesWithNames)
+			await this.writeAppendedComicPageFiles(comicFolderPath, files)
 			
-			await run('process_new_pages.py', [comicName, newFilesWithNames.length])
+			await PythonShellFacade.run('process_new_pages.py', [comicName, files.length])
 
 			if (!isPendingComic) {
 				let updateUpdatedTimeQuery = 'UPDATE Comic SET Updated = NOW() WHERE Id=?'
@@ -208,48 +235,48 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'PendingComic' : 'Comic'} SET NumberOfPages = ? WHERE Id = ?`
-			let queryParams = [existingNumberOfPages + newFilesWithNames.length, comicId]
+			let queryParams = [existingNumberOfPages + files.length, comicId]
 			await this.databaseFacade.execute(updateNumberOfPagesQuery,
 				queryParams, 'Database error: Error updating number of pages')
 			
+			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
 			res.json({success: true})
 			
-			this.addModLog(req, 'Comic', `Append ${newFilesWithNames.length} pages to ${comicName}`)
+			this.addModLog(req, 'Comic', `Append ${files.length} pages to ${comicName}`)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
-	parseRequestFiles (requestFiles, existingNumberOfPages) {
-		if (isOneFileOnly(requestFiles)) {
-			return [{
-				filename: this.getPageName(existingNumberOfPages+1, requestFiles.path),
-				file: requestFiles
-			}]
+	getNewPreProcessedFilePath (pageNumber, file) {
+		let pageNumberString = pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
+		if (file.originalname.endsWith('jpg')) {
+			return pageNumberString + '.jpg'
+		}
+		if (file.originalname.endsWith('png')) {
+			return pageNumberString + '.png'
+		}
+		if (file.originalname.endsWith('gif')) {
+			return pageNumberString + '.gif'
 		}
 		else {
-			requestFiles = [...requestFiles].sort()
-			return requestFiles.map((file, i) => ({
-				filename: this.getPageName(existingNumberOfPages+i+1, file.path),
-				file: file
-			}))
+			throw new Error('Not all pages are .jpg or .png')
 		}
 	}
 
-	async writeAppendedComicPageFiles (comicFolderPath, fileList) {
-		for (let file of fileList) {
-			let fileData = await FileSystemFacade.readFile(file.file.path,
-				`Error parsing uploaded file (${file.name})`) // todo make sure this is  filename
-			await FileSystemFacade.writeFile(`${comicFolderPath}/${file.filename}`,
-				fileData, `Error writing file to disc (${file.name})`) // todo make sure this is  filename
+	async writeAppendedComicPageFiles(comicFolderPath, newFiles) {
+		for (let file of newFiles) {
+			let fileData = await FileSystemFacade.readFile(file.currentTempPath, `Error parsing uploaded file (${file.preProcessedFilePath})`)
+			await FileSystemFacade.writeFile(`${comicFolderPath}/${file.preProcessedFilePath}`, fileData, `Error writing file to disc (${file.preProcessedFilePath})`)
 		}
 	}
 
 	async updateComicDetails (req, res) {
 		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName, previousComic, nextComic] = 
 			[Number(req.params.id), req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished,
-			 req.body.artist, Number(req.body.previousComic), Number(req.body.nextComic)] //todo prevand next
+			 req.body.artist, Number(req.body.previousComic), Number(req.body.nextComic)]
 
 		if (!newName || !newCat || !newTag || newFinished==undefined || !newArtistName) {
 			return returnError('Missing fields', res, null, null)
@@ -423,11 +450,15 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async addThumbnailToComic (req, res, isPendingComic) {
-		let [thumbnailFile, comicName, comicId] = 
-			[req.files.thumbnailFile, req.body.comicName, Number(req.params.id)]
+		let [thumbnailFile, comicName, comicId] = [req.file, req.body.comicName, Number(req.params.id)]
+
 		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
-		if (!thumbnailFile || (!thumbnailFile.path.includes('.jpg') && !thumbnailFile.path.includes('.png'))) {
-			return this.returnError('File must exist and be .jpg or .png', res)
+		if (!thumbnailFile) {
+			return this.returnError('File must exist', res)
+		}
+		if ((!thumbnailFile.mimetype.endsWith('jpeg') && !thumbnailFile.mimetype.endsWith('png'))) {
+			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
+			return this.returnError('File must be .jpg or .png', res)
 		}
 
 		try {
@@ -445,6 +476,7 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			res.json({success: true})
+			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
 
 			this.addModLog(req, isPendingComic?'Pending comic':'Comic', `Add thumbnail to ${comicName}`, `Had old thumbnail: ${preExistingThumbnail}`)
 		}
@@ -501,20 +533,4 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 	}
-
-	sortNewComicImages (requestFiles) {
-		return [...requestFiles].sort((file1, file2) => file1.name>file2.name ? 1 : -1)
-	}
-
-	getPageName (pageNumber, filePathName) {
-		let pageNumberString = pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
-		let pagePostfix = filePathName.substring(filePathName.length - 4)
-		if (pagePostfix != '.jpg' && pagePostfix != '.png') { return false }
-		return pageNumberString + pagePostfix
-	}
 }
-
-function isOneFileOnly (requestFilesObject) {
-	return requestFilesObject.hasOwnProperty('fieldName')
-}
-

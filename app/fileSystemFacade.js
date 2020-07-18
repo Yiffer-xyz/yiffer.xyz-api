@@ -53,5 +53,20 @@ export default class FileSystemFacade {
 				else { resolve({error: false}) }
 			})
 		})
-	}	
+	}
+		
+	static async deleteFiles (filePaths, errorMessage='File system error: Error deleting file') {
+		return new Promise(async (resolve, reject) => {
+			let promises = []
+			for (let path of filePaths) {
+				promises.push(
+					fs.unlink(path, err => {
+						if (err) { reject({error: err, message: errorMessage}) }
+					})
+				)
+			}
+			await Promise.all(promises)
+			resolve({error: false})
+		})
+	}
 }
