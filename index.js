@@ -26,9 +26,9 @@ import DatabaseFacade from './app/databaseFacade.js'
 let databaseFacade = new DatabaseFacade(mysqlPool)
 
 app.use(cors())
-
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
+app.set('query parser', 'extended')
 
 app.use(express.static('./public'))
 

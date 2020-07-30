@@ -134,7 +134,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getModLog (req, res) {
-		let query = 'SELECT User.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM ModLog INNER JOIN User ON (ModLog.User=User.Id) ORDER BY Timestamp DESC'
+		let query = 'SELECT modlog.Id AS id, User.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM ModLog INNER JOIN User ON (ModLog.User=User.Id) ORDER BY Timestamp DESC'
 		try { 
 			let result = await this.databaseFacade.execute(query)
 			res.json(result)
@@ -337,7 +337,7 @@ export default class MiscRouter extends BaseRouter {
 			res.json({success: true})
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
