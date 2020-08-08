@@ -39,6 +39,7 @@ export default class AdvertisingRouter extends BaseRouter {
     let [file, adType, adLink, adMainText, adSecondaryText, notes, user] = 
       [req.file, req.body.adType, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.notes, this.getUser(req)]
     
+    if (!user) { return this.returnError('Not logged in', res, null, null) }
     let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
     if (!isValid) { return res.json({error: error}) }
 

@@ -40,6 +40,10 @@ export default class MiscRouter extends BaseRouter {
 		this.app.get('/api/stats/routes', (req, res) => this.getRouteStats(req, res))
 		this.app.get('/api/stats/visitors', (req, res) => this.getVisitorStats(req, res))
 		this.app.get('/api/stats/comic-views', (req, res) => this.getComicViewStats(req, res))
+
+		this.app.post('/api/mod-applications', (req, res) => this.createModApplication(req, res))
+		this.app.get ('/api/mod-applications', (req, res) => this.getModApplications(req, res))
+		this.app.post('/api/mod-applications/:id', (req, res) => this.processModApplication(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -422,6 +426,57 @@ export default class MiscRouter extends BaseRouter {
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
+		}
+	}
+
+	async createModApplication (req, res) {
+		let [user, notes, competentAnswer, telegramUsername] = 
+			[this.getUser(req), req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
+
+		if (!user) { return this.returnError('Not logged in', res, null, null) }
+		
+		let existingApplicationQuery = 'SELECT * FROM modapplication WHERE UserId = ?'
+		try {
+			let existingApplication = await this.databaseFacade.execute(existingApplicationQuery, [user.id], 'Error listing existing applications')
+			if (existingApplication.length > 0) {
+				return this.returnError('You already have a pending application', res, null, null)
+			}
+
+			let addApplicationQuery = 'INSERT INTO modapplication (UserId, Notes, CompetentAnswer, TelegramUsername) VALUES (?, ?, ?, ?)'
+			let addApplicationQueryParams = [user.id, notes, competentAnswer, telegramUsername]
+			await this.databaseFacade.execute(addApplicationQuery, addApplicationQueryParams, 'Error adding application')
+
+      res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async getModApplications (req, res) {
+		let existingApplicationQuery = 'SELECT modapplication.Id AS id, user.Username AS username, Timestamp AS timestamp, Notes AS notes, CompetentAnswer AS competentAnswer, TelegramUsername AS telegramUsername, IsProcessed AS isProcessed, isRemoved AS isRemoved FROM modapplication INNER JOIN user ON (user.Id = modapplication.UserId)'
+
+		try {
+			let results = await this.databaseFacade.execute(existingApplicationQuery, null, 'Error getting mod applications')
+			res.json(results)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async processModApplication (req, res) {
+		let [applicationId, isRemoved] = [req.params.id, req.body.isRemoved]
+
+		let query = 'UPDATE modapplication SET IsProcessed=1, IsRemoved=? WHERE Id=?'
+		let queryParams = [isRemoved ? '1' : '0', applicationId]
+
+		try {
+			await this.databaseFacade.execute(query, queryParams, 'Error processing application')
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
