@@ -44,6 +44,7 @@ export default class MiscRouter extends BaseRouter {
 		this.app.post('/api/mod-applications', (req, res) => this.createModApplication(req, res))
 		this.app.get ('/api/mod-applications', (req, res) => this.getModApplications(req, res))
 		this.app.post('/api/mod-applications/:id', (req, res) => this.processModApplication(req, res))
+		this.app.get('/api/mod-applications/me', (req, res) => this.getMyModApplicationStatus(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -480,6 +481,32 @@ export default class MiscRouter extends BaseRouter {
 		}
 	}
 
+	async getMyModApplicationStatus (req, res) {
+		let user = this.getUser(req)
+		if (!user) { return this.returnError('Not logged in', res, null, null) }
+
+		let query = 'SELECT IsProcessed AS isProcessed, IsRemoved AS isRemoved FROM modapplication WHERE UserId=?'
+		try {
+			let result = await this.databaseFacade.execute(query, [user.id], 'Error getting mod application status')
+			if (result.length !== 1) { return this.returnError('Error getting mod application status - not a single application on this user-id', res, null, null) }
+			let application = result[0]
+
+			if (!application.isProcessed && !application.isRemoved) {
+				return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.pending })
+			}
+			else if (application.isProcessed && !application.isRemoved) {
+				return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.waiting })
+			}
+			else if (application.isRemoved) {
+				return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.removed })
+			}
+			return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.none })
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
 	getPageName (pageNumber) {
 		return pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
 	}
@@ -490,4 +517,11 @@ const intervalToIntervalQueryString = {
 	'1W': '1 WEEK',
 	'1M': '1 MONTH',
 	'1Y': '1 YEAR',
+}
+
+const MOD_APPLICATION_STATUSES = {
+  none: 'none',
+  pending: 'pending',
+  waiting: 'waiting',
+  removed: 'removed'
 }
