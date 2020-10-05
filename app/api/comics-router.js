@@ -51,11 +51,11 @@ export default class ComicsRouter extends BaseRouter {
 		let queryParams
 		let user = this.getUser(req)
 		if (user) {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
 			queryParams = [user.id]
 		}
 		else {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
 		}
 
 		try {
@@ -72,7 +72,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getFirstPageComics (req, res) {
-		let query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.Finished AS finished, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) GROUP BY name, id ORDER BY id LIMIT 50'
+		let query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) GROUP BY name, id ORDER BY id LIMIT 50'
 		try {
 			let results = await this.databaseFacade.execute(query)
 			res.json(results)
@@ -124,9 +124,8 @@ export default class ComicsRouter extends BaseRouter {
 
 	async createComic (req, res) {
 		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
-		let [comicName, artistId, cat, tag, isFinished, keywordIds, nextComic, previousComic] = 
-			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag,req.body.finished==='true', 
-			 req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
+		let [comicName, artistId, cat, tag, state, keywordIds, nextComic, previousComic] = 
+			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag, req.body.state, req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
 		let userId = req.session.user.id
 		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 
@@ -154,8 +153,8 @@ export default class ComicsRouter extends BaseRouter {
 
 			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
 
-			let insertQuery = 'INSERT INTO PendingComic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, Finished, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, isFinished, hasThumbnail?1:0, previousComic, nextComic]
+			let insertQuery = 'INSERT INTO PendingComic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, State, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, state, hasThumbnail?1:0, previousComic, nextComic]
 			let insertResult = await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Database error creating new comic')
 			let comicId = insertResult.insertId
 
@@ -274,12 +273,11 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async updateComicDetails (req, res) {
-		let [comicId, oldName, newName, newCat, newTag, newFinished, newArtistName, previousComic, nextComic] = 
-			[Number(req.params.id), req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.finished,
-			 req.body.artist, Number(req.body.previousComic), Number(req.body.nextComic)]
+		let [comicId, oldName, newName, newCat, newTag, newState, newArtistName, previousComic, nextComic] = 
+			[Number(req.params.id), req.body.oldName, req.body.name, req.body.cat, req.body.tag, req.body.state, req.body.artist, Number(req.body.previousComic), Number(req.body.nextComic)]
 
-		if (!newName || !newCat || !newTag || newFinished==undefined || !newArtistName) {
-			return returnError('Missing fields', res, null, null)
+		if (!newName || !newCat || !newTag || !newState || !newArtistName) {
+			return this.returnError('Missing fields', res, null, null)
 		}
 
 		try {
@@ -290,8 +288,8 @@ export default class ComicsRouter extends BaseRouter {
 					'Error renaming comic directory')
 			}
 
-			let query = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, Finished = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
-			let queryParams = [newName, newCat, newTag, newFinished, newArtistName, comicId]
+			let query = 'UPDATE Comic SET Name = ?, Cat = ?, Tag = ?, State = ?, Artist = (SELECT Artist.Id FROM Artist WHERE Name = ?) WHERE Id = ?'
+			let queryParams = [newName, newCat, newTag, newState, newArtistName, comicId]
 			await this.databaseFacade.execute(query, queryParams)
 
 			await this.updatePrevAndNextComicLinks(comicId, previousComic, nextComic)
@@ -354,7 +352,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User ON (User.Id=PendingComic.Moderator) LEFT JOIN PendingComicKeyword ON (PendingComicKeyword.ComicId = PendingComic.Id) LEFT JOIN Keyword ON (Keyword.Id = PendingComicKeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
+		let query = 'SELECT Artist.Name AS artist, PendingComic.Id AS id, PendingComic.Name AS name, User.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) INNER JOIN User ON (User.Id=PendingComic.Moderator) LEFT JOIN PendingComicKeyword ON (PendingComicKeyword.ComicId = PendingComic.Id) LEFT JOIN Keyword ON (Keyword.Id = PendingComicKeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
@@ -370,7 +368,7 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
-		let comicDataQuery = 'SELECT Artist.Name AS artistName, PendingComic.Id AS id, PendingComic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, Finished AS finished, HasThumbnail AS hasThumbnail FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) WHERE PendingComic.Name = ?'
+		let comicDataQuery = 'SELECT Artist.Name AS artistName, PendingComic.Id AS id, PendingComic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM PendingComic INNER JOIN Artist ON (PendingComic.Artist=Artist.Id) WHERE PendingComic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, Keyword.Id AS id FROM PendingComicKeyword INNER JOIN Keyword ON (PendingComicKeyword.KeywordId = Keyword.Id) WHERE PendingComicKeyword.ComicId = ?'
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
@@ -403,10 +401,10 @@ export default class ComicsRouter extends BaseRouter {
 	}
 	
 	async approvePendingComic (req, res, comicId) {
-		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, Finished, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
+		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, State, Artist, HasThumbnail FROM PendingComic WHERE Id = ?'
 		let getKeywordsQuery = 'SELECT KeywordId FROM PendingComicKeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE PendingComic SET Processed = 1, Approved = 1 WHERE Id = ?'
-		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, Finished, Artist) VALUES (?, ?, ?, ?, ?, ?)'
+		let insertIntoComicQuery = 'INSERT INTO Comic (Name, Cat, Tag, NumberOfPages, State, Artist) VALUES (?, ?, ?, ?, ?, ?)'
 		let insertKeywordsQuery = 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES '
 
 		let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
@@ -417,7 +415,7 @@ export default class ComicsRouter extends BaseRouter {
 		if (keywordIds.length === 0) { return this.returnError('No tags added', res, connection, err) }
 		keywordIds = keywordIds.map(k => k.KeywordId)
 
-		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.Finished, comicData.Artist]
+		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.State, comicData.Artist]
 		let insertResult = await this.databaseFacade.execute(insertIntoComicQuery, updatePendingComicsQueryParams, 'Error adding new comic to database')
 		await this.databaseFacade.execute(updatePendingComicsQuery, [comicId], 'Error updating pending comic status')
 

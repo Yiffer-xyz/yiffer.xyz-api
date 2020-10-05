@@ -24,6 +24,7 @@ export default class AdvertisingRouter extends BaseRouter {
   
   setupRoutes () {
     this.app.get ('/api/paid-images', (req, res) => this.getAllAds(req, res))
+    this.app.get ('/api/paid-images-basic', (req, res) => this.getAdsForList(req, res))
     this.app.get ('/api/paid-images/pending', (req, res) => this.getPendingAds(req, res))
     this.app.get ('/api/paid-images/awaiting-payment', (req, res) => this.getAdsInNeedOfPayment(req, res))
     this.app.get ('/api/paid-images/active-soon', (req, res) => this.getActiveSoonAds(req, res))
@@ -146,6 +147,18 @@ export default class AdvertisingRouter extends BaseRouter {
 
     let results = await this.getAdsBase(req, res, whereQueryString, whereQueryParams, true)
     res.json(results)
+  }
+
+  async getAdsForList (req, res) {
+    try {
+      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, Filetype AS filetype FROM advertisement WHERE Status='ACTIVE' OR Status = 'ACTIVE, RENEWAL PAID' OR Status = 'ACTIVE, AWAITING RENEWAL PAYMENT'`
+      let results = await this.databaseFacade.execute(query, null, 'Error fetching ads')
+
+      res.json(results)
+    }
+		catch (err) {
+      return this.returnError(err.message, res, err.error, err)
+		}
   }
 
   async getAdById (req, res, adId) {
