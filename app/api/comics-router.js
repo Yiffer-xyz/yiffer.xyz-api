@@ -21,6 +21,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
 
+const COMICS_PER_PAGE = 75
+
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
@@ -29,6 +31,7 @@ export default class ComicsRouter extends BaseRouter {
 
   setupRoutes () {
 		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
+		this.app.get ('/api/comicsPaginated', (req, res) => this.getComicListPaginated(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
 		this.app.post('/api/comics', addComicUploadFormat, (req, res) => this.createComic(req, res))
@@ -45,25 +48,139 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
 	}
+
+	async getComicListPaginated (req, res) {
+		let [categories, tags, keywordIds, search, page, order] = 
+			[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order]
+		keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
+
+		let filterQueryString = ''
+		let filterQueryParams = []
+		let keywordCountString = ''
+		if (categories || tags || search || keywordIds) {
+			let queries = []
+
+			if (keywordIds) {
+				keywordCountString = `HAVING COUNT(*) >= ${keywordIds.length}`
+				let keywordQueryStrings = []
+				keywordIds.forEach(kwId => {
+					filterQueryParams.push(kwId)
+					keywordQueryStrings.push(' comickeyword.KeywordId=? ')
+				})
+				queries.push(`(${keywordQueryStrings.join('OR')})`)
+			}
+
+			if (categories) {
+				let categoryStrings = []
+				categories.forEach(category => {
+					filterQueryParams.push(category)
+					categoryStrings.push(' cat = ? ')
+				})
+				queries.push(`(${categoryStrings.join('OR') })`)
+			}
+
+			if (tags) {
+				let tagStrings = []
+				tags.forEach(tag => {
+					filterQueryParams.push(tag)
+					tagStrings.push(' tag = ? ')
+				})
+				queries.push(`(${tagStrings.join('OR') })`)
+			}
+
+			if (search) {
+				queries.push('(comic.Name LIKE ? OR artist.Name LIKE ?)')
+				filterQueryParams.push(`%${search}%`, `%${search}%`)
+			}
+			
+			filterQueryString = 'WHERE ' + queries.join(' AND ')
+		}
+
+		order = order || 'updated'
+		if (!['updated', 'userRating', 'yourRating'].includes(order)) {
+			return this.returnError('Illegal order by', res, null, null)
+		}
+		let orderQueryString = `ORDER BY ${order} DESC`
+
+		page = (page && !isNaN(page)) ? Number(page)-1 : 0
+		let pageOffset = page * COMICS_PER_PAGE
+		let paginationQueryString = ` LIMIT ${COMICS_PER_PAGE} OFFSET ? `
+
+		let comicVoteQuery = `
+			LEFT JOIN (
+				SELECT ComicId, Vote AS YourVote 
+				FROM ComicVote 
+				WHERE UserId = ?
+			) AS VoteQuery ON (comic.Id = VoteQuery.ComicId) 
+		`
+
+		let user = this.getUser(req)
+
+		let innerComicQuery = `
+			SELECT 
+				comic.Id AS Id, comic.Name AS Name, comic.Cat AS Cat, comic.Tag AS Tag, Artist.Name AS Artist, comic.Updated AS updated, comic.State AS State, comic.Created AS Created, comic.NumberOfPages AS NumberOfPages
+				${user ? ', VoteQuery.YourVote AS yourRating' : ''}
+			FROM comic 
+			INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId)
+			INNER JOIN Artist ON (Artist.Id = Comic.Artist) 
+			${user ? comicVoteQuery : ''} 
+			${filterQueryString}
+			GROUP BY comic.Name 
+			${keywordCountString} 
+			${order==='userRating' ? '' : orderQueryString + paginationQueryString} 
+		`
+		
+		let queryParams = []
+		if (user) { queryParams = [user.id] }
+		queryParams.push(...filterQueryParams, pageOffset)
+
+		let query = `
+			SELECT cc.Id AS id, cc.Name AS name, cc.Cat AS cat, cc.Tag AS tag, cc.Artist AS artist, 
+			cc.updated AS updated, cc.State AS state, cc.Created AS created, cc.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 
+			${user ? 'cc.yourRating AS yourRating' : '0 AS yourRating'}
+			FROM (
+				${innerComicQuery}
+			) AS cc  
+			LEFT JOIN ComicVote ON (cc.Id = ComicVote.ComicId) 
+			GROUP BY name, id 
+			${order==='userRating' ? orderQueryString + paginationQueryString : ''} 
+		`
+
+		let totalPagesQuery = `
+			SELECT COUNT(*) AS count FROM (
+				SELECT DISTINCT Comic.Id FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId) ${filterQueryString}
+			) AS Q1`
+		let totalPagesQueryParam = filterQueryParams
+
+		try {
+			let comicsPromise = this.databaseFacade.execute(query, queryParams)
+			let totalNumberPromise = this.databaseFacade.execute(totalPagesQuery, totalPagesQueryParam)
+
+			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])
+			let numberOfPages = Math.ceil(totalNumber[0].count / COMICS_PER_PAGE)
+
+			res.json({ comics, numberOfPages, page: page+1 })
+		}
+		catch (err) {
+      return this.returnError(err.message, res, err.error, err)
+		}
+	}
 	
 	async getComicList (req, res) {
 		let query
 		let queryParams
 		let user = this.getUser(req)
+		
 		if (user) {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id' 
 			queryParams = [user.id]
 		}
 		else {
-			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) LEFT JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
+			query = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) GROUP BY name, id ORDER BY id'
 		}
 
 		try {
 			let results = await this.databaseFacade.execute(query, queryParams)
-			results = results.map(comic => {
-				comic.keywords = !comic.keywords ? [] : comic.keywords.split(',')
-				return comic
-			})
 			res.json(results)
 		}
 		catch (err) {
@@ -531,4 +648,9 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 	}
+}
+
+function replaceGlobally(original, searchTxt, replaceTxt) {
+	const regex = new RegExp(searchTxt, 'g')
+	return original.replace(regex, replaceTxt) 
 }
