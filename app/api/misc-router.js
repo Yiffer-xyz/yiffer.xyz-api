@@ -12,6 +12,10 @@ var storage = multer.diskStorage({
 })
 var upload = multer({ storage: storage })
 
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 import dateFns from 'date-fns'
 const { format } = dateFns
 

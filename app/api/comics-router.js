@@ -16,7 +16,6 @@ import BaseRouter from './baseRouter.js'
 
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
@@ -31,6 +30,7 @@ export default class ComicsRouter extends BaseRouter {
 
   setupRoutes () {
 		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
+		this.app.get ('/api/all-comics', (req, res) => this.getAllComics(req, res))
 		this.app.get ('/api/comicsPaginated', (req, res) => this.getComicListPaginated(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
@@ -165,6 +165,18 @@ export default class ComicsRouter extends BaseRouter {
       return this.returnError(err.message, res, err.error, err)
 		}
 	}
+
+	async getAllComics (req, res) {
+		let innerComicQuery = `SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, Artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) ORDER BY name ASC`
+
+		try {
+			let comics = await this.databaseFacade.execute(innerComicQuery, null)
+			res.json(comics)
+		}
+		catch (err) {
+      return this.returnError(err.message, res, err.error, err)
+		}
+	}
 	
 	async getComicList (req, res) {
 		let query
@@ -284,7 +296,8 @@ export default class ComicsRouter extends BaseRouter {
 		}
 		catch (err) {
 			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
-			return this.returnError(err.message, res, err.error)
+			FileSystemFacade.deleteDirectory(comicFolderPath)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 	
@@ -417,7 +430,7 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Comic', `Update details of ${comicName}`, queryParams.slice(0,-1).join(', '))
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
@@ -513,7 +526,7 @@ export default class ComicsRouter extends BaseRouter {
 			}
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 	

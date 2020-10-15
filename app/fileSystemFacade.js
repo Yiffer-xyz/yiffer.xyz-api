@@ -28,6 +28,15 @@ export default class FileSystemFacade {
 		})
 	}
 
+	static async deleteDirectory (pathToDirectory) {
+		return new Promise(async (resolve, reject) => {
+			fs.rmdir(pathToDirectory, err => {
+				if (err) { reject({error: err, message: 'Error deleting directory'}) }
+				else { resolve({error: false}) }
+			})
+		})
+	}
+
 	static async readFile (filePath, errorMessage='File system error: Error reading file') {
 		return new Promise(async (resolve, reject) => {
 			fs.readFile(filePath, (err, fileContent) => {

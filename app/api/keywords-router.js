@@ -8,6 +8,7 @@ export default class KeywordsRouter extends BaseRouter {
   
   setupRoutes () {
     this.app.get ('/api/keywords', (req, res) => this.getAllKeywords(req, res))
+    this.app.get ('/api/comic-keywords/:comicId', (req, res) => this.getComicKeywords(req, res))
     this.app.post('/api/keywords/removefromcomic', (req, res) => this.removeKeywordsFromComic(req, res))
     this.app.post('/api/keywords/addtocomic', (req, res) => this.addKeywordsToComic(req, res))
     this.app.post('/api/keywords', (req, res) => this.createKeyword(req, res))
@@ -21,6 +22,18 @@ export default class KeywordsRouter extends BaseRouter {
     let query = 'SELECT Keyword.KeywordName AS name, Keyword.Id AS id, COUNT(*) AS count FROM Keyword LEFT JOIN ComicKeyword ON (Keyword.Id = ComicKeyword.KeywordId) GROUP BY Keyword.Id ORDER BY name'
     try {
       let result = await this.databaseFacade.execute(query)
+      res.json(result)
+    }
+    catch (err) {
+      return this.returnError(err.message, res, err.error)
+    }
+  }
+
+  async getComicKeywords (req, res) {
+    let keywordId = req.params.comicId
+    let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id FROM Keyword INNER JOIN ComicKeyword ON (keyword.Id = comickeyword.KeywordId) WHERE ComicId = ?'
+    try {
+      let result = await this.databaseFacade.execute(query, [Number(keywordId)])
       res.json(result)
     }
     catch (err) {
