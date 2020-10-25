@@ -125,7 +125,7 @@ export default class ComicsRouter extends BaseRouter {
 			INNER JOIN artist ON (artist.Id = comic.Artist) 
 			${user ? comicVoteQuery : ''} 
 			${filterQueryString}
-			GROUP BY comic.Name 
+			GROUP BY comic.Name, comic.Id 
 			${keywordCountString} 
 			${order==='userRating' ? '' : orderQueryString + paginationQueryString} 
 		`
