@@ -52,7 +52,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getComicSuggestions (req, res) {
-		let query = 'SELECT ComicSuggestion.Id AS id, Name AS name, ArtistName AS artist, Description AS description, User.username AS user, ComicSuggestion.UserIP AS userIP FROM ComicSuggestion LEFT JOIN User ON (ComicSuggestion.User = User.Id) WHERE Processed=0 ORDER BY Timestamp ASC'
+		let query = 'SELECT comicsuggestion.Id AS id, Name AS name, ArtistName AS artist, Description AS description, user.username AS user, comicsuggestion.UserIP AS userIP FROM comicsuggestion LEFT JOIN user ON (comicsuggestion.User = user.Id) WHERE Processed=0 ORDER BY Timestamp ASC'
 		try {
 			let result = await this.databaseFacade.execute(query, null, 'Database query error')
 			res.json(result)
@@ -63,7 +63,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getRejectedComicSuggestions (req, res) {
-		let query = 'SELECT Name AS name, ArtistName AS artist, Reason AS reason FROM ComicSuggestion WHERE Approved=0 AND ShowInList=1 ORDER BY Timestamp DESC'
+		let query = 'SELECT Name AS name, ArtistName AS artist, Reason AS reason FROM comicsuggestion WHERE Approved=0 AND ShowInList=1 ORDER BY Timestamp DESC'
 		try {
 			let result = await this.databaseFacade.execute(query, null, 'Database query error')
 			res.json(result)
@@ -77,13 +77,13 @@ export default class MiscRouter extends BaseRouter {
 		let [comicName, artist, comment] = [req.body.comicName, req.body.artist, req.body.comment]
 
 		try {
-			let existingSuggestionsQuery = 'SELECT * FROM ComicSuggestion WHERE Name LIKE ?'
+			let existingSuggestionsQuery = 'SELECT * FROM comicsuggestion WHERE Name LIKE ?'
 			let existingSuggestions = await this.databaseFacade.execute(existingSuggestionsQuery, [comicName])
 			if (existingSuggestions.length > 0) {
 				return this.returnError('This comic name has already been suggested', res)
 			}
 
-			let existingComicQuery = 'SELECT * FROM Comic WHERE Name LIKE ?'
+			let existingComicQuery = 'SELECT * FROM comic WHERE Name LIKE ?'
 			let existingComics = await this.databaseFacade.execute(existingComicQuery, [comicName])
 			if (existingComics.length > 0) {
 				return this.returnError('A comic with this name already exists!', res)
@@ -91,7 +91,7 @@ export default class MiscRouter extends BaseRouter {
 
 			let user = this.getUser(req)
 			let userParam = user ? user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
-			let query = `INSERT INTO ComicSuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
+			let query = `INSERT INTO comicsuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
 			let queryParams = [comicName, artist, comment, userParam]
 
 			await this.databaseFacade.execute(query, queryParams, 'Database error')
@@ -114,7 +114,7 @@ export default class MiscRouter extends BaseRouter {
 				await this.processNotApprovedSuggestion(res, suggestionId, shouldShowInList, reason)
 			}
 
-			let suggestionDetails = (await this.databaseFacade.execute('SELECT Name, ArtistName, Description FROM ComicSuggestion WHERE Id=?', [suggestionId]))[0]
+			let suggestionDetails = (await this.databaseFacade.execute('SELECT Name, ArtistName, Description FROM comicsuggestion WHERE Id=?', [suggestionId]))[0]
 
 			let actionString = isApproved ? 'Approve' : (shouldShowInList ? 'Reject-list' : 'Reject-spam')
 			let modReasonString = shouldShowInList ? ` \nMod reason: "${reason}".` : ''
@@ -127,7 +127,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async processApprovedSuggestion (res, suggestionId) {
-		let query = 'UPDATE ComicSuggestion SET Processed=1, Approved=1 WHERE Id=?'
+		let query = 'UPDATE comicsuggestion SET Processed=1, Approved=1 WHERE Id=?'
 		let queryParams = [suggestionId]
 
 		await this.databaseFacade.execute(query, queryParams, 'Database error')
@@ -135,7 +135,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async processNotApprovedSuggestion (res, suggestionId, shouldShowInList, reason) {
-		let query = 'UPDATE ComicSuggestion SET Processed=1, Approved=0, ShowInList=?, Reason=? WHERE Id=?'
+		let query = 'UPDATE comicsuggestion SET Processed=1, Approved=0, ShowInList=?, Reason=? WHERE Id=?'
 		let queryParams = [shouldShowInList, reason, suggestionId]
 
 		await this.databaseFacade.execute(query, queryParams, 'Database error')
@@ -143,7 +143,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getModLog (req, res) {
-		let query = 'SELECT modlog.Id AS id, User.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM ModLog INNER JOIN User ON (ModLog.User=User.Id) ORDER BY Timestamp DESC'
+		let query = 'SELECT modlog.Id AS id, user.Username AS username, ActionType AS actionType, ActionDescription AS actionDescription, ActionDetails AS actionDetails, Timestamp AS timestamp FROM modlog INNER JOIN user ON (modlog.User=user.Id) ORDER BY Timestamp DESC'
 		try { 
 			let result = await this.databaseFacade.execute(query)
 			res.json(result)
@@ -154,7 +154,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getModScores (req, res) {
-		let query = 'SELECT ModLog.ActionType, ModLog.ActionDescription, User.Username FROM ModLog INNER JOIN User ON (User.Id=ModLog.User)'
+		let query = 'SELECT modlog.ActionType, modlog.ActionDescription, user.Username FROM modlog INNER JOIN user ON (user.Id=modlog.User)'
 		try {
 			let logs = await this.databaseFacade.execute(query)
 			

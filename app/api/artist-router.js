@@ -15,7 +15,7 @@ export default class ArtistRouter extends BaseRouter {
 
   async getAllArtists (req, res) {
     try {
-      let query = 'SELECT Id AS id, Name AS name, PatreonName AS patreonName, E621Name AS e621Name FROM Artist'
+      let query = 'SELECT Id AS id, Name AS name, PatreonName AS patreonName, E621Name AS e621Name FROM artist'
       let results = await this.databaseFacade.execute(query)
       res.json(results)
     }
@@ -26,18 +26,18 @@ export default class ArtistRouter extends BaseRouter {
 
   async getArtistByName (req, res) {
     let artistName = req.params.name
-    let artistDataQuery = 'SELECT Id, E621Name, PatreonName from Artist where Name = ?'
-    let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM ArtistLink WHERE ArtistId = ?'
+    let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
+    let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
 
     let user = this.getUser(req)
     let comicsQuery
     let comicsQueryParams = []
     if (user) {
-      comicsQuery = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) INNER JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM ComicVote WHERE UserId = ?) AS T2 ON (Comic.Id = T2.ComicId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Artist.Id = ? GROUP BY name, id ORDER BY id'
+      comicsQuery = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId=comic.Id) INNER JOIN keyword ON (keyword.Id=comickeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM comicvote WHERE UserId = ?) AS T2 ON (comic.Id = T2.ComicId) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE artist.Id = ? GROUP BY name, id ORDER BY id'
       comicsQueryParams = [user.id]
     }
     else {
-      comicsQuery = 'SELECT Comic.Id AS id, Comic.Name AS name, Comic.Cat AS cat, Comic.Tag AS tag, Artist.Name AS artist, Comic.Updated AS updated, Comic.State AS state, Comic.Created AS created, Comic.NumberOfPages AS numberOfPages, AVG(ComicVote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM Comic INNER JOIN Artist ON (Artist.Id = Comic.Artist) LEFT JOIN ComicKeyword ON (ComicKeyword.ComicId=Comic.Id) INNER JOIN Keyword ON (Keyword.Id=ComicKeyword.KeywordId) LEFT JOIN ComicVote ON (Comic.Id = ComicVote.ComicId) WHERE Artist.Id = ? GROUP BY name, id ORDER BY id'
+      comicsQuery = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId=comic.Id) INNER JOIN keyword ON (keyword.Id=comickeyword.KeywordId) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE artist.Id = ? GROUP BY name, id ORDER BY id'
     }
 
     try {
@@ -69,8 +69,8 @@ export default class ArtistRouter extends BaseRouter {
 
   async addArtist (req, res) {
     let [artistName, e621Name, patreonName] = [req.body.artistName, req.body.e621Name, req.body.patreonName]
-    let alreadyExistsQuery = 'SELECT * FROM Artist WHERE Name = ?'
-    let query = 'INSERT INTO Artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
+    let alreadyExistsQuery = 'SELECT * FROM artist WHERE Name = ?'
+    let query = 'INSERT INTO artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
     try {
       let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
       if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
@@ -91,9 +91,9 @@ export default class ArtistRouter extends BaseRouter {
 
     let typedLinks = extractLinkTypesFromLinkUrls(links)
 
-    let updateQuery = 'UPDATE Artist SET Name=?, E621Name=?, PatreonName=? WHERE Id=?'
-    let deleteLinksQuery = 'DELETE FROM ArtistLink WHERE ArtistId=?'
-    let insertLinksQuery = 'INSERT INTO ArtistLink (ArtistId, LinkURL, LinkType) VALUES '
+    let updateQuery = 'UPDATE artist SET Name=?, E621Name=?, PatreonName=? WHERE Id=?'
+    let deleteLinksQuery = 'DELETE FROM artistlink WHERE ArtistId=?'
+    let insertLinksQuery = 'INSERT INTO artistlink (ArtistId, LinkURL, LinkType) VALUES '
     let insertLinksParams = []
 
     if (links.length > 0) {

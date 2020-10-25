@@ -5,9 +5,4 @@ node_modules/
 package-lock.json
 *.txt
 uploads/*
-public/021njnwjfusjkfn89c23nfsnfkas/
-public/mod-favorites/
-public/listRagImages/
-public/images/
-public/comics/
-public/js/angular-files/
+public/*

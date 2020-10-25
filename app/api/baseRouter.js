@@ -53,7 +53,7 @@ export default class BaseRouter {
 				return res.json({error: 'Not logged in'})
 			}
 			else {
-				let query = 'SELECT * FROM User WHERE Username=?'
+				let query = 'SELECT * FROM user WHERE Username=?'
 				let userData = await this.databaseFacade.execute(query, [req.session.user.username])
 				if (role === 'moderator') {
 					if (userData[0].UserType === 'moderator' || userData[0].UserType === 'admin') {

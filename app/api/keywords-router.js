@@ -19,7 +19,7 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async getAllKeywords (req, res) {
-    let query = 'SELECT Keyword.KeywordName AS name, Keyword.Id AS id, COUNT(*) AS count FROM Keyword LEFT JOIN ComicKeyword ON (Keyword.Id = ComicKeyword.KeywordId) GROUP BY Keyword.Id ORDER BY name'
+    let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id, COUNT(*) AS count FROM keyword LEFT JOIN comickeyword ON (keyword.Id = comickeyword.KeywordId) GROUP BY keyword.Id ORDER BY name'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)
@@ -31,7 +31,7 @@ export default class KeywordsRouter extends BaseRouter {
 
   async getComicKeywords (req, res) {
     let keywordId = req.params.comicId
-    let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id FROM Keyword INNER JOIN ComicKeyword ON (keyword.Id = comickeyword.KeywordId) WHERE ComicId = ?'
+    let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id FROM keyword INNER JOIN comickeyword ON (keyword.Id = comickeyword.KeywordId) WHERE ComicId = ?'
     try {
       let result = await this.databaseFacade.execute(query, [Number(keywordId)])
       res.json(result)
@@ -45,7 +45,7 @@ export default class KeywordsRouter extends BaseRouter {
 		let [comicId, keywords] = [req.body.comicId, req.body.keywords]
     if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
 
-		let deleteQuery = 'DELETE FROM ComicKeyword WHERE (ComicId, KeywordId) IN ('
+		let deleteQuery = 'DELETE FROM comickeyword WHERE (ComicId, KeywordId) IN ('
 		let queryParams = []
 		for (let keyword of keywords) {
 			deleteQuery += '(?, ?), '
@@ -56,7 +56,7 @@ export default class KeywordsRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(deleteQuery, queryParams)
       res.json({success: true})
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
 			this.addModLog(req, 'Keyword', `Remove ${keywords.length} from ${comicName}`, keywords.map(kw => kw.name).join(', '))
     }
     catch (err) {
@@ -68,7 +68,7 @@ export default class KeywordsRouter extends BaseRouter {
     let [comicId, keywords] = [req.body.comicId, req.body.keywords]
     if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
 
-    let insertQuery = 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES '
+    let insertQuery = 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES '
     let queryParams = []
     for (var keyword of keywords) {
 			insertQuery += '(?, ?), '
@@ -79,7 +79,7 @@ export default class KeywordsRouter extends BaseRouter {
     try {
       await this.databaseFacade.execute(insertQuery, queryParams)
       res.json({success: true})
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
 			this.addModLog(req, 'Keyword', `Add ${keywords.length} to ${comicName}`, keywords.map(kw => kw.name).join(', '))
     }
     catch (err) {
@@ -91,7 +91,7 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async createKeyword (req, res) {
-    let query = 'INSERT INTO Keyword (KeywordName) VALUES (?)'
+    let query = 'INSERT INTO keyword (KeywordName) VALUES (?)'
     let queryParams = [req.body.keyword]
     try {
       await this.databaseFacade.execute(query, queryParams)
@@ -108,7 +108,7 @@ export default class KeywordsRouter extends BaseRouter {
     let user = this.getUser(req) 
     let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
-    let query = `INSERT INTO KeywordSuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
+    let query = `INSERT INTO keywordsuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
     let queryParams = [comicId, keywordId, isAddingKeyword ? 1:0, user ? user.id : userIp]
     try {
       await this.databaseFacade.execute(query, queryParams)
@@ -122,9 +122,9 @@ export default class KeywordsRouter extends BaseRouter {
   async processKeywordSuggestion (req, res) {
 		let [suggestionId, comicId, keyword, isAdding, isApproved] = 
       [req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
-    let updateQuery = 'UPDATE KeywordSuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
+    let updateQuery = 'UPDATE keywordsuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
     let updateQueryParams = [isApproved ? 1 : 0, suggestionId]
-    let insertQuery = isAdding ? 'INSERT INTO ComicKeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM ComicKeyword WHERE ComicId = ? AND KeywordId = ?'
+    let insertQuery = isAdding ? 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM comickeyword WHERE ComicId = ? AND KeywordId = ?'
     let insertQueryParams = [comicId, keyword.id]
     try {
       if (isApproved) {
@@ -132,7 +132,7 @@ export default class KeywordsRouter extends BaseRouter {
       }
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Database error: Error updating suggested tags')
       res.json({success: true})
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM Comic WHERE Id=?', [comicId]))[0].Name
+			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
       this.addModLog(req, 'Keyword', `${isApproved ? 'Approve' : 'Reject'} ${keyword.name} for ${comicName}`)
     }
     catch (err) {
@@ -144,7 +144,7 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async getKeywordSuggestions (req, res) {
-    let query = 'SELECT KeywordSuggestion.Id AS id, Comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, User.Username AS user, UserIP AS userIP, Keyword.Id AS keywordId, Keyword.KeywordName AS keywordName FROM KeywordSuggestion INNER JOIN Comic ON (Comic.Id=KeywordSuggestion.ComicId) INNER JOIN Keyword ON (Keyword.Id = KeywordSuggestion.KeywordId) LEFT JOIN User ON (KeywordSuggestion.User = User.Id) WHERE Processed = 0'
+    let query = 'SELECT keywordsuggestion.Id AS id, comic.Name AS comicName, ComicId AS comicId, IsAdding AS addKeyword, user.Username AS user, UserIP AS userIP, keyword.Id AS keywordId, keyword.KeywordName AS keywordName FROM keywordsuggestion INNER JOIN comic ON (comic.Id=keywordsuggestion.ComicId) INNER JOIN keyword ON (keyword.Id = keywordsuggestion.KeywordId) LEFT JOIN user ON (keywordsuggestion.User = user.Id) WHERE Processed = 0'
     try {
       let result = await this.databaseFacade.execute(query)
       res.json(result)

@@ -40,7 +40,7 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async authenticate (username, password) {
-    let query = 'SELECT * FROM User WHERE Username = ?'
+    let query = 'SELECT * FROM user WHERE Username = ?'
     let userResult = await this.databaseFacade.execute(query, [username])
     if (userResult.length === 0) {
       return {error: 'Wrong username'}
@@ -56,7 +56,7 @@ export default class AuthenticationRouter extends BaseRouter {
   async register (req, res) {
     let [username, password] = [req.body.username, req.body.password]
     try {
-      let query = 'SELECT * FROM User WHERE Username = ?'
+      let query = 'SELECT * FROM user WHERE Username = ?'
       let users = await this.databaseFacade.execute(query, [username])
       if (users.length > 0) {
         return this.returnError('User already exists', res)
@@ -69,11 +69,11 @@ export default class AuthenticationRouter extends BaseRouter {
       }
 
       password = await hash(password, 8)
-      let insertQuery = 'INSERT INTO User (Username, Password) VALUES (?, ?)'
+      let insertQuery = 'INSERT INTO user (Username, Password) VALUES (?, ?)'
       let insertQueryParams = [username, password]
       let result = await this.databaseFacade.execute(insertQuery, insertQueryParams)
 
-      let getNewUserQuery = 'SELECT * FROM User WHERE Id = ?'
+      let getNewUserQuery = 'SELECT * FROM user WHERE Id = ?'
       let userResponse = await this.databaseFacade.execute(getNewUserQuery, [result.insertId])
       userResponse = userResponse[0]
 
@@ -109,7 +109,7 @@ export default class AuthenticationRouter extends BaseRouter {
       }
 
       newPassword = await hash(newPassword, 8)
-      let updateQuery = 'UPDATE User SET Password=? WHERE Id=?'
+      let updateQuery = 'UPDATE user SET Password=? WHERE Id=?'
       let updateQueryParams = [newPassword, userDataResponse.Id]
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating password in database')
       res.json({success: true})
@@ -131,7 +131,7 @@ export default class AuthenticationRouter extends BaseRouter {
         return this.returnError(userDataResponse.error, res)
       }
 
-      let updateQuery = 'UPDATE User SET Username=? WHERE Id=?'
+      let updateQuery = 'UPDATE user SET Username=? WHERE Id=?'
       let updateQueryParams = [newUsername, userResponse.Id]
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating username in database')
       res.json({success: true})
