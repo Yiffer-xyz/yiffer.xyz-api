@@ -8,14 +8,16 @@ import session from 'express-session'
 import redis from 'redis'
 import connRedis from 'connect-redis'
 const redisStore = connRedis(session)
-const redisClient = redis.createClient()
+const redisClient = redis.createClient(6379, 'redis');
+
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
   name: '_redisPractice',
   resave: false,
   saveUninitialized: true,
+  rolling: true,
   cookie: { secure: false },
-  store: new redisStore({ host: 'localhost', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
+  store: new redisStore({ host: 'redis', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
 }));
 
 import mysql from 'mysql'
@@ -35,5 +37,15 @@ app.use(express.static('./public'))
 import routes from './app/routes.js'
 routes(app, databaseFacade)
 
-app.listen(port)
+const server = app.listen(port)
 console.log('Magic happens on port ' + port)
+
+function startGracefulShutdown () {
+  console.log('Starting shutdown of express...')
+  server.close(function () {
+    console.log('Express shut down.')
+  })
+}
+
+process.on('SIGTERM', startGracefulShutdown);
+process.on('SIGINT', startGracefulShutdown);

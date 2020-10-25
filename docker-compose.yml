@@ -1,0 +1,13 @@
+version: "3"
+services:
+  server:
+    build: .
+    ports:
+      - "8012:8012"
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--bind", "redis", "--port", "6379"]
+
