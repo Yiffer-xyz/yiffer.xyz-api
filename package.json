@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/ragnarob/yifferXyz#readme",
   "dependencies": {
+    "@google-cloud/storage": "^5.3.0",
     "archiver": "^3.0.0",
     "bcrypt": "^5.0.0",
     "body-parser": "^1.19.0",
@@ -31,7 +32,7 @@
     "mysql": "^2.16.0",
     "passport": "^0.4.0",
     "passport-local": "^1.0.0",
-    "python-shell": "^1.0.7"
+    "sharp": "^0.26.2"
   },
   "devDependencies": {
     "jest": "^24.7.1"

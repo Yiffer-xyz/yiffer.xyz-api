@@ -2,6 +2,7 @@ import BaseRouter from './baseRouter.js'
 
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
+
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads')
@@ -54,9 +55,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
       await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
 
-      let newFilePath = __dirname + `/../../../client/public/paid-images/${adId}.${filetype}`
-			let fileData = await FileSystemFacade.readFile(file.path, 'Error parsing uploaded file')
-      await FileSystemFacade.writeFile(newFilePath, fileData, 'Error writing file to disk')
+      let newFilename = `${adId}.${filetype}`
+      await FileSystemFacade.writeGooglePaidImageFile(file.path, newFilename)
 
       res.json({success: true})
     }
@@ -200,9 +200,7 @@ export default class AdvertisingRouter extends BaseRouter {
         query = 'UPDATE advertisement SET Status=?, Link=?, MainText=?, SecondaryText=?, Filetype=? WHERE Id=?'
         queryParams = [adStatuses.pending, link, mainText, secondaryText, filetype, adId]
 
-        let newFilePath = __dirname + `/../../../client/public/paid-images/${adId}.${filetype}`
-        let fileData = await FileSystemFacade.readFile(file.path, 'Error parsing uploaded file')
-        await FileSystemFacade.writeFile(newFilePath, fileData, 'Error writing file to disk')
+        await FileSystemFacade.writeGooglePaidImageFile(file.path, `${adId}.${filetype}`)
   
       }
       else {

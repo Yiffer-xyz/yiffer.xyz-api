@@ -1,6 +1,42 @@
 import fs from 'fs'
+import googleStorage from '@google-cloud/storage'
+const { Storage } = googleStorage
+const storage = new Storage({ keyFilename: './config/google-service-account.json' })
+
+const paidImagesBucketName = 'paid-images'
+const comicsBucketName = 'yiffer-comics'
 
 export default class FileSystemFacade {
+	static async writeGooglePaidImageFile(localFilePath, newFilename) {
+		await storage.bucket(paidImagesBucketName).upload(localFilePath, {
+			destination: newFilename,
+      gzip: true,
+			metadata: {
+        // Enable long-lived HTTP caching headers
+        // Use only if the contents of the file will never change
+        // (If the contents will change, use cacheControl: 'no-cache')
+        cacheControl: 'no-cache',
+      },
+		})
+	}
+
+	static async renameGooglePaidImageFile(oldFilename, newFilename) {
+		await storage.bucket(paidImagesBucketName).file(oldFilename).rename(newFilename)
+	}
+	
+	static async writeGoogleComicFile(localFilePath, comicName, filename) {
+		await storage.bucket(comicsBucketName).upload(localFilePath, {
+			destination: `comics/${comicName}/${filename}`,
+      gzip: true,
+			metadata: {
+        // Enable long-lived HTTP caching headers
+        // Use only if the contents of the file will never change
+        // (If the contents will change, use cacheControl: 'no-cache')
+        cacheControl: 'no-cache',
+      },
+		})
+	}
+
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
 		return new Promise(async (resolve, reject) => {
 			fs.rename(oldFilename, newFilename, err => {

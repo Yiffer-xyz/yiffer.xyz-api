@@ -1,4 +1,4 @@
-import PythonShellFacade from '../pythonShellFacade.js'
+import { convertComicPage } from '../image-processing.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -256,7 +256,6 @@ export default class ComicsRouter extends BaseRouter {
 		let [comicName, artistId, cat, tag, state, keywordIds, nextComic, previousComic] = 
 			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag, req.body.state, req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
 		let userId = req.session.user.id
-		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 
 		let hasThumbnail = false
 		if (thumbnailFile && thumbnailFile.length === 1) {
@@ -273,14 +272,25 @@ export default class ComicsRouter extends BaseRouter {
 		let fileList = newFiles.sort((f1, f2) => f1.f > f2.f ? -1 : 1)
 
 		try {
-			let allComicFoldersList = await FileSystemFacade.listDir(__dirname + '/../../../client/public/comics', 'Error reading comics directory')
-			if (allComicFoldersList.indexOf(comicName) >= 0) {
-				return this.returnError('Directory of a comic with this name already exists', res)
+			let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
+			let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
+
+			let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
+			if (existingResults.length > 0) {
+				return this.returnError('Comic with this name already exists', res)
+			}
+			let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
+			if (existingSuggestedResults.length > 0) {
+				return this.returnError('Comic with this name already exists, is pending', res)
 			}
 
-			await this.writeNewComicFiles(fileList, comicFolderPath, thumbnailFile)
+			await this.processComicFiles(fileList, thumbnailFile)
 
-			await PythonShellFacade.run('process_new_comic.py', [req.body.comicName])
+			await this.writeNewComicFiles(
+				fileList.map(f => f.path), 
+				comicName, 
+				hasThumbnail ? thumbnailFile.path : null
+			)
 
 			let insertQuery = 'INSERT INTO pendingcomic (Moderator, Name, Artist, Cat, Tag, NumberOfPages, State, HasThumbnail, PreviousComicLink, NextComicLink) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 			let insertQueryParams = [userId, comicName, artistId, cat, tag, fileList.length, state, hasThumbnail?1:0, previousComic, nextComic]
@@ -291,30 +301,49 @@ export default class ComicsRouter extends BaseRouter {
 
 			res.json({success: true})
 			
-			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
+			FileSystemFacade.deleteFiles(fileList.map(f => f.path))
+			if (hasThumbnail) { FileSystemFacade.deleteFile(thumbnailFilePath) }
 			this.addModLog(req, 'Create comic', `Add ${comicName}`)
 		}
 		catch (err) {
 			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
-			FileSystemFacade.deleteDirectory(comicFolderPath)
 			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 	
-	async writeNewComicFiles (fileList, comicFolderPath, thumbnailFile) {
-		await FileSystemFacade.createDirectory(comicFolderPath)
-		for (var i=1; i<= fileList.length; i++) {
-			let file = fileList[i-1]
-			let fileContents = await FileSystemFacade.readFile(file.path)
-
-			let pageName = this.getNewPreProcessedFilePath(i, file)
-			
-			await FileSystemFacade.writeFile(comicFolderPath + '/' + pageName, fileContents, 'Error writing a new file to disk')
+	async processComicFiles (fileList, thumbnailFile) {
+		for (let file of fileList) {
+			if (file.originalname.endsWith('.jpeg') || file.originalname.endsWith('.png')) {
+				await convertComicPage(file.path)
+			}
+			else if (!file.originalname.endsWith('.jpg')) {
+				throw new Error(`Some file is of an unsupported format (${file.originalname})`)
+			}
 		}
 
-		if (!!thumbnailFile) {
-			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
-			await FileSystemFacade.writeFile(comicFolderPath + '/s.jpg', fileContents, 'Error writing thumbnail file to disk')
+		if (thumbnailFile) {
+			if (thumbnailFile.originalname.endsWith('.jpeg') || thumbnailFile.originalname.endsWith('.png')) {
+				await convertComicPage(thumbnailFile.path)
+			}
+			else if (!thumbnailFile.originalname.endsWith('.jpg')) {
+				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
+			}
+		}
+	}
+
+	async writeNewComicFiles (filePaths, comicName, thumbnailFilePath) {
+		let fileWritePromises = []
+		for (var i=1; i<= filePaths.length; i++) {
+			let filePath = filePaths[i-1]
+			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
+			let pageName = `${pageNumberString}.jpg`
+			fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePath, comicName, pageName))
+		}
+
+		await Promise.all(fileWritePromises)
+
+		if (!!thumbnailFilePath) {
+			await FileSystemFacade.writeGoogleComicFile(thumbnailFilePath, comicName, 's.jpg')
 		}
 
 		return {error: false}
@@ -337,25 +366,34 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async addPagesToComic (req, res, isPendingComic) {
-		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, req.params.id]
-		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
+		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, Number(req.params.id)]
 
 		if (!uploadedFiles || uploadedFiles.length === 0) {
 			return this.returnError('No files added!', res)
 		}
 
 		try {
-			let existingFiles = await FileSystemFacade.listDir(comicFolderPath)
-			let existingNumberOfPages = existingFiles.filter(f => f != 's.jpg').length
+			let comicQuery = 'SELECT * FROM comic WHERE Id=?'
+			let comicQueryRes = await this.databaseFacade.execute(comicQuery, [comicId])
+			let comic = comicQueryRes[0]
+			let existingNumberOfPages = comic.NumberOfPages
 
-			let files = uploadedFiles.sort((f1, f2) => f1.f > f2.f ? -1 : 1).map((file, i) => ({
-				preProcessedFilePath: this.getNewPreProcessedFilePath(existingNumberOfPages+i+1, file),
-				currentTempPath: file.path
-			}))
-
-			await this.writeAppendedComicPageFiles(comicFolderPath, files)
+			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
 			
-			await PythonShellFacade.run('process_new_pages.py', [comicName, files.length])
+			for (let file of files) {
+				if (file.originalname.endsWith('.jpeg') || file.originalname.endsWith('.png')) {
+					await convertComicPage(file.path)
+				}
+				else if (!file.originalname.endsWith('.jpg')) {
+					throw new Error(`Some file is of an unsupported format (${file.originalname})`)
+				}
+			}
+
+			await this.writeAppendedComicPageFiles(
+				existingNumberOfPages,
+				files.map(f => f.path),
+				comicName
+			)
 
 			if (!isPendingComic) {
 				let updateUpdatedTimeQuery = 'UPDATE comic SET Updated = NOW() WHERE Id=?'
@@ -395,11 +433,17 @@ export default class ComicsRouter extends BaseRouter {
 		}
 	}
 
-	async writeAppendedComicPageFiles(comicFolderPath, newFiles) {
-		for (let file of newFiles) {
-			let fileData = await FileSystemFacade.readFile(file.currentTempPath, `Error parsing uploaded file (${file.preProcessedFilePath})`)
-			await FileSystemFacade.writeFile(`${comicFolderPath}/${file.preProcessedFilePath}`, fileData, `Error writing file to disc (${file.preProcessedFilePath})`)
+	async writeAppendedComicPageFiles(existingNumPages, filePaths, comicName) {
+		let fileWritePromises = []
+    for (let i=0; i < filePaths.length; i++) {
+			let filePath = filePaths[i]
+			let pageNo = existingNumPages + i + 1
+			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
+			let pageName = `${pageNumString}.jpg`
+			fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePath, comicName, pageName))
 		}
+
+		await Promise.all(fileWritePromises)
 	}
 
 	async updateComicDetails (req, res) {
