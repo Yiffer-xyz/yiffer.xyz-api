@@ -1,5 +1,6 @@
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter from './baseRouter.js'
+import { convertComicPage } from '../image-processing.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -17,6 +18,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import dateFns from 'date-fns'
+import { rename } from 'fs'
 const { format } = dateFns
 
 export default class MiscRouter extends BaseRouter {
@@ -243,59 +245,75 @@ export default class MiscRouter extends BaseRouter {
 	async swapComicPages (req, res) {
 		let [comicName, comicId, pageNumber1, pageNumber2] = 
 			[req.body.comicName, req.body.comicId, req.body.pageNumber1, req.body.pageNumber2]
-		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		let pageName1 = this.getPageName(pageNumber1)
 		let pageName2 = this.getPageName(pageNumber2)
 
 		try {
-			await FileSystemFacade.renameFile(`${comicFolderPath}/${pageName1}.jpg`, 
-				`${comicFolderPath}/temp.jpg`, 'Error renaming first file')
-			await FileSystemFacade.renameFile(`${comicFolderPath}/${pageName2}.jpg`,
-				`${comicFolderPath}/${pageName1}.jpg`, 'Error renaming second file')
-			await FileSystemFacade.renameFile(`${comicFolderPath}/temp.jpg`,
-				`${comicFolderPath}/${pageName2}.jpg`, 'Error renaming first file')
+			await FileSystemFacade.renameGoogleComicFile(
+				`comics/${comicName}/${pageName1}.jpg`,
+				`comics/${comicName}/temp.jpg`,
+			)
+			await FileSystemFacade.renameGoogleComicFile(
+				`comics/${comicName}/${pageName2}.jpg`,
+				`comics/${comicName}/${pageName1}.jpg`,
+			)
+			await FileSystemFacade.renameGoogleComicFile(
+				`comics/${comicName}/temp.jpg`,
+				`comics/${comicName}/${pageName2}.jpg`,
+			)
 
-				console.log('sholw dowkr')
-			
 			res.json({success: true})
 			this.addModLog(req, 'Comic', `Swap pages in ${comicName}`, `Page ${pageNumber1} and ${pageNumber2}`)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
 	async insertComicPage (req, res) {
 		let [comicName, comicId, newPageFile, insertAfterPageNumber] =
 			[req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
-		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
-		if (!newPageFile || (!newPageFile.originalname.endsWith('jpg') && !newPageFile.originalname.endsWith('png'))) {
-			return this.returnError('File must exist and be .jpg or .png', res)
+
+		if (!newPageFile || (
+			!newPageFile.originalname.endsWith('jpg') 
+			&& !newPageFile.originalname.endsWith('png')
+			&& !newPageFile.originalname.endsWith('jpeg')
+		)) {
+			return this.returnError('File must exist and be .jpg or .png or .jpeg', res)
 		}
+
 		try {
-			let comicFiles = (await FileSystemFacade.listDir(comicFolderPath, 'Error listing comic directory'))
-				.filter(f => f!='s.jpg').sort()
-			for (var i=comicFiles.length; i>=insertAfterPageNumber+1; i--) {
-				console.log(`Renaming ${this.getPageName(i)} to ${this.getPageName(i+1)}`)
-				await FileSystemFacade.renameFile(
-					`${comicFolderPath}/${this.getPageName(i)}.jpg`,
-					`${comicFolderPath}/${this.getPageName(i+1)}.jpg`,
-					'Error renaming existing image files'
+			let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id=?'
+			let numberOfPagesRes = await this.databaseFacade.execute(numberOfPagesQuery, [comicId])
+			let numberOfPages = numberOfPagesRes[0].NumberOfPages
+
+			for (let pageNo=numberOfPages; pageNo >= insertAfterPageNumber+1; pageNo--) {
+				console.log(`Renaming ${this.getPageName(pageNo)} to ${this.getPageName(pageNo+1)}`)
+				await FileSystemFacade.renameGoogleComicFile(
+					`comics/${comicName}/${this.getPageName(pageNo)}.jpg`,
+					`comics/${comicName}/${this.getPageName(pageNo+1)}.jpg`,
 				)
 			}
 
-			let fileContents = await FileSystemFacade.readFile(newPageFile.path)
-			await FileSystemFacade.writeFile(`${comicFolderPath}/${this.getPageName(insertAfterPageNumber+1)}.jpg`, fileContents, 'Error writing new file')
+			if (newPageFile.originalname.endsWith('.png')) {
+				await convertComicPage(newPageFile.path)
+			}
+			await FileSystemFacade.writeGoogleComicFile(
+				newPageFile.path,
+				comicName,
+				`${this.getPageName(insertAfterPageNumber+1)}.jpg`,
+			)
 
 			let query = 'UPDATE comic SET NumberOfPages=? WHERE Id=?'
-			let queryParams = [comicFiles.length+1, comicId]
+			let queryParams = [numberOfPages+1, comicId]
 			await this.databaseFacade.execute(query, queryParams, 'Error updating number of pages')
 
 			res.json({success: true})
+			FileSystemFacade.deleteFile(newPageFile.path)
 			this.addModLog(req, 'Comic', `Insert page in ${comicName}`, `Page at position ${insertAfterPageNumber+1}`)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
@@ -303,17 +321,18 @@ export default class MiscRouter extends BaseRouter {
 		let [comicName, comicId, pageNumber] = [req.body.comicName, req.body.comicId, req.body.pageNumber]
 		let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id = ?'
 		let updateQuery = 'UPDATE comic SET NumberOfPages = ? WHERE Id = ?'
-		let comicFolderPath = __dirname + '/../../../client/public/comics/' + comicName
 		try {
 			let numberOfPages = (await this.databaseFacade.execute(numberOfPagesQuery, [comicId]))[0].NumberOfPages
 			let queryParams = [numberOfPages-1, comicId]
 
-			await FileSystemFacade.deleteFile(`${comicFolderPath}/${this.getPageName(pageNumber)}.jpg`)
-			for (var i=pageNumber+1; i<=numberOfPages; i++) {
-				await FileSystemFacade.renameFile(`${comicFolderPath}/${this.getPageName(i)}.jpg`,
-																					`${comicFolderPath}/${this.getPageName(i-1)}.jpg`)
-			}
+			await FileSystemFacade.deleteGoogleComicFile(`comics/${comicName}/${this.getPageName(pageNumber)}.jpg`)
 
+			for (var i=pageNumber+1; i<=numberOfPages; i++) {
+				await FileSystemFacade.renameGoogleComicFile(
+					`comics/${comicName}/${this.getPageName(i)}.jpg`,
+					`comics/${comicName}/${this.getPageName(i-1)}.jpg`
+				)
+			}
 			await this.databaseFacade.execute(updateQuery, queryParams, 'Error updating number of pages')
 
 			res.json({success: true})

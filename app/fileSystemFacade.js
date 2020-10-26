@@ -8,7 +8,7 @@ const comicsBucketName = 'yiffer-comics'
 
 export default class FileSystemFacade {
 	static async writeGooglePaidImageFile(localFilePath, newFilename) {
-		await storage.bucket(paidImagesBucketName).upload(localFilePath, {
+		return storage.bucket(paidImagesBucketName).upload(localFilePath, {
 			destination: newFilename,
       gzip: true,
 			metadata: {
@@ -20,21 +20,23 @@ export default class FileSystemFacade {
 		})
 	}
 
-	static async renameGooglePaidImageFile(oldFilename, newFilename) {
-		await storage.bucket(paidImagesBucketName).file(oldFilename).rename(newFilename)
+	static async renameGoogleComicFile(oldFilename, newFilename) {
+		await storage.bucket(comicsBucketName).file(oldFilename).move(newFilename)
+		return {error: false}
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
-		await storage.bucket(comicsBucketName).upload(localFilePath, {
+		return storage.bucket(comicsBucketName).upload(localFilePath, {
 			destination: `comics/${comicName}/${filename}`,
       gzip: true,
 			metadata: {
-        // Enable long-lived HTTP caching headers
-        // Use only if the contents of the file will never change
-        // (If the contents will change, use cacheControl: 'no-cache')
         cacheControl: 'no-cache',
       },
 		})
+	}
+
+	static async deleteGoogleComicFile(filepath) {
+		return storage.bucket(comicsBucketName).file(filepath).delete()
 	}
 
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {

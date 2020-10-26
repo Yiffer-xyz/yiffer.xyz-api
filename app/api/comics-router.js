@@ -313,19 +313,19 @@ export default class ComicsRouter extends BaseRouter {
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		for (let file of fileList) {
-			if (file.originalname.endsWith('.jpeg') || file.originalname.endsWith('.png')) {
+			if (file.originalname.endsWith('.png')) {
 				await convertComicPage(file.path)
 			}
-			else if (!file.originalname.endsWith('.jpg')) {
+			else if (!file.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
 				throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 			}
 		}
 
 		if (thumbnailFile) {
-			if (thumbnailFile.originalname.endsWith('.jpeg') || thumbnailFile.originalname.endsWith('.png')) {
+			if (thumbnailFile.originalname.endsWith('.png')) {
 				await convertComicPage(thumbnailFile.path)
 			}
-			else if (!thumbnailFile.originalname.endsWith('.jpg')) {
+			else if (!thumbnailFile.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
 				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
 			}
 		}
@@ -381,10 +381,10 @@ export default class ComicsRouter extends BaseRouter {
 			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
 			
 			for (let file of files) {
-				if (file.originalname.endsWith('.jpeg') || file.originalname.endsWith('.png')) {
+				if (file.originalname.endsWith('.png')) {
 					await convertComicPage(file.path)
 				}
-				else if (!file.originalname.endsWith('.jpg')) {
+				else if (!file.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
 					throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 				}
 			}
