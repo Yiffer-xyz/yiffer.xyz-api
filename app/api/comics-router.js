@@ -313,19 +313,19 @@ export default class ComicsRouter extends BaseRouter {
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		for (let file of fileList) {
-			if (file.originalname.endsWith('.png')) {
+			if (file.mimetype.endsWith('.png')) {
 				await convertComicPage(file.path)
 			}
-			else if (!file.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
+			else if (!file.mimetype.endsWith('.jpeg')) {
 				throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 			}
 		}
 
 		if (thumbnailFile) {
-			if (thumbnailFile.originalname.endsWith('.png')) {
+			if (thumbnailFile.mimetype.endsWith('.png')) {
 				await convertComicPage(thumbnailFile.path)
 			}
-			else if (!thumbnailFile.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
+			else if (!thumbnailFile.mimetype.endsWith('.jpeg')) {
 				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
 			}
 		}
@@ -381,10 +381,10 @@ export default class ComicsRouter extends BaseRouter {
 			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
 			
 			for (let file of files) {
-				if (file.originalname.endsWith('.png')) {
+				if (file.mimetype.endsWith('.png')) {
 					await convertComicPage(file.path)
 				}
-				else if (!file.originalname.endsWith('.jpg') && !file.originalname.endsWith('.jpeg')) {
+				else if (!file.mimetype.endsWith('.jpeg')) {
 					throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 				}
 			}
@@ -414,22 +414,6 @@ export default class ComicsRouter extends BaseRouter {
 		catch (err) {
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
 			return this.returnError(err.message, res, err.error, err)
-		}
-	}
-
-	getNewPreProcessedFilePath (pageNumber, file) {
-		let pageNumberString = pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
-		if (file.originalname.endsWith('jpg')) {
-			return pageNumberString + '.jpg'
-		}
-		if (file.originalname.endsWith('png')) {
-			return pageNumberString + '.png'
-		}
-		if (file.originalname.endsWith('gif')) {
-			return pageNumberString + '.gif'
-		}
-		else {
-			throw new Error('Not all pages are .jpg or .png')
 		}
 	}
 
@@ -624,23 +608,21 @@ export default class ComicsRouter extends BaseRouter {
 	async addThumbnailToComic (req, res, isPendingComic) {
 		let [thumbnailFile, comicName, comicId] = [req.file, req.body.comicName, Number(req.params.id)]
 
-		let comicFolderPath = `${__dirname}/../../../client/public/comics/${comicName}`
 		if (!thumbnailFile) {
 			return this.returnError('File must exist', res)
 		}
-		if ((!thumbnailFile.mimetype.endsWith('jpeg') && !thumbnailFile.mimetype.endsWith('png'))) {
+
+		if (!thumbnailFile.mimetype.endsWith('jpeg') && !thumbnailFile.mimetype.endsWith('png')) {
 			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
 			return this.returnError('File must be .jpg or .png', res)
 		}
 
+		if (thumbnailFile.mimetype.endsWith('png')) {
+			await convertComicPage(thumbnailFile.path)
+		}
+
 		try {
-			let directoryContents = await FileSystemFacade.listDir(comicFolderPath)
-			let preExistingThumbnail = directoryContents.indexOf('s.jpg') >= 0
-			if (preExistingThumbnail) {
-				await FileSystemFacade.deleteFile(comicFolderPath + '/s.jpg', 'Error deleting old thumbnail')
-			}
-			let fileContents = await FileSystemFacade.readFile(thumbnailFile.path)
-			await FileSystemFacade.writeFile(comicFolderPath+'/s.jpg', fileContents, 'Error writing new thumbnail file')
+			await FileSystemFacade.writeGoogleComicFile(thumbnailFile.path, comicName, 's.jpg')
 
 			if (isPendingComic) {
 				let updateComicDataQuery = 'UPDATE pendingcomic SET HasThumbnail = 1 WHERE Id = ?'
@@ -650,10 +632,10 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({success: true})
 			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
 
-			this.addModLog(req, isPendingComic?'Pending comic':'comic', `Add thumbnail to ${comicName}`, `Had old thumbnail: ${preExistingThumbnail}`)
+			this.addModLog(req, isPendingComic?'Pending comic':'comic', `Add/change thumbnail to ${comicName}`)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 

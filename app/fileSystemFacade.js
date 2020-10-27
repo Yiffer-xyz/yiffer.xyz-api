@@ -3,7 +3,7 @@ import googleStorage from '@google-cloud/storage'
 const { Storage } = googleStorage
 const storage = new Storage({ keyFilename: './config/google-service-account.json' })
 
-const paidImagesBucketName = 'paid-images'
+const paidImagesBucketName = 'yiffer-paid-images'
 const comicsBucketName = 'yiffer-comics'
 
 export default class FileSystemFacade {

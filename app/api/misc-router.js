@@ -274,11 +274,7 @@ export default class MiscRouter extends BaseRouter {
 		let [comicName, comicId, newPageFile, insertAfterPageNumber] =
 			[req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
 
-		if (!newPageFile || (
-			!newPageFile.originalname.endsWith('jpg') 
-			&& !newPageFile.originalname.endsWith('png')
-			&& !newPageFile.originalname.endsWith('jpeg')
-		)) {
+		if (!newPageFile || (!newPageFile.mimetype.endsWith('jpeg') && !newPageFile.mimetype.endsWith('png'))) {
 			return this.returnError('File must exist and be .jpg or .png or .jpeg', res)
 		}
 
@@ -295,7 +291,7 @@ export default class MiscRouter extends BaseRouter {
 				)
 			}
 
-			if (newPageFile.originalname.endsWith('.png')) {
+			if (newPageFile.mimetype.endsWith('.png')) {
 				await convertComicPage(newPageFile.path)
 			}
 			await FileSystemFacade.writeGoogleComicFile(
