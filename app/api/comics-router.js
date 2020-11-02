@@ -148,7 +148,12 @@ export default class ComicsRouter extends BaseRouter {
 
 		let totalPagesQuery = `
 			SELECT COUNT(*) AS count FROM (
-				SELECT DISTINCT comic.Id FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId) ${filterQueryString}
+				SELECT comic.Id FROM comic 
+				INNER JOIN artist ON (artist.Id = comic.Artist) 
+				INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId) 
+				${filterQueryString}
+				GROUP BY comic.Id
+				${keywordCountString}
 			) AS Q1`
 		let totalPagesQueryParam = filterQueryParams
 
