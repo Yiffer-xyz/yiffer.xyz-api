@@ -1,4 +1,5 @@
 import { convertComicPage } from '../image-processing.js'
+import getComicsQuery from './get-comics-query.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -54,103 +55,122 @@ export default class ComicsRouter extends BaseRouter {
 			[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order]
 		keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
+		let user = this.getUser(req)
 		let filterQueryString = ''
+		let innerJoinKeywordString = ''
 		let filterQueryParams = []
 		let keywordCountString = ''
-		if (categories || tags || search || keywordIds) {
-			let queries = []
-
-			if (keywordIds) {
-				keywordCountString = `HAVING COUNT(*) >= ${keywordIds.length}`
-				let keywordQueryStrings = []
-				keywordIds.forEach(kwId => {
-					filterQueryParams.push(kwId)
-					keywordQueryStrings.push(' comickeyword.KeywordId=? ')
-				})
-				queries.push(`(${keywordQueryStrings.join('OR')})`)
-			}
-
-			if (categories) {
-				let categoryStrings = []
-				categories.forEach(category => {
-					filterQueryParams.push(category)
-					categoryStrings.push(' cat = ? ')
-				})
-				queries.push(`(${categoryStrings.join('OR') })`)
-			}
-
-			if (tags) {
-				let tagStrings = []
-				tags.forEach(tag => {
-					filterQueryParams.push(tag)
-					tagStrings.push(' tag = ? ')
-				})
-				queries.push(`(${tagStrings.join('OR') })`)
-			}
-
-			if (search) {
-				queries.push('(comic.Name LIKE ? OR artist.Name LIKE ?)')
-				filterQueryParams.push(`%${search}%`, `%${search}%`)
-			}
-			
-			filterQueryString = 'WHERE ' + queries.join(' AND ')
-		}
-
-		order = order || 'updated'
-		if (!['updated', 'userRating', 'yourRating'].includes(order)) {
-			return this.returnError('Illegal order by', res, null, null)
-		}
-		let orderQueryString = `ORDER BY ${order} DESC`
-
 		page = (page && !isNaN(page)) ? Number(page)-1 : 0
 		let pageOffset = page * COMICS_PER_PAGE
-		let paginationQueryString = ` LIMIT ${COMICS_PER_PAGE} OFFSET ? `
 
-		let comicVoteQuery = `
-			LEFT JOIN (
-				SELECT ComicId, Vote AS YourVote 
-				FROM comicvote 
-				WHERE UserId = ?
-			) AS VoteQuery ON (comic.Id = VoteQuery.ComicId) 
-		`
+		// databaseFacade, user, limit, offset, categories, tags, keywordIds, search, page, order, keywordIds
+		let comicsPromise = getComicsQuery(
+			this.databaseFacade,
+			user,
+			COMICS_PER_PAGE,
+			pageOffset,
+			categories,
+			tags,
+			keywordIds,
+			search,
+			order
+		)
 
-		let user = this.getUser(req)
+		// if (categories || tags || search || keywordIds) {
+		// 	let queries = []
 
-		let innerComicQuery = `
-			SELECT 
-				comic.Id AS Id, comic.Name AS Name, comic.Cat AS Cat, comic.Tag AS Tag, artist.Name AS Artist, comic.Updated AS updated, comic.State AS State, comic.Created AS Created, comic.NumberOfPages AS NumberOfPages
-				${user ? ', VoteQuery.YourVote AS yourRating' : ''}
-			FROM comic 
-			INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId)
-			INNER JOIN artist ON (artist.Id = comic.Artist) 
-			${user ? comicVoteQuery : ''} 
-			${filterQueryString}
-			GROUP BY comic.Name, comic.Id 
-			${keywordCountString} 
-			${order==='userRating' ? '' : orderQueryString + paginationQueryString} 
-		`
+		// 	if (keywordIds) {
+		// 		keywordCountString = `HAVING COUNT(*) >= ${keywordIds.length}`
+		// 		let keywordQueryStrings = []
+		// 		keywordIds.forEach(kwId => {
+		// 			filterQueryParams.push(kwId)
+		// 			keywordQueryStrings.push(' comickeyword.KeywordId=? ')
+		// 		})
+		// 		queries.push(`(${keywordQueryStrings.join('OR')})`)
+		// 		innerJoinKeywordString = 'INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId)'
+		// 	}
+
+		// 	if (categories) {
+		// 		let categoryStrings = []
+		// 		categories.forEach(category => {
+		// 			filterQueryParams.push(category)
+		// 			categoryStrings.push(' Cat = ? ')
+		// 		})
+		// 		queries.push(`(${categoryStrings.join('OR') })`)
+		// 	}
+
+		// 	if (tags) {
+		// 		let tagStrings = []
+		// 		tags.forEach(tag => {
+		// 			filterQueryParams.push(tag)
+		// 			tagStrings.push(' Tag = ? ')
+		// 		})
+		// 		queries.push(`(${tagStrings.join('OR') })`)
+		// 	}
+
+		// 	if (search) {
+		// 		queries.push('(comic.Name LIKE ? OR artist.Name LIKE ?)')
+		// 		filterQueryParams.push(`%${search}%`, `%${search}%`)
+		// 	}
+			
+		// 	filterQueryString = 'WHERE ' + queries.join(' AND ')
+		// }
+
+		// order = order || 'updated'
+		// if (!['updated', 'userRating', 'yourRating'].includes(order)) {
+		// 	return this.returnError('Illegal order by', res, null, null)
+		// }
+		// let orderQueryString = `ORDER BY ${order} DESC`
+
+		// page = (page && !isNaN(page)) ? Number(page)-1 : 0
+		// let pageOffset = page * COMICS_PER_PAGE
+		// let paginationQueryString = ` LIMIT ${COMICS_PER_PAGE} OFFSET ? `
+
+		// let comicVoteQuery = `
+		// 	LEFT JOIN (
+		// 		SELECT ComicId, Vote AS YourVote 
+		// 		FROM comicvote 
+		// 		WHERE UserId = ?
+		// 	) AS VoteQuery ON (comic.Id = VoteQuery.ComicId) 
+		// `
+
+		// let user = this.getUser(req)
+
+		// let innerComicQuery = `
+		// 	SELECT 
+		// 		comic.Id AS Id, comic.Name AS Name, comic.Cat AS Cat, comic.Tag AS Tag, artist.Name AS Artist, comic.Updated AS updated, comic.State AS State, comic.Created AS Created, comic.NumberOfPages AS NumberOfPages
+		// 		${user ? ', VoteQuery.YourVote AS yourRating' : ''}
+		// 	FROM comic 
+		// 	${innerJoinKeywordString}
+		// 	INNER JOIN artist ON (artist.Id = comic.Artist) 
+		// 	${user ? comicVoteQuery : ''} 
+		// 	${filterQueryString}
+		// 	GROUP BY comic.Name, comic.Id 
+		// 	${keywordCountString} 
+		// 	${order==='userRating' ? '' : orderQueryString + paginationQueryString} 
+		// `
 		
-		let queryParams = []
-		if (user) { queryParams = [user.id] }
-		queryParams.push(...filterQueryParams, pageOffset)
+		// let queryParams = []
+		// if (user) { queryParams = [user.id] }
+		// queryParams.push(...filterQueryParams, pageOffset)
 
-		let query = `
-			SELECT cc.Id AS id, cc.Name AS name, cc.Cat AS cat, cc.Tag AS tag, cc.Artist AS artist, 
-			cc.updated AS updated, cc.State AS state, cc.Created AS created, cc.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 
-			${user ? 'cc.yourRating AS yourRating' : '0 AS yourRating'}
-			FROM (
-				${innerComicQuery}
-			) AS cc  
-			LEFT JOIN comicvote ON (cc.Id = comicvote.ComicId) 
-			GROUP BY name, id 
-			${order==='userRating' ? orderQueryString + paginationQueryString : ''} 
-		`
+		// let query = `
+		// 	SELECT cc.Id AS id, cc.Name AS name, cc.Cat AS cat, cc.Tag AS tag, cc.Artist AS artist, 
+		// 	cc.updated AS updated, cc.State AS state, cc.Created AS created, cc.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 
+		// 	${user ? 'cc.yourRating AS yourRating' : '0 AS yourRating'}
+		// 	FROM (
+		// 		${innerComicQuery}
+		// 	) AS cc  
+		// 	LEFT JOIN comicvote ON (cc.Id = comicvote.ComicId) 
+		// 	GROUP BY name, id 
+		// 	${order==='userRating' ? orderQueryString + paginationQueryString : ''} 
+		// `
 
 		let totalPagesQuery = `
 			SELECT COUNT(*) AS count FROM (
 				SELECT comic.Id FROM comic 
 				INNER JOIN artist ON (artist.Id = comic.Artist) 
-				INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId) 
+				${innerJoinKeywordString}
 				${filterQueryString}
 				GROUP BY comic.Id
 				${keywordCountString}
@@ -158,7 +178,7 @@ export default class ComicsRouter extends BaseRouter {
 		let totalPagesQueryParam = filterQueryParams
 
 		try {
-			let comicsPromise = this.databaseFacade.execute(query, queryParams)
+			// let comicsPromise = this.databaseFacade.execute(query, queryParams)
 			let totalNumberPromise = this.databaseFacade.execute(totalPagesQuery, totalPagesQueryParam)
 
 			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])

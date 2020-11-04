@@ -1,4 +1,5 @@
 import BaseRouter from './baseRouter.js'
+import getComicsQuery from './get-comics-query.js'
 
 export default class ArtistRouter extends BaseRouter {
   constructor (app, databaseFacade, modLogger) {
@@ -29,29 +30,17 @@ export default class ArtistRouter extends BaseRouter {
     let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
     let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
 
-    let user = this.getUser(req)
-    let comicsQuery
-    let comicsQueryParams = []
-    if (user) {
-      comicsQuery = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, T2.YourVote AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId=comic.Id) INNER JOIN keyword ON (keyword.Id=comickeyword.KeywordId) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM comicvote WHERE UserId = ?) AS T2 ON (comic.Id = T2.ComicId) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE artist.Id = ? GROUP BY name, id ORDER BY id'
-      comicsQueryParams = [user.id]
-    }
-    else {
-      comicsQuery = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 0 AS yourRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId=comic.Id) INNER JOIN keyword ON (keyword.Id=comickeyword.KeywordId) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE artist.Id = ? GROUP BY name, id ORDER BY id'
-    }
-
     try {
+      let user = this.getUser(req)
       let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
       let artistId = artistData[0].Id
       let [artistE621Name, artistPatreonName] = [artistData[0].E621Name, artistData[0].PatreonName]
 
-      comicsQueryParams.push(artistId)
-      let links = await this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links')
-      let comics = await this.databaseFacade.execute(comicsQuery, comicsQueryParams, 'Error getting artist comics')
-      for (var comic of comics) {
-				if (!comic.keywords) { comic.keywords = [] }
-				else { comic.keywords = comic.keywords.split(',') }
-      }
+      let promises = [
+        this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links'),
+        getComicsQuery(this.databaseFacade, user, 0, 0, null, null, null, null, null, artistId)
+      ]
+      let [links, comics] = await Promise.all(promises)
 
       let allArtistData = {
         'links': links,
