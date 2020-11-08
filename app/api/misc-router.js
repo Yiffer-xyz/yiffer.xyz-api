@@ -291,7 +291,7 @@ export default class MiscRouter extends BaseRouter {
 				)
 			}
 
-			if (newPageFile.mimetype.endsWith('.png')) {
+			if (newPageFile.mimetype.endsWith('png')) {
 				await convertComicPage(newPageFile.path)
 			}
 			await FileSystemFacade.writeGoogleComicFile(

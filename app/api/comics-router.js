@@ -247,19 +247,19 @@ export default class ComicsRouter extends BaseRouter {
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		for (let file of fileList) {
-			if (file.mimetype.endsWith('.png')) {
+			if (file.mimetype.endsWith('png')) {
 				await convertComicPage(file.path)
 			}
-			else if (!file.mimetype.endsWith('.jpeg')) {
+			else if (!file.mimetype.endsWith('jpeg')) {
 				throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 			}
 		}
 
 		if (thumbnailFile) {
-			if (thumbnailFile.mimetype.endsWith('.png')) {
+			if (thumbnailFile.mimetype.endsWith('png')) {
 				await convertComicPage(thumbnailFile.path)
 			}
-			else if (!thumbnailFile.mimetype.endsWith('.jpeg')) {
+			else if (!thumbnailFile.mimetype.endsWith('jpeg')) {
 				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
 			}
 		}
@@ -307,7 +307,7 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 		try {
-			let comicQuery = 'SELECT * FROM comic WHERE Id=?'
+			let comicQuery = `SELECT * FROM ${isPendingComic ? 'pendingcomic' : 'comic'} WHERE Id=?`
 			let comicQueryRes = await this.databaseFacade.execute(comicQuery, [comicId])
 			let comic = comicQueryRes[0]
 			let existingNumberOfPages = comic.NumberOfPages
@@ -315,10 +315,10 @@ export default class ComicsRouter extends BaseRouter {
 			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
 			
 			for (let file of files) {
-				if (file.mimetype.endsWith('.png')) {
+				if (file.mimetype.endsWith('png')) {
 					await convertComicPage(file.path)
 				}
-				else if (!file.mimetype.endsWith('.jpeg')) {
+				else if (!file.mimetype.endsWith('jpeg')) {
 					throw new Error(`Some file is of an unsupported format (${file.originalname})`)
 				}
 			}
@@ -372,15 +372,14 @@ export default class ComicsRouter extends BaseRouter {
 			return this.returnError('Missing fields', res, null, null)
 		}
 
+		let hasMovedFiles = false
 		try {
 			if (oldName !== newName) {
-				await FileSystemFacade.renameFile(
-					`${__dirname}/../../../client/public/comics/${oldName}`,
-					`${__dirname}/../../../client/public/comics/${newName}`,
-					'Error renaming comic directory')
+				await this.renameComicFiles(comicId, oldName, newName)
+				hasMovedFiles = true
 			}
 
-			let query = 'UPDATE comic SET Name = ?, Cat = ?, Tag = ?, State = ?, Artist = (SELECT Artist.Id FROM artist WHERE Name = ?) WHERE Id = ?'
+			let query = 'UPDATE comic SET Name = ?, Cat = ?, Tag = ?, State = ?, Artist = (SELECT artist.Id FROM artist WHERE Name = ?) WHERE Id = ?'
 			let queryParams = [newName, newCat, newTag, newState, newArtistName, comicId]
 			await this.databaseFacade.execute(query, queryParams)
 
@@ -392,8 +391,27 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Comic', `Update details of ${comicName}`, queryParams.slice(0,-1).join(', '))
 		}
 		catch (err) {
+			if (hasMovedFiles) {
+				await this.renameComicFiles(comicId, newName, oldName)
+			}
 			return this.returnError(err.message, res, err.error, err)
 		}
+	}
+
+	async renameComicFiles (comicId, oldComicName, newComicName) {
+		let numberOfPages = (await this.databaseFacade.execute('SELECT NumberOfPages FROM comic WHERE Id=?', [comicId], 'Error  getting comic number of pages'))[0].NumberOfPages
+
+		let allRenamePromises = []
+		for (let i=1; i<=numberOfPages; i++) {
+			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
+			let pageName = `${pageNumberString}.jpg`
+			let oldPageName = `comics/${oldComicName}/${pageName}`
+			let newPageName = `comics/${newComicName}/${pageName}`
+			allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(oldPageName, newPageName))
+		}
+		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(`comics/${oldComicName}/s.jpg`, `comics/${newComicName}/s.jpg`))
+
+		return await Promise.all(allRenamePromises)
 	}
 
 	async updatePrevAndNextComicLinks (comicId, previousComic, nextComic) {
