@@ -540,7 +540,7 @@ export default class ComicsRouter extends BaseRouter {
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
 
-		let comicName = (await this.databaseFacade.execute('SELECT Name FROM PendingComic WHERE Id=?', [comicId]))[0].Name
+		let comicName = (await this.databaseFacade.execute('SELECT Name FROM pendingcomic WHERE Id=?', [comicId]))[0].Name
 		this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
 
 		res.json({success: true})

@@ -16,7 +16,7 @@ export default class MiscRouter extends BaseRouter {
   }
   
   async getCurrentBlog (req, res) {
-    let newestBlogQuery = 'SELECT Title, Id, Importance, Displaydays, Timestamp FROM blog ORDER BY Timestamp DESC LIMIT 1'
+    let newestBlogQuery = 'SELECT Title, Id, IsImportant, Displaydays, Timestamp FROM blog ORDER BY Timestamp DESC LIMIT 1'
     let returnedBlog = { shouldDisplay: false }
 
     try {
@@ -30,7 +30,7 @@ export default class MiscRouter extends BaseRouter {
               shouldDisplay: true,
               title: newestBlog.Title,
               id: newestBlog.Id,
-              importance: newestBlog.Importance
+              isImportant: newestBlog.IsImportant
             }
           }
         }
@@ -44,7 +44,7 @@ export default class MiscRouter extends BaseRouter {
   }
   
   async getAllBlogs (req, res) {
-    let query = 'SELECT blog.Id AS id, Title AS title, Username AS author, Importance AS importance, Content AS content, Timestamp AS timestamp FROM blog INNER JOIN user ON (blog.Author=user.Id) ORDER BY Timestamp DESC'
+    let query = 'SELECT blog.Id AS id, Title AS title, Username AS author, IsImportant AS isImportant, Content AS content, Timestamp AS timestamp FROM blog INNER JOIN user ON (blog.Author=user.Id) ORDER BY Timestamp DESC'
 
     try {
       let blogs = await this.databaseFacade.execute(query, null, 'Error retrieving blogs')
@@ -56,10 +56,10 @@ export default class MiscRouter extends BaseRouter {
   }
   
   async addNewBlog (req, res) {
-    let [title, userId, importance, content, displayDays] = [req.body.title, req.session.user.id, req.body.importance, req.body.content, req.body.displayDays]
+    let [title, userId, isImportant, content, displayDays] = [req.body.title, req.session.user.id, req.body.isImportant, req.body.content, req.body.displayDays]
 
-    let query = 'INSERT INTO blog (Title, Author, Importance, Content, Displaydays) VALUES (?, ?, ?, ?, ?)'
-    let queryParams = [title, userId, importance, content, displayDays]
+    let query = 'INSERT INTO blog (Title, Author, IsImportant, Content, Displaydays) VALUES (?, ?, ?, ?, ?)'
+    let queryParams = [title, userId, isImportant, content, displayDays]
 
     try {
       await this.databaseFacade.execute(query, queryParams, 'Error adding blog to database')
