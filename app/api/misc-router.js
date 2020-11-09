@@ -51,6 +51,8 @@ export default class MiscRouter extends BaseRouter {
 		this.app.get ('/api/mod-applications', (req, res) => this.getModApplications(req, res))
 		this.app.post('/api/mod-applications/:id', (req, res) => this.processModApplication(req, res))
 		this.app.get('/api/mod-applications/me', (req, res) => this.getMyModApplicationStatus(req, res))
+
+		this.app.post('/api/feedback', (req, res) => this.submitFeedback(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -528,6 +530,20 @@ export default class MiscRouter extends BaseRouter {
 
 	getPageName (pageNumber) {
 		return pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
+	}
+
+	async submitFeedback (req, res) {
+		let feedback = req.body.feedbackText
+		let user = this.getUser(req)
+		
+		let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
+		try {
+			await this.databaseFacade.execute(insertQuery, [feedback, user?.id], 'Error saving feedback')
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
 	}
 }
 
