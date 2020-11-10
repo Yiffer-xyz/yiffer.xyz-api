@@ -1,5 +1,5 @@
 import BaseRouter from './baseRouter.js'
-import getComicsQuery from './get-comics-query.js'
+import { getComics } from './comics-query-helper.js'
 
 export default class ArtistRouter extends BaseRouter {
   constructor (app, databaseFacade, modLogger) {
@@ -38,7 +38,7 @@ export default class ArtistRouter extends BaseRouter {
 
       let promises = [
         this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links'),
-        getComicsQuery(this.databaseFacade, user, 0, 0, null, null, null, null, null, artistId)
+        getComics(this.databaseFacade, user, 0, 0, null, null, null, null, null, artistId)
       ]
       let [links, comics] = await Promise.all(promises)
 

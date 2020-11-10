@@ -1,5 +1,5 @@
 import { convertComicPage } from '../image-processing.js'
-import getComicsQuery from './get-comics-query.js'
+import {getComics, getFilterQuery} from './comics-query-helper.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -56,14 +56,10 @@ export default class ComicsRouter extends BaseRouter {
 		keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
 		let user = this.getUser(req)
-		let filterQueryString = ''
-		let innerJoinKeywordString = ''
-		let filterQueryParams = []
-		let keywordCountString = ''
 		page = (page && !isNaN(page)) ? Number(page)-1 : 0
 		let pageOffset = page * COMICS_PER_PAGE
 
-		let comicsPromise = getComicsQuery(
+		let comicsPromise = getComics(
 			this.databaseFacade,
 			user,
 			COMICS_PER_PAGE,
@@ -75,6 +71,13 @@ export default class ComicsRouter extends BaseRouter {
 			order
 		)
 
+		let [
+			filterQueryString,
+			filterQueryParams,
+			keywordCountString,
+			innerJoinKeywordString
+		] = getFilterQuery(categories, tags, keywordIds, search)
+
 		let totalPagesQuery = `
 			SELECT COUNT(*) AS count FROM (
 				SELECT comic.Id FROM comic 
@@ -84,11 +87,9 @@ export default class ComicsRouter extends BaseRouter {
 				GROUP BY comic.Id
 				${keywordCountString}
 			) AS Q1`
-		let totalPagesQueryParam = filterQueryParams
 
 		try {
-			// let comicsPromise = this.databaseFacade.execute(query, queryParams)
-			let totalNumberPromise = this.databaseFacade.execute(totalPagesQuery, totalPagesQueryParam)
+			let totalNumberPromise = this.databaseFacade.execute(totalPagesQuery, filterQueryParams)
 
 			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])
 			let numberOfPages = Math.ceil(totalNumber[0].count / COMICS_PER_PAGE)
