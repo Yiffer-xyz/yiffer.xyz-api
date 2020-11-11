@@ -52,7 +52,10 @@ export default class MiscRouter extends BaseRouter {
 		this.app.post('/api/mod-applications/:id', (req, res) => this.processModApplication(req, res))
 		this.app.get('/api/mod-applications/me', (req, res) => this.getMyModApplicationStatus(req, res))
 
-		this.app.post('/api/feedback', (req, res) => this.submitFeedback(req, res))
+		this.app.post  ('/api/feedback', (req, res) => this.submitFeedback(req, res))
+		this.app.get   ('/api/feedback', (req, res) => this.getFeedback(req, res))
+		this.app.delete('/api/feedback/:id', (req, res) => this.deleteFeedback(req, res))
+		this.app.patch ('/api/feedback/:id/read', (req, res) => this.markFeedbackRead(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -539,6 +542,48 @@ export default class MiscRouter extends BaseRouter {
 		let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
 		try {
 			await this.databaseFacade.execute(insertQuery, [feedback, user?.id], 'Error saving feedback')
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async getFeedback (req, res) {
+		if (!this.authorizeAdmin(req, res)) {
+			res.status(403).send()
+		}
+
+		let query = 'SELECT feedback.Id AS id, Text AS text, user.Username AS username, IsRead AS isRead, Timestamp AS timestamp FROM feedback LEFT JOIN user ON (user.Id = feedback.UserId) WHERE IsRemoved=0 ORDER BY feedback.Id DESC'
+
+		try {
+			let feedbacks = await this.databaseFacade.execute(query, null, 'Error fetching feedback')
+			res.json(feedbacks)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async deleteFeedback (req, res) {
+		let feedbackId = req.params.id
+		let query = 'DELETE FROM feedback WHERE Id = ?'
+		
+		try {
+			await this.databaseFacade.execute(query, [feedbackId], 'Error deleteing feedback')
+			res.json({success: true})
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async markFeedbackRead (req, res) {
+		let feedbackId = req.params.id
+		let query = 'UPDATE feedback SET IsRead=1 WHERE Id = ?'
+
+		try {
+			await this.databaseFacade.execute(query, [feedbackId], 'Error updating feedback')
 			res.json({success: true})
 		}
 		catch (err) {
