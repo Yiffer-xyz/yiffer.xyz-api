@@ -42,7 +42,7 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
 	async removeKeywordsFromComic (req, res) {
-		let [comicId, keywords] = [req.body.comicId, req.body.keywords]
+    let [comicId, keywords] = [req.body.comicId, req.body.keywords]
     if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
 
 		let deleteQuery = 'DELETE FROM comickeyword WHERE (ComicId, KeywordId) IN ('
