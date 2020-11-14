@@ -1,4 +1,4 @@
-import { convertComicPage } from '../image-processing.js'
+import { convertComicPage, convertThumbnailFile } from '../image-processing.js'
 import {getComics, getFilterQuery} from './comics-query-helper.js'
 
 import multer from 'multer'
@@ -237,7 +237,11 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({success: true})
 			
 			FileSystemFacade.deleteFiles(fileList.map(f => f.path))
-			if (hasThumbnail) { FileSystemFacade.deleteFile(thumbnailFilePath) }
+			if (hasThumbnail) {
+				FileSystemFacade.deleteFile(thumbnailFile.path)
+				FileSystemFacade.deleteFile(thumbnailFile.path + '-thumb')
+				FileSystemFacade.deleteFile(thumbnailFile.path + '-thumbsmall')
+			}
 			this.addModLog(req, 'Create comic', `Add ${comicName}`)
 		}
 		catch (err) {
@@ -257,16 +261,17 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 		if (thumbnailFile) {
-			if (thumbnailFile.mimetype.endsWith('png')) {
-				await convertComicPage(thumbnailFile.path)
+
+			if (thumbnailFile.mimetype.endsWith('png') || thumbnailFile.mimetype.endsWith('jpeg')) {
+				await convertThumbnailFile(thumbnailFile.path)
 			}
-			else if (!thumbnailFile.mimetype.endsWith('jpeg')) {
+			else {
 				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
 			}
 		}
 	}
 
-	async writeNewComicFiles (filePaths, comicName, thumbnailFilePath) {
+	async writeNewComicFiles (filePaths, comicName, originalThumbnailFilePath) {
 		let fileWritePromises = []
 		for (var i=1; i<= filePaths.length; i++) {
 			let filePath = filePaths[i-1]
@@ -277,8 +282,11 @@ export default class ComicsRouter extends BaseRouter {
 
 		await Promise.all(fileWritePromises)
 
-		if (!!thumbnailFilePath) {
-			await FileSystemFacade.writeGoogleComicFile(thumbnailFilePath, comicName, 's.jpg')
+		if (!!originalThumbnailFilePath) {
+			await Promise.all([
+				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumb', comicName, 'thumbnail.webp'),
+				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumbsmall', comicName, 'thumbnail-small.webp'),
+			])
 		}
 
 		return {error: false}
@@ -410,7 +418,13 @@ export default class ComicsRouter extends BaseRouter {
 			let newPageName = `comics/${newComicName}/${pageName}`
 			allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(oldPageName, newPageName))
 		}
-		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(`comics/${oldComicName}/s.jpg`, `comics/${newComicName}/s.jpg`))
+
+		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(
+			`comics/${oldComicName}/thumbnail.webp`, `comics/${newComicName}/thumbnail.webp`
+		))
+		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(
+			`comics/${oldComicName}/thumbnail-small.webp`, `comics/${newComicName}/thumbnail-small.webp`
+		))
 
 		return await Promise.all(allRenamePromises)
 	}
@@ -567,15 +581,16 @@ export default class ComicsRouter extends BaseRouter {
 
 		if (!thumbnailFile.mimetype.endsWith('jpeg') && !thumbnailFile.mimetype.endsWith('png')) {
 			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
-			return this.returnError('File must be .jpg or .png', res)
+			return this.returnError('File must be .jpg, .jpeg, or .png', res)
 		}
 
-		if (thumbnailFile.mimetype.endsWith('png')) {
-			await convertComicPage(thumbnailFile.path)
-		}
+		await convertThumbnailFile(thumbnailFile.path)
 
 		try {
-			await FileSystemFacade.writeGoogleComicFile(thumbnailFile.path, comicName, 's.jpg')
+			await Promise.all([
+				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path+'-thumb', comicName, 'thumbnail.webp'),
+				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path+'-thumbsmall', comicName, 'thumbnail-small.webp')
+			])
 
 			if (isPendingComic) {
 				let updateComicDataQuery = 'UPDATE pendingcomic SET HasThumbnail = 1 WHERE Id = ?'
@@ -583,7 +598,10 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			res.json({success: true})
-			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
+
+			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file 1')
+			await FileSystemFacade.deleteFile(thumbnailFile.path + '-thumb', 'Error deleting temp file 2')
+			await FileSystemFacade.deleteFile(thumbnailFile.path + '-thumbsmall', 'Error deleting temp file 3')
 
 			this.addModLog(req, isPendingComic?'Pending comic':'comic', `Add/change thumbnail to ${comicName}`)
 		}

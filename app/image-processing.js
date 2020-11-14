@@ -8,3 +8,15 @@ export async function convertComicPage(filepath) {
 
   return sharp(buffer).toFile(filepath)
 }
+
+export async function convertThumbnailFile(filepath) {
+  await sharp(filepath)
+    .resize(200)
+    .webp({quality: 90})
+    .toFile(filepath + '-thumb')
+
+  await sharp(filepath)
+    .resize(100)
+    .webp({quality: 90})
+    .toFile(filepath + '-thumbsmall')
+}
