@@ -261,7 +261,6 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 		if (thumbnailFile) {
-
 			if (thumbnailFile.mimetype.endsWith('png') || thumbnailFile.mimetype.endsWith('jpeg')) {
 				await convertThumbnailFile(thumbnailFile.path)
 			}
@@ -286,6 +285,7 @@ export default class ComicsRouter extends BaseRouter {
 			await Promise.all([
 				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumb', comicName, 'thumbnail.webp'),
 				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumbsmall', comicName, 'thumbnail-small.webp'),
+				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath, comicName, 'thumbnail.jpg'),
 			])
 		}
 
@@ -589,7 +589,8 @@ export default class ComicsRouter extends BaseRouter {
 		try {
 			await Promise.all([
 				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path+'-thumb', comicName, 'thumbnail.webp'),
-				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path+'-thumbsmall', comicName, 'thumbnail-small.webp')
+				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path+'-thumbsmall', comicName, 'thumbnail-small.webp'),
+				FileSystemFacade.writeGoogleComicFile(thumbnailFile.path, comicName, 'thumbnail.jpg'),
 			])
 
 			if (isPendingComic) {

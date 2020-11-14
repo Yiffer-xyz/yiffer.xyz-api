@@ -19,4 +19,11 @@ export async function convertThumbnailFile(filepath) {
     .resize(100)
     .webp({quality: 90})
     .toFile(filepath + '-thumbsmall')
+
+  let jpgBuffer = await sharp(filepath)
+    .resize(200)
+    .jpg({quality: 100})
+    .toBuffer()
+
+  return sharp(jpgBuffer).toFile(filepath)
 }
