@@ -15,10 +15,6 @@ var upload = multer({ storage: storage })
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter from './baseRouter.js'
 
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
 
 const COMICS_PER_PAGE = 75
@@ -39,15 +35,15 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/comics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false))
 		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
-		this.app.post('/api/comics/:id/addthumbnail', upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
+		this.app.post('/api/comics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
 		
-		this.app.get ('/api/pendingcomics', (req, res) => this.getPendingComics(req, res))
-		this.app.get ('/api/pendingcomics/:name', (req, res) => this.getPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id', (req, res) => this.processPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addthumbnail', upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
-		this.app.post('/api/pendingcomics/:id/addkeywords', (req, res) => this.addKeywordsToPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/removekeywords', (req, res) => this.removeKeywordsFromPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
+		this.app.get ('/api/pendingcomics', this.authorizeMod.bind(this), (req, res) => this.getPendingComics(req, res))
+		this.app.get ('/api/pendingcomics/:name', this.authorizeMod.bind(this), (req, res) => this.getPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id', this.authorizeAdmin.bind(this), (req, res) => this.processPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addkeywords', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id/removekeywords', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
 	}
 
 	async getComicListPaginated (req, res) {
@@ -659,9 +655,4 @@ export default class ComicsRouter extends BaseRouter {
 		}
 
 	}
-}
-
-function replaceGlobally(original, searchTxt, replaceTxt) {
-	const regex = new RegExp(searchTxt, 'g')
-	return original.replace(regex, replaceTxt) 
 }

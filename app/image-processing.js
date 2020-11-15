@@ -22,7 +22,7 @@ export async function convertThumbnailFile(filepath) {
 
   let jpgBuffer = await sharp(filepath)
     .resize(200)
-    .jpg({quality: 100})
+    .jpeg({quality: 100})
     .toBuffer()
 
   return sharp(jpgBuffer).toFile(filepath)

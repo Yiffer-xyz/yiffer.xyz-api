@@ -39,18 +39,25 @@ export default class BaseRouter {
 
 	async authorizeMod (req, res, next) {
 		let authorized = await this.authorize(req, res, 'moderator')
-		return authorized === true
+		if (authorized === true) {
+			if (next) { next() }
+			else { return authorized === true }
+		}
 	}
 
 	async authorizeAdmin (req, res, next) {
 		let authorized = await this.authorize(req, res, 'admin')
-		return authorized === true
+		if (authorized === true) {
+			if (next) { next() }
+			else { return authorized === true }
+		}
 	}
 
 	async authorize(req, res, role) {
 		try {
 			if (!req.session || !req.session.user) {
-				return res.json({error: 'Not logged in'})
+				console.log('asdasjdnajsdnkj')
+				res.status(401).json({error: 'Not logged in'})
 			}
 			else {
 				let query = 'SELECT * FROM user WHERE Username=?'
@@ -60,7 +67,7 @@ export default class BaseRouter {
 						return true
 					}
 					else {
-						res.json({error: 'Unauthorized'})
+						res.status(403).json({error: 'Unauthorized'})
 					}
 				}
 				else if (role === 'admin') {
@@ -68,7 +75,7 @@ export default class BaseRouter {
 						return true
 					}
 					else {
-						res.json({error: 'Unauthorized'})
+						res.status(403).json({error: 'Unauthorized'})
 					}
 				}
 			}
