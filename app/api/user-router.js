@@ -7,11 +7,11 @@ export default class UserRouter extends BaseRouter {
   }
   
   setupRoutes () {
-    this.app.get ('/api/users/search', (req, res) => this.searchForUser(req, res))
-    this.app.get ('/api/users/moderators', (req, res) => this.getModerators(req, res))
-    this.app.get ('/api/users/:id', (req, res) => this.getUser(req, res))
-    this.app.post('/api/users/:id', (req, res) => this.updateUser(req, res))
-    this.app.post('/api/users/:id/delete', (req, res) => this.deleteUser(req, res))
+    this.app.get ('/api/users/search', this.authorizeAdmin.bind(this), (req, res) => this.searchForUser(req, res))
+    this.app.get ('/api/users/moderators', this.authorizeAdmin.bind(this), (req, res) => this.getModerators(req, res))
+    this.app.get ('/api/users/:id', this.authorizeAdmin.bind(this), (req, res) => this.getUser(req, res))
+    this.app.post('/api/users/:id', this.authorizeAdmin.bind(this), (req, res) => this.updateUser(req, res))
+    this.app.post('/api/users/:id/delete', this.authorizeAdmin.bind(this), (req, res) => this.deleteUser(req, res))
   }
 
   async searchForUser (req, res) {

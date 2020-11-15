@@ -9,12 +9,12 @@ export default class KeywordsRouter extends BaseRouter {
   setupRoutes () {
     this.app.get ('/api/keywords', (req, res) => this.getAllKeywords(req, res))
     this.app.get ('/api/comic-keywords/:comicId', (req, res) => this.getComicKeywords(req, res))
-    this.app.post('/api/keywords/removefromcomic', (req, res) => this.removeKeywordsFromComic(req, res))
-    this.app.post('/api/keywords/addtocomic', (req, res) => this.addKeywordsToComic(req, res))
-    this.app.post('/api/keywords', (req, res) => this.createKeyword(req, res))
-    this.app.post('/api/keywordsuggestions/process', (req, res) => this.processKeywordSuggestion(req, res))
+    this.app.post('/api/keywords/removefromcomic', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromComic(req, res))
+    this.app.post('/api/keywords/addtocomic', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToComic(req, res))
+    this.app.post('/api/keywords', this.authorizeMod.bind(this), (req, res) => this.createKeyword(req, res))
+    this.app.post('/api/keywordsuggestions/process', this.authorizeMod.bind(this), (req, res) => this.processKeywordSuggestion(req, res))
     this.app.post('/api/keywordsuggestions', (req, res) => this.addKeywordSuggestion(req, res))
-    this.app.get ('/api/keywordsuggestions', (req, res) => this.getKeywordSuggestions(req, res))
+    this.app.get ('/api/keywordsuggestions', this.authorizeMod.bind(this), (req, res) => this.getKeywordSuggestions(req, res))
     this.app.post('/api/keywords/log', (req, res) => this.logKeywordClick(req, res))
   }
 

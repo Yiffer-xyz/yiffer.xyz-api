@@ -13,12 +13,7 @@ var storage = multer.diskStorage({
 })
 var upload = multer({ storage: storage })
 
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 import dateFns from 'date-fns'
-import { rename } from 'fs'
 const { format } = dateFns
 
 export default class MiscRouter extends BaseRouter {
@@ -28,34 +23,34 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	setupRoutes () {
-		this.app.get ('/api/comicsuggestions', (req, res) => this.getComicSuggestions(req, res))
+		this.app.get ('/api/comicsuggestions', this.authorizeMod.bind(this), (req, res) => this.getComicSuggestions(req, res))
 		this.app.get ('/api/comicsuggestions/rejected', (req, res) => this.getRejectedComicSuggestions(req, res))
 		this.app.post('/api/comicsuggestions', (req, res) => this.addComicSuggestion(req, res))
-		this.app.post('/api/comicsuggestions/:id/process', (req, res) => this.processComicSuggestion(req, res))
+		this.app.post('/api/comicsuggestions/:id/process', this.authorizeMod.bind(this), (req, res) => this.processComicSuggestion(req, res))
 
-		this.app.get ('/api/modlog', (req, res) => this.getModLog(req, res))
-		this.app.get ('/api/modscores', (req, res) => this.getModScores(req, res))
+		this.app.get ('/api/modlog', this.authorizeMod.bind(this), (req, res) => this.getModLog(req, res))
+		this.app.get ('/api/modscores', this.authorizeMod.bind(this), (req, res) => this.getModScores(req, res))
 	
-		this.app.post('/api/swapcomicpages', (req, res) => this.swapComicPages(req, res))
-		this.app.post('/api/insertcomicpage', upload.single('newPageFile'), (req, res) => this.insertComicPage(req, res))
-		this.app.post('/api/deletecomicpage', (req, res) => this.deletecomicpage(req, res))
+		this.app.post('/api/swapcomicpages', this.authorizeMod.bind(this), (req, res) => this.swapComicPages(req, res))
+		this.app.post('/api/insertcomicpage', this.authorizeMod.bind(this), upload.single('newPageFile'), (req, res) => this.insertComicPage(req, res))
+		this.app.post('/api/deletecomicpage', this.authorizeMod.bind(this), (req, res) => this.deletecomicpage(req, res))
 
 		this.app.post('/api/log-route', (req, res) => this.logRoute(req, res))
 		this.app.post('/api/log-event', (req, res) => this.logEvent(req, res))
 
-		this.app.get('/api/stats/routes', (req, res) => this.getRouteStats(req, res))
-		this.app.get('/api/stats/visitors', (req, res) => this.getVisitorStats(req, res))
-		this.app.get('/api/stats/comic-views', (req, res) => this.getComicViewStats(req, res))
+		this.app.get('/api/stats/routes', this.authorizeMod.bind(this), (req, res) => this.getRouteStats(req, res))
+		this.app.get('/api/stats/visitors', this.authorizeMod.bind(this), (req, res) => this.getVisitorStats(req, res))
+		this.app.get('/api/stats/comic-views', this.authorizeMod.bind(this), (req, res) => this.getComicViewStats(req, res))
 
-		this.app.post('/api/mod-applications', (req, res) => this.createModApplication(req, res))
-		this.app.get ('/api/mod-applications', (req, res) => this.getModApplications(req, res))
-		this.app.post('/api/mod-applications/:id', (req, res) => this.processModApplication(req, res))
-		this.app.get('/api/mod-applications/me', (req, res) => this.getMyModApplicationStatus(req, res))
+		this.app.post('/api/mod-applications', this.authorizeAdmin.bind(this), (req, res) => this.createModApplication(req, res))
+		this.app.get ('/api/mod-applications', this.authorizeAdmin.bind(this), (req, res) => this.getModApplications(req, res))
+		this.app.post('/api/mod-applications/:id', this.authorizeAdmin.bind(this), (req, res) => this.processModApplication(req, res))
+		this.app.get ('/api/mod-applications/me', this.authorizeUser.bind(this), (req, res) => this.getMyModApplicationStatus(req, res))
 
 		this.app.post  ('/api/feedback', (req, res) => this.submitFeedback(req, res))
-		this.app.get   ('/api/feedback', (req, res) => this.getFeedback(req, res))
-		this.app.delete('/api/feedback/:id', (req, res) => this.deleteFeedback(req, res))
-		this.app.patch ('/api/feedback/:id/read', (req, res) => this.markFeedbackRead(req, res))
+		this.app.get   ('/api/feedback', this.authorizeMod.bind(this), (req, res) => this.getFeedback(req, res))
+		this.app.delete('/api/feedback/:id', this.authorizeMod.bind(this), (req, res) => this.deleteFeedback(req, res))
+		this.app.patch ('/api/feedback/:id/read', this.authorizeMod.bind(this), (req, res) => this.markFeedbackRead(req, res))
 	}
 
 	async getComicSuggestions (req, res) {
@@ -248,8 +243,8 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async swapComicPages (req, res) {
-		let [comicName, comicId, pageNumber1, pageNumber2] = 
-			[req.body.comicName, req.body.comicId, req.body.pageNumber1, req.body.pageNumber2]
+		let [comicName, pageNumber1, pageNumber2] = 
+			[req.body.comicName, req.body.pageNumber1, req.body.pageNumber2]
 		let pageName1 = this.getPageName(pageNumber1)
 		let pageName2 = this.getPageName(pageNumber2)
 
