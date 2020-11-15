@@ -13,10 +13,6 @@ var storage = multer.diskStorage({
 })
 var upload = multer({ storage: storage })
 
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 export default class AdvertisingRouter extends BaseRouter {
   constructor (app, databaseFacade) {
 		super(app, databaseFacade)
@@ -24,17 +20,13 @@ export default class AdvertisingRouter extends BaseRouter {
   }
   
   setupRoutes () {
-    this.app.get ('/api/paid-images', (req, res) => this.getAllAds(req, res))
+    this.app.get ('/api/paid-images', this.authorizeAdmin.bind(this), (req, res) => this.getAllAds(req, res))
     this.app.get ('/api/paid-images-basic', (req, res) => this.getAdsForList(req, res))
-    this.app.get ('/api/paid-images/pending', (req, res) => this.getPendingAds(req, res))
-    this.app.get ('/api/paid-images/awaiting-payment', (req, res) => this.getAdsInNeedOfPayment(req, res))
-    this.app.get ('/api/paid-images/active-soon', (req, res) => this.getActiveSoonAds(req, res))
-    this.app.get ('/api/paid-images/active', (req, res) => this.getActiveAds(req, res))
-    this.app.get ('/api/paid-images/user/:userid', (req, res) => this.getAdsByUserId(req, res))
-    this.app.post('/api/paid-images', upload.single('file'), (req, res) => this.createApplication(req, res))
-    this.app.post('/api/paid-images/:adId', (req, res) => this.updateAd(req, res))
-    this.app.post('/api/paid-images/:adId/correct', upload.single('file'), (req, res) => this.correctAd(req, res))
-    this.app.post('/api/paid-images/:adId/toggle-renew', (req, res) => this.toggleAdRenewal(req, res))
+    this.app.get ('/api/paid-images/me', this.authorizeUser.bind(this), (req, res) => this.getUserAds(req, res))
+    this.app.post('/api/paid-images', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.createApplication(req, res))
+    this.app.post('/api/paid-images/:adId', this.authorizeAdmin.bind(this), (req, res) => this.updateAd(req, res))
+    this.app.post('/api/paid-images/:adId/correct', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.correctAd(req, res))
+    this.app.post('/api/paid-images/:adId/toggle-renew', this.authorizeUser.bind(this), (req, res) => this.toggleAdRenewal(req, res))
   }
 
   async createApplication (req, res) {
@@ -124,8 +116,13 @@ export default class AdvertisingRouter extends BaseRouter {
 		}
   }
 
-  async getAdsByUserId (req, res) {
-    let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [req.params.userid], false)
+  async getUserAds (req, res) {
+    let user = this.getUser(req)
+    if (!user || !user.id) {
+      return this.returnError('Invalid user', res, null, null)
+    }
+
+    let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
     res.json(results)
   }
 
@@ -189,6 +186,10 @@ export default class AdvertisingRouter extends BaseRouter {
 
     try {
       let existingAd = await this.getAdById(req, res, adId)
+      let user = this.getUser(req)
+      if (existingAd.userId !== user.id) {
+        return this.returnStatusError(401, 'User does not own given ad id', res, null, null)
+      }
 
       let {isValid, error} = this.checkApplicationValidity(file, existingAd.adType, link, mainText, secondaryText, file, true)
       if (!isValid) { return res.json({error: error}) }
@@ -223,6 +224,11 @@ export default class AdvertisingRouter extends BaseRouter {
 
     try {
       let ad = await this.getAdById(req, res, adId)
+      let user = this.getUser(req)
+      if (ad.userId !== user.id) {
+        return this.returnStatusError(401, 'User does not own given ad id', res, null, null)
+      }
+      
       let query, queryParams
 
       if (ad.status === 'ACTIVE' && shouldRenew) {
@@ -280,31 +286,4 @@ function getLongAdType (adType) {
   if (adType === 'card2M') { return 'Card, 2 months' }
   if (adType === 'card4M') { return 'Card, 4 months' }
   if (adType === 'banner1M') { return 'Wide, 1 month' }
-}
-
-function getAdStatus (ad) {
-  if (!ad.isApproved) {
-    return 'PENDING'
-  }
-  if (ad.needsCorrection && ad.isApproved) {
-    return 'NEEDS CORRECTION'
-  }
-  if (ad.isApproved && !ad.isActive && !ad.isPaid) {
-    return 'AWAITING PAYMENT'
-  }
-  if (ad.isApproved && !ad.isActive && ad.isPaid) {
-    return 'ACTIVE SOON'
-  }
-  if (ad.isActive && !ad.renew) {
-    return 'ACTIVE'
-  }
-  if (ad.isActive && ad.renew && !ad.isPaid) {
-    return 'ACTIVE, AWAITING RENEWAL PAYMENT'
-  }
-  if (ad.isActive && ad.renew && ad.isPaid) {
-    return 'ACTIVE, RENEWAL PAID'
-  }
-  else {
-    return `ENDED`
-  }
 }

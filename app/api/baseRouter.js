@@ -18,6 +18,20 @@ export default class BaseRouter {
 		}
 	}
 
+	returnStatusError(status, errorMessage, res, err, fullErr) {
+		console.log(`Controlled error with status ${status}: ${errorMessage}`)
+		if (fullErr) {
+			console.log(fullErr)
+		}
+	
+		try {
+			if (res) { res.status(status).json({ error: errorMessage }) }
+		}
+		catch (err2) {
+			console.log('Error returning error', err2)
+		}
+	}
+
 	getUser (req) {
 		if (req.session && req.session.user) {
 			return req.session.user
