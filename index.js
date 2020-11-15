@@ -37,7 +37,8 @@ app.use(express.static('./public'))
 import { prerenderToken } from './config/prerender.js'
 import prerender from 'prerender-node'
 prerender.set('prerenderToken', prerenderToken)
-         
+  .blacklisted(['/api/*'])
+
 app.use(prerender);
 
 import routes from './app/routes.js'
