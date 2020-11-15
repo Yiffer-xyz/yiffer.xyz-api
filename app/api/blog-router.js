@@ -12,7 +12,7 @@ export default class MiscRouter extends BaseRouter {
 	setupRoutes () {
 		this.app.get('/api/blogs/current', (req, res) => this.getCurrentBlog(req, res))
 		this.app.get('/api/blogs', (req, res) => this.getAllBlogs(req, res))
-		this.app.post('/api/blogs', (req, res) => this.addNewBlog(req, res))
+		this.app.post('/api/blogs', this.authorizeAdmin.bind(this), (req, res) => this.addNewBlog(req, res))
   }
   
   async getCurrentBlog (req, res) {

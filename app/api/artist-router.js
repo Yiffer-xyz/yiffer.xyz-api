@@ -10,8 +10,8 @@ export default class ArtistRouter extends BaseRouter {
   setupRoutes () {
     this.app.get ('/api/artists', (req, res) => this.getAllArtists(req, res))
     this.app.get ('/api/artists/:name', (req, res) => this.getArtistByName(req, res))
-    this.app.post('/api/artists', (req, res) => this.addArtist(req, res))
-    this.app.post('/api/artists/:id', (req, res) => this.updateArtist(req, res))
+    this.app.post('/api/artists', this.authorizeMod.bind(this), (req, res) => this.addArtist(req, res))
+    this.app.post('/api/artists/:id', this.authorizeMod.bind(this), (req, res) => this.updateArtist(req, res))
   }
 
   async getAllArtists (req, res) {
