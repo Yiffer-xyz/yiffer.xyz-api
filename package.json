@@ -36,6 +36,7 @@
     "sharp": "^0.26.2"
   },
   "devDependencies": {
+    "eslint": "^7.13.0",
     "jest": "^24.7.1"
   }
 }

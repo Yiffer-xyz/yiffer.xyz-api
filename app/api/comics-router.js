@@ -26,14 +26,13 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
   setupRoutes () {
-		this.app.get ('/api/comics', (req, res) => this.getComicList(req, res))
 		this.app.get ('/api/all-comics', (req, res) => this.getAllComics(req, res))
 		this.app.get ('/api/comicsPaginated', (req, res) => this.getComicListPaginated(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
-		this.app.post('/api/comics', addComicUploadFormat, (req, res) => this.createComic(req, res))
-		this.app.post('/api/comics/:id/addpages', upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false))
-		this.app.post('/api/comics/:id/updatedetails', (req, res) => this.updateComicDetails(req, res))
+		this.app.post('/api/comics', this.authorizeMod.bind(this), addComicUploadFormat, (req, res) => this.createComic(req, res))
+		this.app.post('/api/comics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false))
+		this.app.post('/api/comics/:id/updatedetails', this.authorizeMod.bind(this), (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		this.app.post('/api/comics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
 		
@@ -109,28 +108,6 @@ export default class ComicsRouter extends BaseRouter {
 		}
 	}
 	
-	async getComicList (req, res) {
-		let query
-		let queryParams
-		let user = this.getUser(req)
-		
-		if (user) {
-			query = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, T2.YourVote AS yourRating FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN (SELECT ComicId, Vote AS YourVote FROM comicvote WHERE UserId = ?) AS T2 ON (comic.Id = T2.ComicId) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) GROUP BY name, id ORDER BY id' 
-			queryParams = [user.id]
-		}
-		else {
-			query = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 0 AS yourRating FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) GROUP BY name, id ORDER BY id'
-		}
-
-		try {
-			let results = await this.databaseFacade.execute(query, queryParams)
-			res.json(results)
-		}
-		catch (err) {
-      return this.returnError(err.message, res, err.error)
-		}
-	}
-
 	async getFirstPageComics (req, res) {
 		let query = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) GROUP BY name, id ORDER BY id LIMIT 50'
 		try {
@@ -277,7 +254,7 @@ export default class ComicsRouter extends BaseRouter {
 
 		await Promise.all(fileWritePromises)
 
-		if (!!originalThumbnailFilePath) {
+		if (originalThumbnailFilePath) {
 			await Promise.all([
 				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumb', comicName, 'thumbnail.webp'),
 				FileSystemFacade.writeGoogleComicFile(originalThumbnailFilePath + '-thumbsmall', comicName, 'thumbnail-small.webp'),
@@ -530,10 +507,10 @@ export default class ComicsRouter extends BaseRouter {
 
 		let comicData = await this.databaseFacade.execute(getFullPendingComicDataQuery, [comicId], 'Error getting pending comic data')
 		comicData = comicData[0]
-		if (!!comicData.hasThumbnail) { return this.returnError('Pending comic has no thumbnail', res) }
+		if (comicData.hasThumbnail) { return this.returnError('Pending comic has no thumbnail', res) }
 
 		let keywordIds = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
-		if (keywordIds.length === 0) { return this.returnError('No tags added', res, connection, err) }
+		if (keywordIds.length === 0) { return this.returnStatusError(400, 'No tags added', res, null, null) }
 		keywordIds = keywordIds.map(k => k.KeywordId)
 
 		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.State, comicData.Artist]
