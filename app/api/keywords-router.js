@@ -91,10 +91,13 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async createKeyword (req, res) {
+    if (!req.body.keyword || req.body.keyword.trim().length === 0) {
+      return this.returnStatusError(400, 'No keyword supplied', res, null, null)
+    }
+
     let query = 'INSERT INTO keyword (KeywordName) VALUES (?)'
-    let queryParams = [req.body.keyword]
     try {
-      await this.databaseFacade.execute(query, queryParams)
+      await this.databaseFacade.execute(query, [req.body.keyword.trim()])
       res.json({success: true})
 			this.addModLog(req, 'Keyword', `Add ${req.body.keyword}`)
     }

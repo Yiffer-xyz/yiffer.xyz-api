@@ -19,10 +19,15 @@ const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumb
 
 const COMICS_PER_PAGE = 75
 
+import { dirname } from 'path';	
+import { fileURLToPath } from 'url';	
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
+		this.setupUploadsFolder()		
 	}
 
   setupRoutes () {
@@ -43,6 +48,13 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/addkeywords', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
+	}
+
+	async setupUploadsFolder () {
+		let folders = await FileSystemFacade.listDir(__dirname + '/../../')
+		if (!folders.includes('uploads')) {
+			await FileSystemFacade.createDirectory(__dirname + '/../../uploads')
+		}
 	}
 
 	async getComicListPaginated (req, res) {
@@ -328,6 +340,7 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Comic', `Append ${files.length} pages to ${comicName}`)
 		}
 		catch (err) {
+			console.log(err)
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
 			return this.returnError(err.message, res, err.error, err)
 		}
@@ -577,7 +590,7 @@ export default class ComicsRouter extends BaseRouter {
 			await FileSystemFacade.deleteFile(thumbnailFile.path + '-thumb', 'Error deleting temp file 2')
 			await FileSystemFacade.deleteFile(thumbnailFile.path + '-thumbsmall', 'Error deleting temp file 3')
 
-			this.addModLog(req, isPendingComic?'Pending comic':'comic', `Add/change thumbnail to ${comicName}`)
+			this.addModLog(req, isPendingComic?'Pending comic':'Comic', `Add/change thumbnail to ${comicName}`)
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error, err)

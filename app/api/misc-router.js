@@ -236,8 +236,8 @@ export default class MiscRouter extends BaseRouter {
 			return 15
 		}
 		else {
-			console.log(actionType, actionDescription)
-			return -1000
+			console.log('Failed to get action score, type and desc: ', actionType, actionDescription)
+			return 0
 		}
 		return 0
 	}
@@ -284,7 +284,6 @@ export default class MiscRouter extends BaseRouter {
 			let numberOfPages = numberOfPagesRes[0].NumberOfPages
 
 			for (let pageNo=numberOfPages; pageNo >= insertAfterPageNumber+1; pageNo--) {
-				console.log(`Renaming ${this.getPageName(pageNo)} to ${this.getPageName(pageNo+1)}`)
 				await FileSystemFacade.renameGoogleComicFile(
 					`comics/${comicName}/${this.getPageName(pageNo)}.jpg`,
 					`comics/${comicName}/${this.getPageName(pageNo+1)}.jpg`,
@@ -507,7 +506,12 @@ export default class MiscRouter extends BaseRouter {
 		let query = 'SELECT IsProcessed AS isProcessed, IsRemoved AS isRemoved FROM modapplication WHERE UserId=?'
 		try {
 			let result = await this.databaseFacade.execute(query, [user.id], 'Error getting mod application status')
-			if (result.length !== 1) { return this.returnError('Error getting mod application status - not a single application on this user-id', res, null, null) }
+			if (result.length === 0) {
+				return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.none })
+			}
+			if (result.length !== 1) {
+				return this.returnError('Error getting mod application status - not a single application on this user-id', res, null, null)
+			}
 			let application = result[0]
 
 			if (!application.isProcessed && !application.isRemoved) {

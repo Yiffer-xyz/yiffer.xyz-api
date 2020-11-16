@@ -70,7 +70,6 @@ export default class BaseRouter {
 	async authorize(req, res, role) {
 		try {
 			if (!req.session || !req.session.user) {
-				console.log('asdasjdnajsdnkj')
 				res.status(401).json({error: 'Not logged in'})
 			}
 			else {
