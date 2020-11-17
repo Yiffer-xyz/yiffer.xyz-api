@@ -183,7 +183,7 @@ export default class MiscRouter extends BaseRouter {
 			if (actionDescription.includes('Update details of')) {
 				return 15
 			}
-			if (actionDescription.includes('Add thumbnail to')) {
+			if (actionDescription.includes('thumbnail to')) {
 				return 20
 			}
 			if (actionDescription.includes('Swap pages')) {

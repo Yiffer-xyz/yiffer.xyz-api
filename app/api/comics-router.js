@@ -66,6 +66,8 @@ export default class ComicsRouter extends BaseRouter {
 		page = (page && !isNaN(page)) ? Number(page)-1 : 0
 		let pageOffset = page * COMICS_PER_PAGE
 
+		if (!user && order === 'yourRating') { order = 'updated' }
+
 		let comicsPromise = getComics(
 			this.databaseFacade,
 			user,
