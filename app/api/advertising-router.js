@@ -27,6 +27,7 @@ export default class AdvertisingRouter extends BaseRouter {
     this.app.post('/api/paid-images/:adId', this.authorizeAdmin.bind(this), (req, res) => this.updateAd(req, res))
     this.app.post('/api/paid-images/:adId/correct', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.correctAd(req, res))
     this.app.post('/api/paid-images/:adId/toggle-renew', this.authorizeUser.bind(this), (req, res) => this.toggleAdRenewal(req, res))
+    this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
   }
 
   async createApplication (req, res) {
@@ -240,7 +241,7 @@ export default class AdvertisingRouter extends BaseRouter {
         queryParams = [adStatuses.active, adId]
       }
       else {
-			  return this.returnError('Illegal action', res, null, null)
+        return this.returnError('Illegal action', res, null, null)
       }
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
@@ -249,6 +250,18 @@ export default class AdvertisingRouter extends BaseRouter {
     }
 		catch (err) {
       return this.returnError(err.message, res, err.error, err)
+		}
+  }
+
+  async logAdClick (req, res) {
+    res.end()
+    let adId = req.body.adId
+    try {
+      let query = 'UPDATE advertisement SET Clicks = Clicks + 1 WHERE Id = ?'
+      await this.databaseFacade.execute(query, [adId], 'Error logging ad click')
+    }
+		catch (err) {
+      console.error('Error updating ad clicks: ', err)
 		}
   }
 }
