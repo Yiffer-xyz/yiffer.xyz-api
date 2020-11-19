@@ -369,42 +369,95 @@ export default class MiscRouter extends BaseRouter {
 		let query
 
 		if (interval === 'All') {
-			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, YEAR(timestamp) AS yr, MONTH(timestamp) AS mnth FROM yifferdb.routelog GROUP BY yr, mnth, session ORDER BY timestamp) AS T1 GROUP BY yr, mnth ORDER BY timestamp DESC'
+			query = `
+				SELECT COUNT(*) AS count, yr AS year, mnth AS month
+				FROM (
+					SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
+					FROM routelog
+					GROUP BY yr, mnth, session
+					ORDER BY yr, mnth
+				) AS T1 
+				GROUP BY yr, mnth ORDER BY year DESC, month DESC
+			`
 		}
 		else if (interval === '1Y') {
-			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, YEAR(timestamp) AS yr, MONTH(timestamp) AS mnth FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 YEAR) GROUP BY yr, mnth, session ORDER BY timestamp) AS T1 GROUP BY yr, mnth ORDER BY timestamp DESC'
+			query = `
+				SELECT COUNT(*) AS count, yr AS year, mnth AS month
+				FROM (
+					SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
+					FROM routelog
+					WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 YEAR)
+					GROUP BY yr, mnth, session
+					ORDER BY yr, mnth
+				) AS T1 
+				GROUP BY yr, mnth ORDER BY year DESC, month DESC
+			`
 		}
 		else if (interval === '1M') {
-			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, DATE(timestamp) AS dt FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 MONTH) GROUP BY dt, session ORDER BY timestamp) AS T1 GROUP BY dt ORDER BY timestamp DESC'
+			query = `
+				SELECT COUNT(*) AS count, dt AS dataKey 
+				FROM (
+					SELECT session, DATE(routelog.timestamp) AS dt 
+					FROM routelog
+					WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 MONTH)
+					GROUP BY dt, session
+					ORDER BY dt
+				) AS T1 
+				GROUP BY dt ORDER BY dt DESC
+			`
 		}
 		else if (interval === '1W') {
-			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, DATE(timestamp) AS dt FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 WEEK) GROUP BY dt, session ORDER BY timestamp) AS T1 GROUP BY dt ORDER BY timestamp DESC'
+			query = `
+				SELECT COUNT(*) AS count, dt AS dataKey 
+				FROM (
+					SELECT session, DATE(routelog.timestamp) AS dt 
+					FROM routelog
+					WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 WEEK)
+					GROUP BY dt, session
+					ORDER BY dt
+				) AS T1 
+				GROUP BY dt ORDER BY dt DESC
+			`
 		}
 		else if (interval === '24H') {
-			query = 'SELECT COUNT(*) AS count, timestamp AS dataKey FROM (SELECT session, timestamp, HOUR(timestamp) AS hr FROM yifferdb.routelog WHERE timestamp>DATE_SUB(now(), INTERVAL 1 DAY) GROUP BY hr, session ORDER BY timestamp) AS T1 GROUP BY hr ORDER BY timestamp DESC'
+			query = `
+				SELECT COUNT(*) AS count, dt AS date, hr AS hour 
+				FROM (
+					SELECT session, DATE(timestamp) AS dt, HOUR(routelog.timestamp) AS hr
+					FROM routelog
+					WHERE timestamp>DATE_SUB(now(), INTERVAL 1 DAY)
+					GROUP BY dt, hr, session
+					ORDER BY dt, hr
+				) AS T1 
+				GROUP BY dt, hr ORDER BY dt DESC, hr DESC
+			`
 		}
 
 		try {
 			let results = await this.databaseFacade.execute(query, null)
 
 			for (let result of results) {
-				let resultDate = new Date(result.dataKey)
-
 				if (interval === '1Y' || interval === 'All') {
-					result.dataKey = format(resultDate, 'MMM yyyy')
-				}
-				else if (interval === '1M' || interval === '1W') {
-					result.dataKey = format(resultDate, 'EEE d. MMM')
+					result.dataKey = `${MONTH_NO_TO_STR[result.month]} ${result.year}`
+					delete result.year
+					delete result.month
 				}
 				else if (interval === '24H') {
+					let resultDate = new Date(result.date)
+					resultDate.setHours(result.hour)
 					result.dataKey = format(resultDate, 'EEE HH:00')
+				}
+				else {
+					// interval === '1M' || interval === '1W'
+					let resultDate = new Date(result.dataKey)
+					result.dataKey = format(resultDate, 'EEE d. MMM')
 				}
 			}
 
 			res.json(results)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
@@ -424,7 +477,7 @@ export default class MiscRouter extends BaseRouter {
 			res.json(results)
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 
@@ -604,3 +657,7 @@ const MOD_APPLICATION_STATUSES = {
   waiting: 'waiting',
   removed: 'removed'
 }
+
+const MONTH_NO_TO_STR = [
+	'Jan', 'Feb', 'Mar', 'Apr', 'May,', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+]
