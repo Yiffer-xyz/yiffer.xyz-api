@@ -12,7 +12,7 @@ const redisClient = redis.createClient(6379, 'redis');
 
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
-  name: '_redisPractice',
+  name: 'yifferCookie',
   resave: false,
   saveUninitialized: true,
   rolling: true,
