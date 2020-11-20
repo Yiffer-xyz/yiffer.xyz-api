@@ -29,9 +29,9 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async login (req, res) {
-    let [username, password] = [req.body.username, req.body.password]
+    let [usernameOrEmail, password] = [req.body.username, req.body.password]
     try {
-      let userResponse = await this.authenticate(username, password)
+      let userResponse = await this.authenticate(usernameOrEmail, password)
       if ('error' in userResponse) {
         return this.returnError(userResponse.error, res)
       }
@@ -51,16 +51,16 @@ export default class AuthenticationRouter extends BaseRouter {
     }
   }
 
-  async authenticate (username, password) {
-    let query = 'SELECT * FROM user WHERE Username = ?'
-    let userResult = await this.databaseFacade.execute(query, [username])
+  async authenticate (usernameOrEmail, password) {
+    let query = 'SELECT * FROM user WHERE Username = ? OR Email = ?'
+    let userResult = await this.databaseFacade.execute(query, [usernameOrEmail, usernameOrEmail])
     if (userResult.length === 0) {
-      return {error: 'Wrong username'}
+      return {error: 'Non-existing username/email'}
     }
     userResult = userResult[0]
     let passwordMatch = await compare(password, userResult.Password)
     if (!passwordMatch) {
-      return {error: 'Wrong password'}
+      return {error: 'Incorrect password'}
     }
     return userResult
   }
