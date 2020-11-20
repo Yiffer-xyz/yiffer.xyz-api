@@ -15,7 +15,7 @@ export default class UserRouter extends BaseRouter {
   }
 
   async searchForUser (req, res) {
-    let query = 'SELECT Id AS id, Username AS username, UserType AS userType, Donator AS donator, CreatedTime AS createdTime FROM user WHERE Username LIKE ? ORDER BY createdTime DESC'
+    let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, Donator AS donator, CreatedTime AS createdTime FROM user WHERE Username LIKE ? ORDER BY createdTime DESC'
     let queryParams = ['%' + req.query.searchText + '%']
     try {
       let results = await this.databaseFacade.execute(query, queryParams, 'Error fetching users')
@@ -39,7 +39,7 @@ export default class UserRouter extends BaseRouter {
   }
 
   async getModerators (req, res) {
-    let query = `SELECT Id AS id, Username AS username, UserType AS userType, Donator AS donator, CreatedTime AS createdTime FROM user WHERE UserType = 'moderator' OR UserType = 'admin' ORDER BY CreatedTime DESC`
+    let query = `SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, Donator AS donator, CreatedTime AS createdTime FROM user WHERE UserType = 'moderator' OR UserType = 'admin' ORDER BY CreatedTime DESC`
     try {
       let results = await this.databaseFacade.execute(query, null, 'Error fetching moderators')
       res.json(results)
