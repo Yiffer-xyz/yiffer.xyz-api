@@ -5,7 +5,7 @@ export default class BaseRouter {
 		this.modLogger = modLogger
 	}
 
-	// todo refactor. take only err and res?
+	// TODO SWAP ALL USAGES for returnStatusError
 	returnError (errorMessage, res, err, fullErr) {
 		console.log('Error: ', errorMessage)
 		console.log(fullErr)
@@ -18,14 +18,25 @@ export default class BaseRouter {
 		}
 	}
 
-	returnStatusError(status, errorMessage, res, err, fullErr) {
-		console.log(`Controlled error with status ${status}: ${errorMessage}`)
-		if (fullErr) {
-			console.log(fullErr)
+	returnStatusError(status, res, error) {
+		let errorToSend
+		if (typeof(error) === 'string') {
+			console.log(`Controlled error with status ${status}: ${error.customErrorMessage}`)
+			errorToSend = error
 		}
-	
+		else if ('customErrorMessage' in error) {
+			console.log(`Controlled error with status ${status}: ${error.customErrorMessage}`)
+			errorToSend = error.customErrorMessage
+		}
+		else {
+			console.log(`FATAL error with status ${status}: ${error}`)
+			errorToSend = 'Server error'
+		}
+
 		try {
-			if (res) { res.status(status).json({ error: errorMessage }) }
+			if (res) {
+				res.status(status).send(errorToSend)
+			}
 		}
 		catch (err2) {
 			console.log('Error returning error', err2)

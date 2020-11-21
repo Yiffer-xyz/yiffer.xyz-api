@@ -182,14 +182,14 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async correctAd (req, res) {
-    let [adId, link, mainText, secondaryText, file] = 
-      [req.params.adId, req.body.link, req.body.mainText, req.body.secondaryText, req.file]
-
     try {
+      let [adId, link, mainText, secondaryText, file] = 
+        [req.params.adId, req.body.link, req.body.mainText, req.body.secondaryText, req.file]
+
       let existingAd = await this.getAdById(req, res, adId)
       let user = this.getUser(req)
       if (existingAd.userId !== user.id) {
-        return this.returnStatusError(401, 'User does not own given ad id', res, null, null)
+        return this.returnStatusError(401, res, 'User does not own given ad id')
       }
 
       let {isValid, error} = this.checkApplicationValidity(file, existingAd.adType, link, mainText, secondaryText, file, true)
@@ -216,18 +216,18 @@ export default class AdvertisingRouter extends BaseRouter {
       res.json({success: true, ad: updatedAd})
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+      return this.returnStatusError(500, res, err)
     }
   }
 
   async toggleAdRenewal (req, res) {
-    let [adId, shouldRenew] = [req.params.adId, req.body.shouldRenew]
-
     try {
+      let [adId, shouldRenew] = [req.params.adId, req.body.shouldRenew]
+
       let ad = await this.getAdById(req, res, adId)
       let user = this.getUser(req)
       if (ad.userId !== user.id) {
-        return this.returnStatusError(401, 'User does not own given ad id', res, null, null)
+        return this.returnStatusError(401, res, 'User does not own given ad id')
       }
       
       let query, queryParams
@@ -249,7 +249,7 @@ export default class AdvertisingRouter extends BaseRouter {
       res.json({success: true})
     }
 		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+      return this.returnStatusError(500, res, err)
 		}
   }
 

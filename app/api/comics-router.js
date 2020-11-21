@@ -525,7 +525,9 @@ export default class ComicsRouter extends BaseRouter {
 		if (comicData.hasThumbnail) { return this.returnError('Pending comic has no thumbnail', res) }
 
 		let keywordIds = await this.databaseFacade.execute(getKeywordsQuery, [comicId], 'Error getting pending comic keywords')
-		if (keywordIds.length === 0) { return this.returnStatusError(400, 'No tags added', res, null, null) }
+		if (keywordIds.length === 0) {
+			return this.returnStatusError(400, res, 'No tags added')
+		}
 		keywordIds = keywordIds.map(k => k.KeywordId)
 
 		let updatePendingComicsQueryParams = [comicData.Name, comicData.Cat, comicData.Tag, comicData.NumberOfPages, comicData.State, comicData.Artist]

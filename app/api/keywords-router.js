@@ -92,7 +92,7 @@ export default class KeywordsRouter extends BaseRouter {
 
   async createKeyword (req, res) {
     if (!req.body.keyword || req.body.keyword.trim().length === 0) {
-      return this.returnStatusError(400, 'No keyword supplied', res, null, null)
+      return this.returnStatusError(400, res, 'No keyword supplied')
     }
 
     let query = 'INSERT INTO keyword (KeywordName) VALUES (?)'
