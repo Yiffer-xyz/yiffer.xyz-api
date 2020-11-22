@@ -29,7 +29,7 @@ export default class BaseRouter {
 			errorToSend = error.customErrorMessage
 		}
 		else {
-			console.log(`FATAL error with status ${status}: ${error}`)
+			console.log(`FATAL error with status ${status}:`, error)
 			errorToSend = 'Server error'
 		}
 

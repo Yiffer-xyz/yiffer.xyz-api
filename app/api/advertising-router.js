@@ -25,8 +25,10 @@ export default class AdvertisingRouter extends BaseRouter {
     this.app.get ('/api/paid-images/me', this.authorizeUser.bind(this), (req, res) => this.getUserAds(req, res))
     this.app.post('/api/paid-images', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.createApplication(req, res))
     this.app.post('/api/paid-images/:adId', this.authorizeAdmin.bind(this), (req, res) => this.updateAd(req, res))
+    this.app.delete('/api/paid-images/:adId', this.authorizeUser.bind(this), (req, res) => this.deleteOrDeactivateAd(req, res))
     this.app.post('/api/paid-images/:adId/correct', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.correctAd(req, res))
     this.app.post('/api/paid-images/:adId/toggle-renew', this.authorizeUser.bind(this), (req, res) => this.toggleAdRenewal(req, res))
+    this.app.post('/api/paid-images/:adId/reactivate', this.authorizeUser.bind(this), (req, res) => this.reactivateAd(req, res))
     this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
   }
 
@@ -34,9 +36,18 @@ export default class AdvertisingRouter extends BaseRouter {
     let [file, adType, adLink, adMainText, adSecondaryText, notes, user] = 
       [req.file, req.body.adType, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.notes, this.getUser(req)]
     
-    if (!user) { return this.returnError('Not logged in', res, null, null) }
+    if (!user) {
+      return this.returnStatusError(401, res, 'Not logged in')
+    }
+    console.log(user)
+    if (!user.email) {
+      return this.returnStatusError(403, res, 'You must add an email address to your account first')
+    }    
+
     let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
-    if (!isValid) { return res.json({error: error}) }
+    if (!isValid) {
+      return this.returnStatusError(400, res, error)
+    }
 
     let filetype = file.originalname.substring(file.originalname.length-3)
 
@@ -93,7 +104,7 @@ export default class AdvertisingRouter extends BaseRouter {
       if (!adMainText) {
         return {isValid: false, error: 'Missing fields'}
       }
-      if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 40)) {
+      if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 60)) {
         return {isValid: false, error: 'Text too long'}
       }
     }
@@ -118,13 +129,12 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async getUserAds (req, res) {
-    let user = this.getUser(req)
-    if (!user || !user.id) {
-      return this.returnError('Invalid user', res, null, null)
+    try {
+      let user = this.getUser(req)
+      let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
+      res.json(results)
     }
-
-    let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
-    res.json(results)
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async getAllAds (req, res) {
@@ -179,6 +189,31 @@ export default class AdvertisingRouter extends BaseRouter {
     catch (err) {
       return this.returnError(err.message, res, err.error, err)
     }
+  }
+
+  async deleteOrDeactivateAd (req, res) {
+    try {
+      let adId = req.params.adId
+      let user = await this.getUser(req)
+      let ad = (await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true))[0]
+
+      if (ad.userId !== user.id) {
+        return this.returnStatusError(401, res, 'You do not own this ad')
+      }
+
+      let isDelete = ['PENDING', 'NEEDS CORRECTION', 'AWAITING PAYMENT'].includes(ad.status)
+      let query
+      if (isDelete) {
+        query = 'DELETE FROM advertisement WHERE advertisement.Id = ?'
+      }
+      else {
+        query = `UPDATE advertisement SET Status = 'ENDED' WHERE advertisement.Id = ?`
+      }
+
+      await this.databaseFacade.execute(query, [adId], 'Error updating ad in database')
+      res.status(204).end()
+    }
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async correctAd (req, res) {
@@ -248,9 +283,27 @@ export default class AdvertisingRouter extends BaseRouter {
 
       res.json({success: true})
     }
-		catch (err) {
-      return this.returnStatusError(500, res, err)
-		}
+		catch (err) { return this.returnStatusError(500, res, err) }
+  }
+
+  async reactivateAd (req, res) {
+    try {
+      let adId = req.params.adId
+      let ad = await this.getAdById(req, res, adId)
+      let user = this.getUser(req)
+      if (ad.userId !== user.id) {
+        return this.returnStatusError(401, res, 'You do not own this ad')
+      }
+      if (ad.status !== 'ENDED') {
+        return this.returnStatusError(400, res, `Only ads with status 'ENDED' may be reactivated`)
+      }
+      
+      let query = `UPDATE advertisement SET Status = 'AWAITING PAYMENT' WHERE Id = ?`
+      await this.databaseFacade.execute(query, [adId], 'Error updating status in database')
+
+      res.status(204).end()
+    }
+		catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async logAdClick (req, res) {
