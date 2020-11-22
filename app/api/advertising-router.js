@@ -1,5 +1,5 @@
 import BaseRouter from './baseRouter.js'
-
+import adPrices from '../../config/ad-prices.js'
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
 
@@ -53,7 +53,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
     try {
       let adId = await this.generateAdId()
-      let price = getPrice(adType)
+      let price = adPrices[adType]
       let query = 'INSERT INTO advertisement (Id, AdType, Link, MainText, SecondaryText, Filetype, UserId, Price, AdvertiserNotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       let queryParams = [adId, adType, adLink, adMainText, adSecondaryText, filetype, user.id, price, notes]
 
@@ -340,12 +340,6 @@ function makeId (length) {
      result += characters.charAt(Math.floor(Math.random() * charactersLength))
   }
   return result
-}
-
-function getPrice (adType) {
-  if (adType === 'card2M') { return 20 }
-  if (adType === 'card4M') { return 30 }
-  if (adType === 'banner1M') { return 17}
 }
 
 function getLongAdType (adType) {
