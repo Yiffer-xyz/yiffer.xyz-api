@@ -1,13 +1,20 @@
 version: "3"
+
 services:
   server:
-    build: .
+    image: cliserv:latest
     ports:
       - "8012:8012"
+    networks:
+      - redis-net
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
-    command: ["redis-server", "--bind", "redis", "--port", "6379"]
+    command: redis-server --appendonly yes
+    networks:
+      - redis-net
 
+networks:
+  redis-net:
