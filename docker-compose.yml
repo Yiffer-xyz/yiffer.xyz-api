@@ -2,11 +2,16 @@ version: "3"
 
 services:
   server:
-    image: cliserv:latest
+    image: yiffer-srv:latest
     ports:
       - "8012:8012"
     networks:
       - redis-net
+
+  client:
+    image: yiffer-cli:latest
+    ports:
+      - "8080:8080"
 
   redis:
     image: redis:alpine
