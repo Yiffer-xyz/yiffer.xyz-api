@@ -17,20 +17,18 @@ export default class ArtistRouter extends BaseRouter {
   async getAllArtists (req, res) {
     try {
       let query = 'SELECT Id AS id, Name AS name, PatreonName AS patreonName, E621Name AS e621Name FROM artist'
-      let results = await this.databaseFacade.execute(query)
+      let results = await this.databaseFacade.execute(query, null, 'Error getting artists from database')
       res.json(results)
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error)
-		}
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async getArtistByName (req, res) {
-    let artistName = req.params.name
-    let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
-    let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
-
     try {
+      let artistName = req.params.name
+      let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
+      let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
+
       let user = this.getUser(req)
       let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
       let artistId = artistData[0].Id
@@ -51,16 +49,14 @@ export default class ArtistRouter extends BaseRouter {
 
       res.json(allArtistData)
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error)
-		}
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async addArtist (req, res) {
-    let [artistName, e621Name, patreonName] = [req.body.artistName, req.body.e621Name, req.body.patreonName]
-    let alreadyExistsQuery = 'SELECT * FROM artist WHERE Name = ?'
-    let query = 'INSERT INTO artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
     try {
+      let [artistName, e621Name, patreonName] = [req.body.artistName, req.body.e621Name, req.body.patreonName]
+      let alreadyExistsQuery = 'SELECT * FROM artist WHERE Name = ?'
+      let query = 'INSERT INTO artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
       let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
       if (existingArtist.length > 0) { return this.returnError('Artist already exists', res) }
 
@@ -69,31 +65,29 @@ export default class ArtistRouter extends BaseRouter {
 
 			this.addModLog(req, 'Artist', `Add ${artistName}`)
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error)
-		}
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async updateArtist (req, res) {
-    let artistId = req.params.id
-    let [artistName, e621Name, patreonName, links] = [req.body.artistName, req.body.e621Name, req.body.patreonName, req.body.links]
-
-    let typedLinks = extractLinkTypesFromLinkUrls(links)
-
-    let updateQuery = 'UPDATE artist SET Name=?, E621Name=?, PatreonName=? WHERE Id=?'
-    let deleteLinksQuery = 'DELETE FROM artistlink WHERE ArtistId=?'
-    let insertLinksQuery = 'INSERT INTO artistlink (ArtistId, LinkURL, LinkType) VALUES '
-    let insertLinksParams = []
-
-    if (links.length > 0) {
-      for (var typedLink of typedLinks) {
-        insertLinksQuery += `(?, ?, ?), `
-        insertLinksParams.push(artistId, typedLink.linkUrl, typedLink.linkType)
-      }
-      insertLinksQuery = insertLinksQuery.substring(0, insertLinksQuery.length-2)
-    }
-
     try {
+      let artistId = req.params.id
+      let [artistName, e621Name, patreonName, links] = [req.body.artistName, req.body.e621Name, req.body.patreonName, req.body.links]
+
+      let typedLinks = extractLinkTypesFromLinkUrls(links)
+
+      let updateQuery = 'UPDATE artist SET Name=?, E621Name=?, PatreonName=? WHERE Id=?'
+      let deleteLinksQuery = 'DELETE FROM artistlink WHERE ArtistId=?'
+      let insertLinksQuery = 'INSERT INTO artistlink (ArtistId, LinkURL, LinkType) VALUES '
+      let insertLinksParams = []
+
+      if (links.length > 0) {
+        for (var typedLink of typedLinks) {
+          insertLinksQuery += `(?, ?, ?), `
+          insertLinksParams.push(artistId, typedLink.linkUrl, typedLink.linkType)
+        }
+        insertLinksQuery = insertLinksQuery.substring(0, insertLinksQuery.length-2)
+      }
+
       await this.databaseFacade.execute(updateQuery, [artistName, e621Name, patreonName, artistId], 'Error updating artist')
       await this.databaseFacade.execute(deleteLinksQuery, [artistId], 'Error removing old links')
       if (links.length > 0) {
@@ -103,9 +97,7 @@ export default class ArtistRouter extends BaseRouter {
 
 			this.addModLog(req, 'Artist', `Update ${artistName} info`)
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error)
-		}
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 }
 
