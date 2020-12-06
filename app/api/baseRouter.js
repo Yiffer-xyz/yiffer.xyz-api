@@ -52,6 +52,14 @@ export default class BaseRouter {
 		}
 	}
 
+	async getUserAccount (userId) {
+    let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, CreatedTime AS createdTime FROM user WHERE id = ?'
+    let queryParams = [userId]
+
+    let results = await this.databaseFacade.execute(query, queryParams, 'Error getting user email')
+    return results[0]
+  }
+
 	async authorizeUser (req, res, next) {
 		let user = this.getUser(req)
 		if (!user) {

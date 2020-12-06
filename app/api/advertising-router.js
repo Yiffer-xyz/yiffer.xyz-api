@@ -2,6 +2,7 @@ import BaseRouter from './baseRouter.js'
 import adPrices from '../../config/ad-prices.js'
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
+import { sendEmail } from '../emailFacade.js'
 
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -33,25 +34,24 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async createApplication (req, res) {
-    let [file, adType, adLink, adMainText, adSecondaryText, notes, user] = 
+    try {
+      let [file, adType, adLink, adMainText, adSecondaryText, notes, user] = 
       [req.file, req.body.adType, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.notes, this.getUser(req)]
     
-    if (!user) {
-      return this.returnStatusError(401, res, 'Not logged in')
-    }
-    console.log(user)
-    if (!user.email) {
-      return this.returnStatusError(403, res, 'You must add an email address to your account first')
-    }    
+      if (!user) {
+        return this.returnStatusError(401, res, 'Not logged in')
+      }
+      if (!user.email) {
+        return this.returnStatusError(403, res, 'You must add an email address to your account first')
+      }    
 
-    let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
-    if (!isValid) {
-      return this.returnStatusError(400, res, error)
-    }
+      let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
+      if (!isValid) {
+        return this.returnStatusError(400, res, error)
+      }
 
-    let filetype = file.originalname.substring(file.originalname.length-3)
+      let filetype = file.originalname.substring(file.originalname.length-3)
 
-    try {
       let adId = await this.generateAdId()
       let price = adPrices[adType]
       let query = 'INSERT INTO advertisement (Id, AdType, Link, MainText, SecondaryText, Filetype, UserId, Price, AdvertiserNotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -61,12 +61,27 @@ export default class AdvertisingRouter extends BaseRouter {
 
       let newFilename = `${adId}.${filetype}`
       await FileSystemFacade.writeGooglePaidImageFile(file.path, newFilename)
+      
+      sendEmail(
+        'advertising',
+        user.email,
+        'Ad submission confirmation - Yiffer.xyz!',
+        `We have received your advertisement submission and will review it shortly. If the ad is accepted, you will receive another email stating this. Otherwise, you will receive an email detailing what needs to be fixed.
+        <br/><br/>
+        Regards,<br/>
+        Yiffer.xyz`
+      )      
+      sendEmail(
+        'advertising',
+        'advertising@yiffer.xyz',
+        'New ad - Yiffer.xyz!',
+        `An ad with id ${adId} has been submitted by ${user.username}.`
+      )
 
       res.json({success: true})
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
-    }
+
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async generateAdId () {
@@ -123,9 +138,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
       return results
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
-		}
+
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async getUserAds (req, res) {
@@ -134,6 +148,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
       res.json(results)
     }
+
     catch (err) { return this.returnStatusError(500, res, err) }
   }
 
@@ -164,9 +179,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
       res.json(results)
     }
-		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
-		}
+
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async getAdById (req, res, adId) {
@@ -175,20 +189,40 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async updateAd (req, res) {
-    let [adId, price, status, activationDate, deactivationDate, adminNotes] = 
-      [req.params.adId, req.body.price, req.body.status, req.body.activationDate, req.body.deactivationDate, req.body.adminNotes]
-    
-    let query = 'UPDATE advertisement SET Price=?, Status=?, ActivationDate=?, DeactivationDate=?, AdminNotes=? WHERE Id=?'
-    let queryParams = [price, status, activationDate, deactivationDate, adminNotes, adId]
-
     try {
+      let [adId, price, status, activationDate, deactivationDate, adminNotes] = 
+      [req.params.adId, req.body.price, req.body.status, req.body.activationDate, req.body.deactivationDate, req.body.adminNotes]
+
+      let adExistsQuery = 'SELECT * FROM advertisement WHERE Id=?'
+      let adExistsResult = await this.databaseFacade.execute(adExistsQuery, [adId])
+      if (adExistsResult.length === 0) {
+        return this.returnStatusError(404, res, 'Ad with given id not found')
+      }
+      
+      let query = 'UPDATE advertisement SET Price=?, Status=?, ActivationDate=?, DeactivationDate=?, AdminNotes=? WHERE Id=?'
+      let queryParams = [price, status, activationDate, deactivationDate, adminNotes, adId]
+
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(req, res, adId)
+
+      if (status === 'AWAITING PAYMENT') {
+        let user = this.getUserAccount()
+        if (status === 'AWAITING PAYMENT') {
+          await sendEmail(
+            'advertising',
+            user.email,
+            'Ad ready for payment - Yiffer.xyz!',
+            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (<b>${price} USD</b>) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising/${price}USD">paypal.me/yifferadvertising${price}USD</a> Remember to include your ad's ID in the PayPal message field. You can find detailed instructions at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
+            <br/><br/>
+            Regards,<br/>
+            Yiffer.xyz`
+          )
+        }
+      }
+
       res.json({success: true, ad: updatedAd})
     }
-    catch (err) {
-      return this.returnError(err.message, res, err.error, err)
-    }
+    catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async deleteOrDeactivateAd (req, res) {
@@ -276,7 +310,7 @@ export default class AdvertisingRouter extends BaseRouter {
         queryParams = [adStatuses.active, adId]
       }
       else {
-        return this.returnError('Illegal action', res, null, null)
+        return this.returnStatusError(400, res, 'Illegal action')
       }
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
