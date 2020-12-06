@@ -1,5 +1,5 @@
 import { convertComicPage, convertThumbnailFile } from '../image-processing.js'
-import {getComics, getFilterQuery} from './comics-query-helper.js'
+import { getComics, getFilterQuery } from './comics-query-helper.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({

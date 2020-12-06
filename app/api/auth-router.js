@@ -12,15 +12,15 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   setupRoutes () {
-    this.app.get ('/refresh-auth', (req, res) => this.refreshAuth(req, res))
-    this.app.post('/login', (req, res) => this.login(req, res))
-    this.app.post('/register', (req, res) => this.register(req, res))
-    this.app.get ('/logout', (req, res) => this.logout(req, res))
-    this.app.post('/changepassword', this.authorizeUser.bind(this), (req, res) => this.changePassword(req, res))
-    this.app.post('/changeusername', this.authorizeUser.bind(this), (req, res) => this.changeUsername(req, res))
-    this.app.post('/change-email', this.authorizeUser.bind(this), (req, res) => this.changeEmail(req, res))
-    this.app.post('/reset-password', (req, res) => this.resetPassword(req, res))
-    this.app.post('/reset-password-link/:token', (req, res) => this.resetPasswordByLink(req, res))
+    this.app.get ('/api/refresh-auth', (req, res) => this.refreshAuth(req, res))
+    this.app.post('/api/login', (req, res) => this.login(req, res))
+    this.app.post('/api/register', (req, res) => this.register(req, res))
+    this.app.get ('/api/logout', (req, res) => this.logout(req, res))
+    this.app.post('/api/changepassword', this.authorizeUser.bind(this), (req, res) => this.changePassword(req, res))
+    this.app.post('/api/changeusername', this.authorizeUser.bind(this), (req, res) => this.changeUsername(req, res))
+    this.app.post('/api/change-email', this.authorizeUser.bind(this), (req, res) => this.changeEmail(req, res))
+    this.app.post('/api/reset-password', (req, res) => this.resetPassword(req, res))
+    this.app.post('/api/reset-password-link/:token', (req, res) => this.resetPasswordByLink(req, res))
   }
 
   async refreshAuth (req, res) {
