@@ -129,7 +129,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async getAdsBase (req, res, whereStatement, whereParams, isAdminRequest) {
     try {
-      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, ApprovedDate AS approvedDate, Filetype AS filetype, Price AS price, ActivationDate AS activationDate, DeactivationDate AS deactivationDate, ApplicationDate AS applicationDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''} FROM advertisement INNER JOIN user ON (user.Id = advertisement.UserId) ${whereStatement} ORDER BY ApplicationDate DESC`
+      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, ApprovedDate AS approvedDate, Filetype AS filetype, Price AS price, ActivationDate AS activationDate, DeactivationDate AS deactivationDate, ApplicationDate AS applicationDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote FROM advertisement INNER JOIN user ON (user.Id = advertisement.UserId) ${whereStatement} ORDER BY ApplicationDate DESC`
       let results = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
 
       for (let result of results) {
@@ -190,8 +190,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAd (req, res) {
     try {
-      let [adId, price, status, activationDate, deactivationDate, adminNotes] = 
-      [req.params.adId, req.body.price, req.body.status, req.body.activationDate, req.body.deactivationDate, req.body.adminNotes]
+      let [adId, price, status, activationDate, deactivationDate, adminNotes, correctionNote] = 
+      [req.params.adId, req.body.price, req.body.status, req.body.activationDate, req.body.deactivationDate, req.body.adminNotes, req.body.correctionNote]
 
       let adExistsQuery = 'SELECT * FROM advertisement WHERE Id=?'
       let adExistsResult = await this.databaseFacade.execute(adExistsQuery, [adId])
@@ -199,20 +199,34 @@ export default class AdvertisingRouter extends BaseRouter {
         return this.returnStatusError(404, res, 'Ad with given id not found')
       }
       
-      let query = 'UPDATE advertisement SET Price=?, Status=?, ActivationDate=?, DeactivationDate=?, AdminNotes=? WHERE Id=?'
-      let queryParams = [price, status, activationDate, deactivationDate, adminNotes, adId]
+      let query = 'UPDATE advertisement SET Price=?, Status=?, ActivationDate=?, DeactivationDate=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
+      let queryParams = [price, status, activationDate, deactivationDate, adminNotes, correctionNote||null, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(req, res, adId)
 
-      if (status === 'AWAITING PAYMENT') {
+      if (status === adStatuses.awaitingPayment || status === adStatuses.needsCorrection) {
         let user = this.getUserAccount()
-        if (status === 'AWAITING PAYMENT') {
+        if (status === adStatuses.awaitingPayment) {
           await sendEmail(
             'advertising',
             user.email,
-            'Ad ready for payment - Yiffer.xyz!',
+            'Ad ready for payment - Yiffer.xyz',
             `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (<b>${price} USD</b>) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising/${price}USD">paypal.me/yifferadvertising${price}USD</a> Remember to include your ad's ID in the PayPal message field. You can find detailed instructions at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
+            <br/><br/>
+            Regards,<br/>
+            Yiffer.xyz`
+          )
+        }
+        else if (status === adStatuses.needsCorrection) {
+          await sendEmail(
+            'advertising',
+            user.email,
+            'Ad needs correction - Yiffer.xyz',
+            `Your advertisement with ID <b>${adId}</b> is not accepted in its submitted state. Here are the notes from an administrator to help you fix this:<br/><br/>
+            <i>${correctionNote}</i>
+            <br/><br/>
+            You can make the required changes to your ad at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
