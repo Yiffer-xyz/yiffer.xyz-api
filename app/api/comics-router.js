@@ -135,7 +135,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getComicByName (req, res) {
-    let comicName = req.params.name
+		let comicName = req.params.name
     let comicDataQuery
 		let queryParams = []
     let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (Id = FirstComic) WHERE LastComic = ?'
@@ -154,7 +154,9 @@ export default class ComicsRouter extends BaseRouter {
 		try {
 			let result = await this.databaseFacade.execute(comicDataQuery, queryParams)
 			let comicData = result[0]
-			if (!comicData) { return this.returnError('Comic not found', res) }
+			if (!comicData) {
+				return this.returnApiError(res, new ApiError('There are no comics with this name', 404))
+			}
 			
 			let comicId = comicData.id
 			if (!comicData.keywords) { comicData.keywords = [] }
@@ -170,7 +172,7 @@ export default class ComicsRouter extends BaseRouter {
 			res.json(comicData)
 		}
 		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			return this.returnApiError(res, err)
 		}
 	}
 

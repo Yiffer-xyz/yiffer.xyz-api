@@ -19,13 +19,13 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async getAllKeywords (req, res) {
-    let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id, COUNT(*) AS count FROM keyword LEFT JOIN comickeyword ON (keyword.Id = comickeyword.KeywordId) GROUP BY keyword.Id ORDER BY name'
     try {
+      let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id, COUNT(*) AS count FROM keyword LEFT JOIN comickeyword ON (keyword.Id = comickeyword.KeywordId) GROUP BY keyword.Id ORDER BY name'
       let result = await this.databaseFacade.execute(query)
       res.json(result)
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error)
+      return this.returnApiError(res, err)
     }
   }
 
