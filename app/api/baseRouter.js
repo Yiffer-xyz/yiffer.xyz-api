@@ -1,8 +1,41 @@
+export class ApiError extends Error {
+	constructor(message, status) {
+		super(message)
+		this.status = status
+		this.name = 'ApiError'
+	}
+}
+
 export default class BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.modLogger = modLogger
+	}
+
+	returnApiError(res, error) {
+		// TODO remove this once everything uses returnApiError. For now, to deal with
+		// database-returned stuff, which must support the old ways
+		if ('customErrorMessage' in error) {
+			error = new ApiError(error.customErrorMessage, 500)
+			console.log(`[500] Controlled error: ${error.message}`)
+		}
+		else if (!(error instanceof ApiError)) {
+			console.error(`[500] UNCAUGHT error: ${error.stack}`)
+			error = new ApiError('Server error', 500)
+		}
+		else {
+			console.log(`[${error.status}] Controlled error: ${error.message}`)
+		}
+
+		try {
+			if (res) {
+				res.status(error.status).send(error.message)
+			}
+		}
+		catch (err2) {
+			console.error('REAL BAD: Error returning error', err2)
+		}
 	}
 
 	// TODO SWAP ALL USAGES for returnStatusError

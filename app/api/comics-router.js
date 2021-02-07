@@ -13,7 +13,7 @@ var storage = multer.diskStorage({
 var upload = multer({ storage: storage })
 
 import FileSystemFacade from '../fileSystemFacade.js'
-import BaseRouter from './baseRouter.js'
+import BaseRouter, { ApiError } from './baseRouter.js'
 
 const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
 
@@ -58,46 +58,47 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getComicListPaginated (req, res) {
-		let [categories, tags, keywordIds, search, page, order] = 
-			[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order]
-		keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
-
-		let user = this.getUser(req)
-		page = (page && !isNaN(page)) ? Number(page)-1 : 0
-		let pageOffset = page * COMICS_PER_PAGE
-
-		if (!user && order === 'yourRating') { order = 'updated' }
-
-		let comicsPromise = getComics(
-			this.databaseFacade,
-			user,
-			COMICS_PER_PAGE,
-			pageOffset,
-			categories,
-			tags,
-			keywordIds,
-			search,
-			order
-		)
-
-		let [
-			filterQueryString,
-			filterQueryParams,
-			keywordCountString,
-			innerJoinKeywordString
-		] = getFilterQuery(categories, tags, keywordIds, search)
-
-		let totalPagesQuery = `
-			SELECT COUNT(*) AS count FROM (
-				SELECT comic.Id FROM comic 
-				INNER JOIN artist ON (artist.Id = comic.Artist) 
-				${innerJoinKeywordString}
-				${filterQueryString}
-				GROUP BY comic.Id
-				${keywordCountString}
-			) AS Q1`
-
 		try {
+			let [categories, tags, keywordIds, search, page, order] = 
+				[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order]
+
+			keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
+
+			let user = this.getUser(req)
+			page = (page && !isNaN(page)) ? Number(page)-1 : 0
+			let pageOffset = page * COMICS_PER_PAGE
+
+			if (!user && order === 'yourRating') { order = 'updated' }
+
+			let comicsPromise = getComics(
+				this.databaseFacade,
+				user,
+				COMICS_PER_PAGE,
+				pageOffset,
+				categories,
+				tags,
+				keywordIds,
+				search,
+				order
+			)
+
+			let [
+				filterQueryString,
+				filterQueryParams,
+				keywordCountString,
+				innerJoinKeywordString
+			] = getFilterQuery(categories, tags, keywordIds, search)
+
+			let totalPagesQuery = `
+				SELECT COUNT(*) AS count FROM (
+					SELECT comic.Id FROM comic 
+					INNER JOIN artist ON (artist.Id = comic.Artist) 
+					${innerJoinKeywordString}
+					${filterQueryString}
+					GROUP BY comic.Id
+					${keywordCountString}
+				) AS Q1`
+
 			let totalNumberPromise = this.databaseFacade.execute(totalPagesQuery, filterQueryParams)
 
 			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])
@@ -106,11 +107,12 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({ comics, numberOfPages, page: page+1 })
 		}
 		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			return this.returnApiError(res, err)
 		}
 	}
 
 	async getAllComics (req, res) {
+		return this.returnApiError(res, new ApiError('feil', 500))
 		let innerComicQuery = `SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) ORDER BY name ASC`
 
 		try {

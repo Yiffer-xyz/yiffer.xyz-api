@@ -1,3 +1,5 @@
+import { ApiError } from './baseRouter.js'
+
 export async function getComics (databaseFacade, user, limit, offset, categories, tags, keywordIds, search, order, artistId) {
   let [
     filterQueryString,
@@ -8,7 +10,7 @@ export async function getComics (databaseFacade, user, limit, offset, categories
 
   order = order || 'updated'
   if (!['updated', 'userRating', 'yourRating'].includes(order)) {
-    return this.returnError('Illegal order by', res, null, null)
+    throw new ApiError('Invalid order by', 400)
   }
   let orderQueryString = `ORDER BY ${order} DESC`
 

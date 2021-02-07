@@ -8,7 +8,10 @@ import session from 'express-session'
 import redis from 'redis'
 import connRedis from 'connect-redis'
 const redisStore = connRedis(session)
-const redisClient = redis.createClient(6379, 'redis');
+const redisClient = redis.createClient(6379, 'localhost');
+
+import dotenv from 'dotenv'
+dotenv.config()
 
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
@@ -16,8 +19,9 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
   rolling: true,
-  cookie: { secure: false },
-  store: new redisStore({ host: 'redis', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
+  cookie: { secure: process.env.IS_PRODUCTION === '1' },
+  proxy: true,
+  store: new redisStore({ host: 'localhost', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
 }));
 
 import mysql from 'mysql'
