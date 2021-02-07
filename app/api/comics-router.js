@@ -112,7 +112,6 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getAllComics (req, res) {
-		return this.returnApiError(res, new ApiError('feil', 500))
 		let innerComicQuery = `SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) ORDER BY name ASC`
 
 		try {
