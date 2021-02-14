@@ -1,5 +1,5 @@
 import FileSystemFacade from '../fileSystemFacade.js'
-import BaseRouter from './baseRouter.js'
+import BaseRouter, { ApiError } from './baseRouter.js'
 import { convertComicPage } from '../image-processing.js'
 
 import multer from 'multer'
@@ -76,19 +76,19 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async addComicSuggestion (req, res) {
-		let [comicName, artist, comment] = [req.body.comicName, req.body.artist, req.body.comment]
-
 		try {
+			let [comicName, artist, comment] = [req.body.comicName, req.body.artist, req.body.comment]
+
 			let existingSuggestionsQuery = 'SELECT * FROM comicsuggestion WHERE Name LIKE ?'
-			let existingSuggestions = await this.databaseFacade.execute(existingSuggestionsQuery, [comicName])
+			let existingSuggestions = await this.databaseFacade.execute(existingSuggestionsQuery, [comicName], 'Database error occurred when fetching existing suggestions list')
 			if (existingSuggestions.length > 0) {
-				return this.returnError('This comic name has already been suggested', res)
+				return this.returnApiError(res, new ApiError('This comic name has already been suggested', 400))
 			}
 
 			let existingComicQuery = 'SELECT * FROM comic WHERE Name LIKE ?'
-			let existingComics = await this.databaseFacade.execute(existingComicQuery, [comicName])
+			let existingComics = await this.databaseFacade.execute(existingComicQuery, [comicName], 'Database error occurred when fetching list of comics')
 			if (existingComics.length > 0) {
-				return this.returnError('A comic with this name already exists!', res)
+				return this.returnApiError(res, new ApiError('A comic with this name already exists!', 400))
 			}
 
 			let user = this.getUser(req)
@@ -96,11 +96,11 @@ export default class MiscRouter extends BaseRouter {
 			let query = `INSERT INTO comicsuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
 			let queryParams = [comicName, artist, comment, userParam]
 
-			await this.databaseFacade.execute(query, queryParams, 'Database error')
+			await this.databaseFacade.execute(query, queryParams, 'Database error occurred when adding suggestion')
 			res.json({success: true})
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			this.returnApiError(res, err)
 		}
 	}
 
@@ -502,26 +502,28 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async createModApplication (req, res) {
-		let [user, notes, competentAnswer, telegramUsername] = 
-			[this.getUser(req), req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
-
-		if (!user) { return this.returnError('Not logged in', res, null, null) }
-		
-		let existingApplicationQuery = 'SELECT * FROM modapplication WHERE UserId = ?'
 		try {
-			let existingApplication = await this.databaseFacade.execute(existingApplicationQuery, [user.id], 'Error listing existing applications')
+			let [user, notes, competentAnswer, telegramUsername] = 
+				[this.getUser(req), req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
+
+			if (!user) {
+				return this.returnApiError(res, new ApiError('Not logged in', 401))
+			}
+			
+			let existingApplicationQuery = 'SELECT * FROM modapplication WHERE UserId = ?'
+			let existingApplication = await this.databaseFacade.execute(existingApplicationQuery, [user.id], 'Database error: Error listing existing applications')
 			if (existingApplication.length > 0) {
-				return this.returnError('You already have a pending application', res, null, null)
+				return this.returnApiError(res, new ApiError('You already have a pending application', 400))
 			}
 
 			let addApplicationQuery = 'INSERT INTO modapplication (UserId, Notes, CompetentAnswer, TelegramUsername) VALUES (?, ?, ?, ?)'
 			let addApplicationQueryParams = [user.id, notes, competentAnswer, telegramUsername]
-			await this.databaseFacade.execute(addApplicationQuery, addApplicationQueryParams, 'Error adding application')
+			await this.databaseFacade.execute(addApplicationQuery, addApplicationQueryParams, 'Database error: Error adding application')
 
-      res.json({success: true})
+      res.end()
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
 		}
 	}
 
@@ -588,16 +590,16 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async submitFeedback (req, res) {
-		let feedback = req.body.feedbackText
-		let user = this.getUser(req)
-		
-		let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
 		try {
+			let feedback = req.body.feedbackText
+			let user = this.getUser(req)
+			
+			let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
 			await this.databaseFacade.execute(insertQuery, [feedback, user?.id], 'Error saving feedback')
-			res.json({success: true})
+			res.end()
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error, err)
+			return this.returnApiError(res, err)
 		}
 	}
 
