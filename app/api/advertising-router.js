@@ -1,4 +1,4 @@
-import BaseRouter from './baseRouter.js'
+import BaseRouter, { ApiError } from './baseRouter.js'
 import adPrices from '../../config/ad-prices.js'
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
@@ -39,15 +39,15 @@ export default class AdvertisingRouter extends BaseRouter {
       [req.file, req.body.adType, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.notes, this.getUser(req)]
     
       if (!user) {
-        return this.returnStatusError(401, res, 'Not logged in')
+        return this.returnApiError(res, new ApiError('Not logged in', 401))
       }
       if (!user.email) {
-        return this.returnStatusError(403, res, 'You must add an email address to your account first')
+        return this.returnApiError(res, new ApiError('You must add an email address to your account first', 403))
       }    
 
       let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
       if (!isValid) {
-        return this.returnStatusError(400, res, error)
+        return this.returnApiError(res, new ApiError(error, 400))
       }
 
       let filetype = file.originalname.substring(file.originalname.length-3)
@@ -78,10 +78,11 @@ export default class AdvertisingRouter extends BaseRouter {
         `An ad with id ${adId} has been submitted by ${user.username}.`
       )
 
-      res.json({success: true})
+      res.end()
     }
-
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
   async generateAdId () {
