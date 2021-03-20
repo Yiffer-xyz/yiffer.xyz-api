@@ -33,11 +33,11 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async login (req, res) {
-    let [usernameOrEmail, password] = [req.body.username, req.body.password]
     try {
+      let [usernameOrEmail, password] = [req.body.username, req.body.password]
       let userResponse = await this.authenticate(usernameOrEmail, password)
       if ('error' in userResponse) {
-        return this.returnError(userResponse.error, res)
+				return this.returnApiError(res, new ApiError(userResponse.error, 400))
       }
       else {
         let userData = {
@@ -51,7 +51,7 @@ export default class AuthenticationRouter extends BaseRouter {
       }
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
     }
   }
 
@@ -70,30 +70,33 @@ export default class AuthenticationRouter extends BaseRouter {
   }
   
   async register (req, res) {
-    let [username, password, email] = [req.body.username, req.body.password, req.body.email]
     try {
+      let [username, password1, password2, email] = [req.body.username, req.body.password1, req.body.password2, req.body.email]
+      if (password1 !== password2) {
+				return this.returnApiError(res, new ApiError('Passwords do not match', 400))
+      }
       let query = 'SELECT * FROM user WHERE Username = ?'
       let users = await this.databaseFacade.execute(query, [username])
       if (users.length > 0) {
-        return this.returnError('User already exists', res)
+				return this.returnApiError(res, new ApiError('Username already exists', 409))
       }
       let emailQuery = 'SELECT * FROM user WHERE Email = ?'
       users = await this.databaseFacade.execute(emailQuery, [email])
       if (users.length > 0) {
-        return this.returnError('An account with this email already exists', res)
+				return this.returnApiError(res, new ApiError('An account with this email already exists', 409))
       }
 
       if (!this.validateEmail(email)) {
-        return this.returnError('Invalid email', res)
+				return this.returnApiError(res, new ApiError('Invalid email', 400))
       }
-      if (!this.validatePassword(password)) {
-        return this.returnError('Invalid password', res)
+      if (!this.validatePassword(password1)) {
+				return this.returnApiError(res, new ApiError('Invalid password', 400))
       }
       if (!this.validateUsername(username)) {
-        return this.returnError('Invalid username', res)
+				return this.returnApiError(res, new ApiError('Invalid username', 400))
       }
 
-      password = await hash(password, 8)
+      let password = await hash(password1, 8)
       let insertQuery = 'INSERT INTO user (Username, Password, Email) VALUES (?, ?, ?)'
       let insertQueryParams = [username, password, email]
       let result = await this.databaseFacade.execute(insertQuery, insertQueryParams)
@@ -109,7 +112,7 @@ export default class AuthenticationRouter extends BaseRouter {
         userType: userResponse.UserType,
       }
       req.session.user = userData
-      res.json({success: true, userData: userData})
+      res.status(201).json(userData)
 
       sendEmail(
         'account',
@@ -123,13 +126,13 @@ export default class AuthenticationRouter extends BaseRouter {
       )
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
     }
   }
 
   logout (req, res) {
     req.session.destroy()
-    res.end('ok')
+    res.status(200).end()
   }
 
   async changePassword (req, res) {
