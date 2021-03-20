@@ -1,4 +1,4 @@
-import BaseRouter from './baseRouter.js'
+import BaseRouter, { ApiError } from './baseRouter.js'
 import { sendEmail } from '../emailFacade.js'
 import bcrypt from 'bcrypt'
 import dateFns from 'date-fns'
@@ -133,25 +133,26 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async changePassword (req, res) {
-    let [username, oldPassword, newPassword] = 
-      [req.session.user.username, req.body.oldPassword, req.body.newPassword]
-    if (!this.validatePassword(newPassword)) {
-      return this.returnError('Invalid new password, must be at least 6 characters long', res)
-    }
     try {
+      let [username, oldPassword, newPassword] = 
+        [req.session.user.username, req.body.oldPassword, req.body.newPassword]
+
+      if (!this.validatePassword(newPassword)) {
+				return this.returnApiError(res, new ApiError('Invalid new password, must be at least 6 characters long', 400))
+      }
       let userDataResponse = await this.authenticate(username, oldPassword)
       if ('error' in userDataResponse) {
-        return this.returnError(userDataResponse.error, res)
+				return this.returnApiError(res, new ApiError(userDataResponse.error, 400))
       }
 
       newPassword = await hash(newPassword, 8)
       let updateQuery = 'UPDATE user SET Password=? WHERE Id=?'
       let updateQueryParams = [newPassword, userDataResponse.Id]
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error updating password in database')
-      res.json({success: true})
+      res.status(200).end()
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
     }
   }
 
@@ -178,23 +179,24 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async changeEmail (req, res) {
-    let [currentPassword, email] = [req.body.password, req.body.email]
-    let {username, id: userId} = req.session.user
-    
-    if (!userId) {
-      return this.returnError('Not logged in', res)
-    }
-    if (!this.validateEmail(email)) {
-      return this.returnError('Invalid email address', res)
-    }
-    let userResponse = await this.authenticate(username, currentPassword)
-    if ('error' in userResponse) {
-      return this.returnError('Incorrect password', res)
-    }
-
-    let query = 'UPDATE user SET Email=? WHERE Id=?'
-    let queryParams = [email, userId]
     try {
+      let [currentPassword, email] = [req.body.password, req.body.email]
+      let {username, id: userId} = req.session.user
+    
+      if (!userId) {
+				return this.returnApiError(res, new ApiError('Not logged in', 400))
+      }
+      if (!this.validateEmail(email)) {
+				return this.returnApiError(res, new ApiError('Invalid email address', 400))
+      }
+      let userResponse = await this.authenticate(username, currentPassword)
+      if ('error' in userResponse) {
+				return this.returnApiError(res, new ApiError('Incorrect password', 400))
+      }
+
+      let query = 'UPDATE user SET Email=? WHERE Id=?'
+      let queryParams = [email, userId]
+
       await this.databaseFacade.execute(query, queryParams, 'Error adding email to database')
       req.session.user = {
         ...req.session.user,
@@ -207,24 +209,22 @@ export default class AuthenticationRouter extends BaseRouter {
         'account',
         email,
         'Successful email setup',
-        `You have successfully connected this email address (<strong>${req.session.user.username}</strong>) to your account with username <strong>${username}</strong> at Yiffer.xyz.
+        `You have successfully connected this email address (<strong>${email}</strong>) to your account with username <strong>${username}</strong> at Yiffer.xyz.
         <br/><br/>
         Regards,<br/>
         Yiffer.xyz`
       )
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
     }
   }
 
   async resetPassword (req, res) {
     try {
-      let a={}
-      a.asd.asd()
       let email = req.body.email
       if (!this.validateEmail(email)) {
-        return this.returnStatusError(400, res, 'This is not a valid email address')
+				return this.returnApiError(res, new ApiError('This is not a valid email address', 400))
       }
 
       let user = await this.getUserByEmail(email)
@@ -245,9 +245,11 @@ export default class AuthenticationRouter extends BaseRouter {
         )
       }
 
-      res.status(204).end()
+      res.status(200).end()
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+			this.returnApiError(res, err)
+    }
   }
 
   async resetPasswordByLink (req, res) {
@@ -255,26 +257,26 @@ export default class AuthenticationRouter extends BaseRouter {
       let token = req.params.token
       let [password1, password2] = [req.body.password1, req.body.password2]
       if (password1 !== password2) {
-        return this.returnStatusError(400, res, 'Passwords do not match')
+				return this.returnApiError(res, new ApiError('Passwords do not match', 400))
       }
       if (!this.validatePassword(password1)) {
-        return this.returnStatusError(400, res, 'Invalid password')
+				return this.returnApiError(res, new ApiError('Invalid password', 400))
       }
 
       let tokenQuery = 'SELECT UserId AS userId, Token AS token, Timestamp AS timestamp, IsUsed AS isUsed FROM resettoken WHERE token = ?'
       let tokenResults = await this.databaseFacade.execute(tokenQuery, [token])
       if (tokenResults.length === 0) {
-        return this.returnStatusError(404, res, 'Invalid link')
+				return this.returnApiError(res, new ApiError('Invalid link', 404))
       }
       let resetRecord = tokenResults[0]
 
       if (resetRecord.isUsed) {
-        return this.returnStatusError(400, res, 'This link has been used already.')
+				return this.returnApiError(res, new ApiError('This link has been used already', 400))
       }
 
       let maxTokenUsageTime = addHours(new Date(resetRecord.timestamp), 24)
       if (isAfter(new Date(), maxTokenUsageTime)) {
-        return this.returnStatusError(400, res, 'Link expired. Submit a password reset request again.')
+				return this.returnApiError(res, new ApiError('Link expired. Submit a password reset request again', 400))
       }
 
       let hashedPassword = await hash(password1, 8)
@@ -288,7 +290,9 @@ export default class AuthenticationRouter extends BaseRouter {
 
       res.status(204).end()
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+			this.returnApiError(res, err)
+    }
   }
 
   validatePassword (password) {

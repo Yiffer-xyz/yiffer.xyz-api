@@ -97,7 +97,7 @@ export default class MiscRouter extends BaseRouter {
 			let queryParams = [comicName, artist, comment, userParam]
 
 			await this.databaseFacade.execute(query, queryParams, 'Database error occurred when adding suggestion')
-			res.json({success: true})
+			res.status(204).end()
 		}
 		catch (err) {
 			this.returnApiError(res, err)
