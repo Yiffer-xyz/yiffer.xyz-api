@@ -7,13 +7,12 @@ import session from 'express-session'
 
 import redis from 'redis'
 import connRedis from 'connect-redis'
+import redisConfig from './config/redis-config.js'
 const redisStore = connRedis(session)
-const redisClient = redis.createClient(6379, 'localhost');
+const redisClient = redis.createClient(redisConfig.port, redisConfig.host);
 
 import dotenv from 'dotenv'
 dotenv.config()
-
-import redisConfig from './config/redis-config.js'
 
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
