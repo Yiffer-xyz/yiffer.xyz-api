@@ -42,7 +42,7 @@ export default class MiscRouter extends BaseRouter {
 		this.app.get('/api/stats/visitors', this.authorizeMod.bind(this), (req, res) => this.getVisitorStats(req, res))
 		this.app.get('/api/stats/comic-views', this.authorizeMod.bind(this), (req, res) => this.getComicViewStats(req, res))
 
-		this.app.post('/api/mod-applications', this.authorizeAdmin.bind(this), (req, res) => this.createModApplication(req, res))
+		this.app.post('/api/mod-applications', (req, res) => this.createModApplication(req, res))
 		this.app.get ('/api/mod-applications', this.authorizeAdmin.bind(this), (req, res) => this.getModApplications(req, res))
 		this.app.post('/api/mod-applications/:id', this.authorizeAdmin.bind(this), (req, res) => this.processModApplication(req, res))
 		this.app.get ('/api/mod-applications/me', this.authorizeUser.bind(this), (req, res) => this.getMyModApplicationStatus(req, res))
