@@ -13,6 +13,8 @@ const redisClient = redis.createClient(6379, 'localhost');
 import dotenv from 'dotenv'
 dotenv.config()
 
+import redisConfig from './config/redis-config.js'
+
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
   name: 'yifferCookie',
@@ -21,7 +23,12 @@ app.use(session({
   rolling: true,
   cookie: { secure: process.env.IS_PRODUCTION === '1' },
   proxy: true,
-  store: new redisStore({ host: 'localhost', port: 6379, client: redisClient, ttl: 86400 * 1000 * 60 }),
+  store: new redisStore({
+    host: redisConfig.host,
+    port: redisConfig.port,
+    client: redisClient,
+    ttl: redisConfig.ttl,
+  }),
 }));
 
 import mysql from 'mysql'
