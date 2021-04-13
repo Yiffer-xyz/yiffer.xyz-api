@@ -1,8 +1,10 @@
 import BaseRouter, { ApiError } from './baseRouter.js'
-import adPrices from '../../config/ad-prices.js'
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
 import { sendEmail } from '../emailFacade.js'
+import adPrices from '../../config/ad-prices.js'
+import dateFns from 'date-fns'
+const { addMonths } = dateFns
 
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -13,6 +15,7 @@ var storage = multer.diskStorage({
   }
 })
 var upload = multer({ storage: storage })
+const adImageUploadFormat = upload.fields([{ name: 'file1', maxCount: 1 }, { name: 'file2', maxCount: 1 }])
 
 export default class AdvertisingRouter extends BaseRouter {
   constructor (app, databaseFacade) {
@@ -21,108 +24,170 @@ export default class AdvertisingRouter extends BaseRouter {
   }
   
   setupRoutes () {
+    this.app.get('/api/paid-images-prices', (req, res) => this.getAdPrices(req, res))
     this.app.get ('/api/paid-images', this.authorizeAdmin.bind(this), (req, res) => this.getAllAds(req, res))
-    this.app.get ('/api/paid-images-basic', (req, res) => this.getAdsForList(req, res))
+    this.app.get ('/api/paid-images-basic', (req, res) => this.getAdsForFrontEnd(req, res))
     this.app.get ('/api/paid-images/me', this.authorizeUser.bind(this), (req, res) => this.getUserAds(req, res))
-    this.app.post('/api/paid-images', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.createApplication(req, res))
-    this.app.post('/api/paid-images/:adId', this.authorizeAdmin.bind(this), (req, res) => this.updateAd(req, res))
+    this.app.get('/api/paid-images/:adId/click-stats', this.authorizeUser.bind(this), (req, res) => this.getAdClickStats(req, res))
+    this.app.post('/api/paid-images', this.authorizeUser.bind(this), adImageUploadFormat, (req, res) => this.createApplication(req, res))
+    this.app.post('/api/paid-images/:adId/update-admin', this.authorizeAdmin.bind(this), (req, res) => this.updateAdAdmin(req, res))
     this.app.delete('/api/paid-images/:adId', this.authorizeUser.bind(this), (req, res) => this.deleteOrDeactivateAd(req, res))
-    this.app.post('/api/paid-images/:adId/correct', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.correctAd(req, res))
-    this.app.post('/api/paid-images/:adId/toggle-renew', this.authorizeUser.bind(this), (req, res) => this.toggleAdRenewal(req, res))
-    this.app.post('/api/paid-images/:adId/reactivate', this.authorizeUser.bind(this), (req, res) => this.reactivateAd(req, res))
+    this.app.post('/api/paid-images/:adId/update-user', this.authorizeUser.bind(this), adImageUploadFormat, (req, res) => this.updateAdUser(req, res))
     this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
+  }
+
+  async getAdPrices (req, res) {
+    res.json(adPrices)
   }
 
   async createApplication (req, res) {
     try {
-      let [file, adType, adLink, adMainText, adSecondaryText, notes, user] = 
-      [req.file, req.body.adType, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.notes, this.getUser(req)]
+      let [file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes, user] = 
+        [req.file1, req.file2, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes, this.getUser(req)]
     
-      if (!user) {
-        return this.returnApiError(res, new ApiError('Not logged in', 401))
-      }
-      if (!user.email) {
-        return this.returnApiError(res, new ApiError('You must add an email address to your account first', 403))
-      }    
+        if (!user) {
+          return this.returnApiError(res, new ApiError('Not logged in', 401))
+        }
+        if (!user.email) {
+          return this.returnApiError(res, new ApiError('You must add an email address to your account first', 403))
+        }
+        
+        let {isValid, error} = this.checkApplicationValidity(file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes)
+        if (!isValid) {
+          return this.returnApiError(res, new ApiError(error, 400))
+        }
 
-      let {isValid, error} = this.checkApplicationValidity(file, adType, adLink, adMainText, adSecondaryText, notes)
-      if (!isValid) {
-        return this.returnApiError(res, new ApiError(error, 400))
-      }
+        let adId = await this.generateAdId()
+        let query = 'INSERT INTO advertisement (Id, AdType, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        let queryParams = [adId, adType, adLink, adMainText, adSecondaryText, filetype, user.id, advertiserNotes]
 
-      let filetype = file.originalname.substring(file.originalname.length-3)
+        await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
 
-      let adId = await this.generateAdId()
-      let price = adPrices[adType]
-      let query = 'INSERT INTO advertisement (Id, AdType, Link, MainText, SecondaryText, Filetype, UserId, Price, AdvertiserNotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      let queryParams = [adId, adType, adLink, adMainText, adSecondaryText, filetype, user.id, price, notes]
+        let filetype = file1.originalname.substring(file1.originalname.length-3)
 
-      await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
+        if (adType === 'card') {
+          let newFilenameBig = `${adId}-big.${filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilenameBig)
+          let newFilenameSmall = `${adId}-small.${filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file2.path, newFilenameSmall)
+        }
+        else {
+          let newFilename = `${adId}.${filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
+        }
 
-      let newFilename = `${adId}.${filetype}`
-      await FileSystemFacade.writeGooglePaidImageFile(file.path, newFilename)
-      
-      sendEmail(
-        'advertising',
-        user.email,
-        'Ad submission confirmation - Yiffer.xyz!',
-        `We have received your advertisement submission and will review it shortly. If the ad is accepted, you will receive another email stating this. Otherwise, you will receive an email detailing what needs to be fixed.
-        <br/><br/>
-        Regards,<br/>
-        Yiffer.xyz`
-      )      
-      sendEmail(
-        'advertising',
-        'advertising@yiffer.xyz',
-        'New ad - Yiffer.xyz!',
-        `An ad with id ${adId} has been submitted by ${user.username}.`
-      )
-
-      res.end()
+        sendEmail(
+          'advertising',
+          user.email,
+          'Ad submission confirmation - Yiffer.xyz!',
+          `We have received your advertisement submission and will review it shortly. If the ad is accepted, you will receive another email stating this. Otherwise, you will receive an email detailing what needs to be fixed.
+          <br/><br/>
+          Regards,<br/>
+          Yiffer.xyz`
+        )      
+        sendEmail(
+          'advertising',
+          'advertising@yiffer.xyz',
+          'New ad - Yiffer.xyz',
+          `An ad of type ${adType} with id ${adId} has been submitted by user ${user.username}.`
+        )
+  
+        res.status(204).end()
     }
     catch (err) {
       return this.returnApiError(res, err)
     }
   }
 
-  async generateAdId () {
-    let allIdsQuery = 'SELECT id FROM advertisement'
-    let ids = await this.databaseFacade.execute(allIdsQuery, null, 'Error fetching ad IDs')
-
-    let isIdNew = false
-    let newId
-    while (!isIdNew) {
-      newId = makeId(6)
-      let doesIdExist = [...ids].includes(newId)
-      isIdNew = ids.length===0 || !doesIdExist
+  checkUpdateValidity (file1, file2, adType, adName, adLink, adMainText, adSecondaryText, existingFileType) {
+    if (file1) {
+      let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
+      if (filetype1 !== existingFileType) {
+        return {isValid: false, error: `You cannot change the file format (must be ${existingFileType})`}
+      }
     }
 
-    return newId
+    if (file2) {
+      let filetype2 = file2.originalname.substring(file2.originalname.length-3).toLowerCase()
+      if (filetype2 !== existingFileType) {
+        return {isValid: false, error: `You cannot change the file format (must be ${existingFileType})`}
+      }
+    }
+
+    if (!adLink) {
+      return {isValid: false, error: 'Missing link'}
+    }
+
+    if (adType === 'card') {
+      if (!adMainText) {
+        return {isValid: false, error: 'Missing main text'}
+      }
+      if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 60)) {
+        return {isValid: false, error: 'One of the texts are too long (max 25 and 60 characters)'}
+      }
+    }
+
+    if (!adName || adName.length === 0) {
+      return {isValid: false, error: 'Ad name missing'}
+    }
+    if (adName.length > 64) {
+      return {isValid: false, error: 'Ad name too long - max 64 characters'}
+    }
+
+    return {isValid: true}
   }
 
-  checkApplicationValidity (file, adType, adLink, adMainText, adSecondaryText, notes, isCorrection=false) {
-    if (!file && !isCorrection) {
+  checkApplicationValidity (file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes) {
+    let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
+
+    if (!file1) {
       return {isValid: false, error: 'File missing'}
     }
-    if (file && (!file.originalname.endsWith('jpg') && !file.originalname.endsWith('png') && !file.originalname.endsWith('gif'))) {
+    if (file1 && !(['jpg', 'png', 'gif'].includes(filetype1))) {
       return {isValid: false, error: 'Invalid file format (must be jpg/png/gif)'}
     }
-    if (!isCorrection && !adTypes.includes(adType)) {
+
+    if (adType === 'card') {
+      if (!file2) {
+        return {isValid: false, error: 'Second file missing'}
+      }
+
+      let filetype2 = file2.originalname.substring(file2.originalname.length-3).toLowerCase()
+
+      if (file2 && !(['jpg', 'png', 'gif'].includes(filetype2))) {
+        return {isValid: false, error: 'Invalid second file format (must be jpg/png/gif)'}
+      }
+
+      if (filetype1 !== filetype2) {
+        return {isValid: false, error: 'The two files must be of the same type (jpg/png/gif)'}
+      }
+    }
+
+    if (!adTypes.includes(adType)) {
       return {isValid: false, error: 'Invalid ad type'}
     }
     if (!adLink) {
       return {isValid: false, error: 'Missing link'}
     }
-    if (notes && notes.length > 255) {
-      return {isValid: false, error: 'Notes too long (max 255)'}
-    }
-    if (adType.includes('card')) {
+
+    if (adType === 'card') {
       if (!adMainText) {
-        return {isValid: false, error: 'Missing fields'}
+        return {isValid: false, error: 'Missing main text'}
       }
       if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 60)) {
-        return {isValid: false, error: 'Text too long'}
+        return {isValid: false, error: 'One of the texts are too long'}
       }
+    }
+
+    if (advertiserNotes && advertiserNotes.length > 255) {
+      return {isValid: false, error: 'Notes too long - max 255 characters'}
+    }
+
+    if (!adName || adName.length === 0) {
+      return {isValid: false, error: 'Ad name missing'}
+    }
+    if (adName.length > 64) {
+      return {isValid: false, error: 'Ad name too long - max 64 characters'}
     }
 
     return {isValid: true}
@@ -130,17 +195,15 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async getAdsBase (req, res, whereStatement, whereParams, isAdminRequest) {
     try {
-      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, ApprovedDate AS approvedDate, Filetype AS filetype, Price AS price, ActivationDate AS activationDate, DeactivationDate AS deactivationDate, ApplicationDate AS applicationDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote FROM advertisement INNER JOIN user ON (user.Id = advertisement.UserId) ${whereStatement} ORDER BY ApplicationDate DESC`
-      let results = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
+      let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote FROM advertisement INNER JOIN user ON (user.Id = advertisement.UserId) ${whereStatement} ORDER BY CreatedDate DESC`
 
-      for (let result of results) {
-        result.adTypeLong = getLongAdType(result.adType)
-      }
+      let results = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
 
       return results
     }
-
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
   async getUserAds (req, res) {
@@ -149,8 +212,9 @@ export default class AdvertisingRouter extends BaseRouter {
       let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
       res.json(results)
     }
-
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
   async getAllAds (req, res) {
@@ -173,47 +237,91 @@ export default class AdvertisingRouter extends BaseRouter {
     res.json(results)
   }
 
-  async getAdsForList (req, res) {
+  async getAdsForFrontEnd (req, res) {
     try {
-      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, Filetype AS filetype FROM advertisement WHERE Status='ACTIVE' OR Status = 'ACTIVE, RENEWAL PAID' OR Status = 'ACTIVE, AWAITING RENEWAL PAYMENT'`
+      let query = `SELECT advertisement.Id AS id, AdType AS adType, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, Filetype AS filetype FROM advertisement WHERE Status=${adStatuses.active}`
       let results = await this.databaseFacade.execute(query, null, 'Error fetching ads')
 
       res.json(results)
     }
-
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
-  async getAdById (req, res, adId) {
-    let ad = await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true)
-    return ad[0]
-  }
-
-  async updateAd (req, res) {
+  async getAdClickStats (req, res) {
     try {
-      let [adId, price, status, activationDate, deactivationDate, adminNotes, correctionNote] = 
-      [req.params.adId, req.body.price, req.body.status, req.body.activationDate, req.body.deactivationDate, req.body.adminNotes, req.body.correctionNote]
+      let adId = req.params.adId
+      let user = this.getUser(req)
 
-      let adExistsQuery = 'SELECT * FROM advertisement WHERE Id=?'
-      let adExistsResult = await this.databaseFacade.execute(adExistsQuery, [adId])
-      if (adExistsResult.length === 0) {
-        return this.returnStatusError(404, res, 'Ad with given id not found')
+      let adDetails = await this.getAdById(req, res, adId)
+      if (adDetails.userId !== user.id) {
+        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
       }
+
+      let statsQuery = 'SELECT Date AS date, Clicks AS clicks FROM advertisementdayclick WHERE AdId = ? ORDER BY Date ASC'
+      let statsResult = await this.databaseFacade.execute(statsQuery, [adId])
       
-      let query = 'UPDATE advertisement SET Price=?, Status=?, ActivationDate=?, DeactivationDate=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
-      let queryParams = [price, status, activationDate, deactivationDate, adminNotes, correctionNote||null, adId]
+      // todo check if needed - could possibly just return statsResult as json?
+      let stats = []
+      for (let dayStat of statsResult) {
+        stats.push({date: dayStat.date, clicks: dayStat.clicks})
+      }
+
+      res.json(stats)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async updateAdAdmin (req, res) {
+    try {
+      let [adId, status, expiryDateExtendMonths, customExpiryDate, adminNotes, correctionNote] = 
+        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.adminNotes, req.body.correctionNote]
+
+      let existingAd = this.getAdById(req, res, adId)
+      if (!existingAd) {
+        return this.returnApiError(res, new ApiError('Ad with given id not found', 404))
+      }
+
+      let newExpiryDate
+      if (expiryDateExtendMonths) {
+        newExpiryDate = addMonths(new Date(existingAd.expiryDate), expiryDateExtendMonths)
+      }
+      else {
+        newExpiryDate = customExpiryDate
+      }
+
+      let adType = existingAd.adType
+
+      let query = 'UPDATE advertisement Status=?, ExpiryDate=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
+      let queryParams = [status, newExpiryDate, adminNotes, correctionNote||null, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(req, res, adId)
-
+      
       if (status === adStatuses.awaitingPayment || status === adStatuses.needsCorrection) {
         let user = this.getUserAccount()
+        
         if (status === adStatuses.awaitingPayment) {
+          let adCosts = []
+          for (let adPrice of adPrices[adType]) {
+            if (adPrice.discountedPrice) {
+              adCosts.push(`<b>${adPrice.discountedPrice} USD</b> for ${adPrice.durationMonths} months (limited discount)`)
+            }
+            else {
+              adCosts.push(`<b>${adPrice.discountedPrice} USD</b> for ${adPrice.durationMonths} months`)
+            }
+          }
+
+          let adCostsString = adCosts.join(', ')
+
           await sendEmail(
             'advertising',
             user.email,
             'Ad ready for payment - Yiffer.xyz',
-            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (<b>${price} USD</b>) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising/${price}USD">paypal.me/yifferadvertising${price}USD</a> Remember to include your ad's ID in the PayPal message field. You can find detailed instructions at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
+            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
@@ -234,10 +342,12 @@ export default class AdvertisingRouter extends BaseRouter {
           )
         }
       }
-
+      
       res.json({success: true, ad: updatedAd})
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
   async deleteOrDeactivateAd (req, res) {
@@ -247,52 +357,76 @@ export default class AdvertisingRouter extends BaseRouter {
       let ad = (await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true))[0]
 
       if (ad.userId !== user.id) {
-        return this.returnStatusError(401, res, 'You do not own this ad')
+        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
       }
 
-      let isDelete = ['PENDING', 'NEEDS CORRECTION', 'AWAITING PAYMENT'].includes(ad.status)
+      let isDelete = [adStatuses.pending, adStatuses.needsCorrection, adStatuses.awaitingPayment].includes(ad.status)
+      let canDeactivate = [adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection].includes(ad.status)
       let query
       if (isDelete) {
         query = 'DELETE FROM advertisement WHERE advertisement.Id = ?'
       }
-      else {
+      else if (canDeactivate) {
         query = `UPDATE advertisement SET Status = 'ENDED' WHERE advertisement.Id = ?`
+      }
+      else {
+        return this.returnApiError(res, new ApiError('You cannot deactivate nor delete this ad', 400))
       }
 
       await this.databaseFacade.execute(query, [adId], 'Error updating ad in database')
       res.status(204).end()
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
-  async correctAd (req, res) {
+  async updateAdUser (req, res) {
     try {
-      let [adId, link, mainText, secondaryText, file] = 
-        [req.params.adId, req.body.link, req.body.mainText, req.body.secondaryText, req.file]
+      let [adId, file1, file2, adName, link, mainText, secondaryText] = 
+        [req.params.adId, req.file1, req.file2, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText, req.file]
 
       let existingAd = await this.getAdById(req, res, adId)
+      if (!existingAd) {
+        return this.returnApiError(res, new ApiError('Ad id not found', 404))
+      }
+
       let user = this.getUser(req)
       if (existingAd.userId !== user.id) {
-        return this.returnStatusError(401, res, 'User does not own given ad id')
+        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
       }
 
-      let {isValid, error} = this.checkApplicationValidity(file, existingAd.adType, link, mainText, secondaryText, file, true)
+      let {isValid, error} = this.checkUpdateValidity(file1, file2, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype)
       if (!isValid) { return res.json({error: error}) }
     
-      let query, queryParams
-
-      if (file) {
-        let filetype = file.originalname.substring(file.originalname.length-3)
-        query = 'UPDATE advertisement SET Status=?, Link=?, MainText=?, SecondaryText=?, Filetype=? WHERE Id=?'
-        queryParams = [adStatuses.pending, link, mainText, secondaryText, filetype, adId]
-
-        await FileSystemFacade.writeGooglePaidImageFile(file.path, `${adId}.${filetype}`)
-  
+      if (existingAd.adType === 'card') {
+        if (file1) {
+          let newFilenameBig = `${adId}-big.${existingAd.filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilenameBig)
+        }
+        if (file2) {
+          let newFilenameSmall = `${adId}-small.${existingAd.filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file2.path, newFilenameSmall)
+        }
       }
       else {
-        query = 'UPDATE advertisement SET Status=?, Link=?, MainText=?, SecondaryText=? WHERE Id=?'
-        queryParams = [adStatuses.pending, link, mainText, secondaryText, adId]
+        if (file1) {
+          let newFilename = `${adId}.${existingAd.filetype}`
+          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
+        }
       }
+      
+      let newStatus
+      if ([adStatuses.needsCorrection, adStatuses.pending, adStatuses.ended, adStatuses.awaitingPayment].includes(existingAd.status)) {
+        newStatus = adStatuses.pending
+      }
+      if ([adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection].includes(existingAd)) {
+        newStatus = adStatuses.activeButPending
+      }
+      
+      let query, queryParams
+      query = 'UPDATE advertisement SET Status=?, AdName=?, Link=?, MainText=?, SecondaryText=? WHERE Id=?'
+      queryParams = [newStatus, adName, link, mainText, secondaryText, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
 
@@ -300,83 +434,61 @@ export default class AdvertisingRouter extends BaseRouter {
       res.json({success: true, ad: updatedAd})
     }
     catch (err) {
-      return this.returnStatusError(500, res, err)
+      return this.returnApiError(res, err)
     }
-  }
-
-  async toggleAdRenewal (req, res) {
-    try {
-      let [adId, shouldRenew] = [req.params.adId, req.body.shouldRenew]
-
-      let ad = await this.getAdById(req, res, adId)
-      let user = this.getUser(req)
-      if (ad.userId !== user.id) {
-        return this.returnStatusError(401, res, 'User does not own given ad id')
-      }
-      
-      let query, queryParams
-
-      if (ad.status === 'ACTIVE' && shouldRenew) {
-        query = 'UPDATE advertisement SET Status=? WHERE id=?'
-        queryParams = [adStatuses.activeAwaitingRenewal, adId]
-      }
-      else if (ad.status === 'ACTIVE, AWAITING RENEWAL PAYMENT' && !shouldRenew) {
-        query = 'UPDATE advertisement SET Status=? WHERE id=?'
-        queryParams = [adStatuses.active, adId]
-      }
-      else {
-        return this.returnStatusError(400, res, 'Illegal action')
-      }
-
-      await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
-
-      res.json({success: true})
-    }
-		catch (err) { return this.returnStatusError(500, res, err) }
-  }
-
-  async reactivateAd (req, res) {
-    try {
-      let adId = req.params.adId
-      let ad = await this.getAdById(req, res, adId)
-      let user = this.getUser(req)
-      if (ad.userId !== user.id) {
-        return this.returnStatusError(401, res, 'You do not own this ad')
-      }
-      if (ad.status !== 'ENDED') {
-        return this.returnStatusError(400, res, `Only ads with status 'ENDED' may be reactivated`)
-      }
-      
-      let query = `UPDATE advertisement SET Status = 'AWAITING PAYMENT' WHERE Id = ?`
-      await this.databaseFacade.execute(query, [adId], 'Error updating status in database')
-
-      res.status(204).end()
-    }
-		catch (err) { return this.returnStatusError(500, res, err) }
   }
 
   async logAdClick (req, res) {
-    res.end()
+    res.status(204).end()
+
     let adId = req.body.adId
     try {
-      let query = 'UPDATE advertisement SET Clicks = Clicks + 1 WHERE Id = ?'
-      await this.databaseFacade.execute(query, [adId], 'Error logging ad click')
+      let queryClicks = 'UPDATE advertisement SET Clicks = Clicks + 1 WHERE Id = ?'
+      await this.databaseFacade.execute(queryClicks, [adId], 'Error logging ad click')
+
+      const today = (new Date()).toISOString().substr(0, 10)
+      let queryDayClicks = 'INSERT INTO advertisementdayclick (AdId, Date, Clicks) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE Clicks = Clicks + 1'
+      let queryDayClicksParams = [adId, today]
+      await this.databaseFacade.execute(queryDayClicks, queryDayClicksParams, 'Error logging ad click')
     }
 		catch (err) {
       console.error('Error updating ad clicks: ', err)
 		}
   }
+
+  async getAdById (req, res, adId) {
+    let ad = await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true)
+    if (ad.length === 0) {
+      return false
+    }
+    return ad[0]
+  }
+
+  async generateAdId () {
+    let allIdsQuery = 'SELECT id FROM advertisement'
+    let ids = await this.databaseFacade.execute(allIdsQuery, null, 'Error fetching ad IDs')
+
+    let isIdNew = false
+    let newId
+    while (!isIdNew) {
+      newId = makeId(6)
+      let doesIdExist = [...ids].includes(newId)
+      isIdNew = ids.length===0 || !doesIdExist
+    }
+
+    return newId
+  }
 }
 
-const adTypes = ['card2M', 'card4M', 'banner1M']
+const adTypes = ['card', 'banner']
+
 const adStatuses = {
   pending: 'PENDING',
   needsCorrection: 'NEEDS CORRECTION',
   awaitingPayment: 'AWAITING PAYMENT',
-  activeSoon: 'ACTIVE SOON',
   active: 'ACTIVE',
-  activeAwaitingRenewal: 'ACTIVE, AWAITING RENEWAL PAYMENT',
-  activeRenewalPaid: 'ACTIVE, RENEWAL PAID',
+  activeButPending: 'ACTIVE BUT PENDING',
+  activeNeedsCorrection: 'ACTIVE BUT NEEDS CORR.',
   ended: 'ENDED',
   cancelled: 'CANCELLED',
 }
@@ -389,10 +501,4 @@ function makeId (length) {
      result += characters.charAt(Math.floor(Math.random() * charactersLength))
   }
   return result
-}
-
-function getLongAdType (adType) {
-  if (adType === 'card2M') { return 'Card, 2 months' }
-  if (adType === 'card4M') { return 'Card, 4 months' }
-  if (adType === 'banner1M') { return 'Wide, 1 month' }
 }
