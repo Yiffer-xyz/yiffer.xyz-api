@@ -17,8 +17,12 @@ export default class BaseRouter {
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
+			console.log(`[500] Controlled error: ${error.error}`)
+			if ('error' in error) {
+				console.error(error.error)
+			}
+
 			error = new ApiError(error.customErrorMessage, 500)
-			console.log(`[500] Controlled error: ${error.message}`)
 		}
 		else if (!(error instanceof ApiError)) {
 			console.error(`[500] UNCAUGHT error: ${error.stack}`)

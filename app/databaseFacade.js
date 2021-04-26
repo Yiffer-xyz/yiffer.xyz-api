@@ -3,7 +3,14 @@ export default class DatabaseFacade {
 		this.mysqlPool = mysqlPool
 	}
 
-	async execute (queryString, queryParams, errorMessage='Database error') {
+	async execute (queryString, queryParams, errorMessage) {
+		if (!errorMessage) {
+			errorMessage = 'Database error'
+		}
+		else {
+			errorMessage = `Database error: ${errorMessage}`
+		}
+		
 		return new Promise (async (resolve, reject) => {
 			this.mysqlPool.getConnection((err, connection) => {
 				if (err) {
