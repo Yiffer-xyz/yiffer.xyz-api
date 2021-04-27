@@ -123,6 +123,19 @@ export default class BaseRouter {
 		}
 	}
 
+	async isAdmin (req) {
+		if (!req.session || !req.session.user) {
+			return false
+		}
+		let query = 'SELECT * FROM user WHERE Username=?'
+		let userData = await this.databaseFacade.execute(query, [req.session.user.username])
+
+		if (userData[0].UserType === 'admin') {
+			return true
+		}
+		return false
+	}
+
 	async authorize(req, res, role) {
 		try {
 			if (!req.session || !req.session.user) {

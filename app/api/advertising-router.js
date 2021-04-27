@@ -5,6 +5,8 @@ import { sendEmail } from '../emailFacade.js'
 import adPrices from '../../config/ad-prices.js'
 import dateFns from 'date-fns'
 const { addMonths } = dateFns
+import cron from 'cron'
+const CronJob = cron.CronJob
 
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -21,19 +23,83 @@ export default class AdvertisingRouter extends BaseRouter {
   constructor (app, databaseFacade) {
 		super(app, databaseFacade)
 		this.setupRoutes()
+    let cronJob = new CronJob('0 0 * * *', () => {
+      this.calculateAdClicks()
+    }, null, true, 'Europe/London')
+    cronJob.start()
   }
-  
+
   setupRoutes () {
     this.app.get('/api/paid-images-prices', (req, res) => this.getAdPrices(req, res))
     this.app.get ('/api/paid-images', this.authorizeAdmin.bind(this), (req, res) => this.getAllAds(req, res))
     this.app.get ('/api/paid-images-basic', (req, res) => this.getAdsForFrontEnd(req, res))
     this.app.get ('/api/paid-images/me', this.authorizeUser.bind(this), (req, res) => this.getUserAds(req, res))
     this.app.get('/api/paid-images/:adId/click-stats', this.authorizeUser.bind(this), (req, res) => this.getAdClickStats(req, res))
+    this.app.get('/api/paid-images/:adId/payments', this.authorizeUser.bind(this), (req, res) => this.getAdPaymentsStats(req, res))
     this.app.post('/api/paid-images', this.authorizeUser.bind(this), adImageUploadFormat, (req, res) => this.createApplication(req, res))
     this.app.post('/api/paid-images/:adId/update-admin', this.authorizeAdmin.bind(this), (req, res) => this.updateAdAdmin(req, res))
     this.app.delete('/api/paid-images/:adId', this.authorizeUser.bind(this), (req, res) => this.deleteOrDeactivateAd(req, res))
     this.app.post('/api/paid-images/:adId/update-user', this.authorizeUser.bind(this), adImageUploadFormat, (req, res) => this.updateAdUser(req, res))
     this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
+  }
+  
+  async calculateAdClicks () {
+    console.log('CRON: Calculating ad clicks for today')
+
+    let activeAdStates = [adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection]
+    let today = new Date(new Date().getTime() - 3600*1000*2) // Make sure it's the whole day b4 midnight
+
+    let relevantAdsQuery = `SELECT 
+      Id AS id, Status AS status, advertisement.Clicks AS clicks, SUM(advertisementdayclick.Clicks) AS currentlySummedUpClicks
+      FROM advertisement LEFT JOIN advertisementdayclick ON (advertisement.Id = advertisementdayclick.AdId)
+      GROUP BY Id, clicks`
+
+    let allAds = await this.databaseFacade.execute(relevantAdsQuery, null, 'Error getting all ads with counts for cron')
+    
+    let insertAdClicksQuery = 'INSERT INTO advertisementdayclick (AdId, Date, Clicks) VALUES (?, ?, ?)'
+
+    try {
+      for (let ad of allAds) {
+        console.log(`Processing ad with id ${ad.id}, status ${ad.status}, clicks ${ad.clicks}, sum clicks ${ad.currentlySummedUpClicks}`)
+        let shouldInsert = false
+        let clicksForToday = 0
+
+        if (activeAdStates.includes(ad.status)) {
+          shouldInsert = true
+          if (ad.currentlySummedUpClicks === null) {
+            clicksForToday = ad.clicks
+          }
+          else if (ad.clicks >= ad.currentlySummedUpClicks) {
+            clicksForToday = ad.clicks - ad.currentlySummedUpClicks
+          }
+        }
+        else {
+          if (ad.currentlySummedUpClicks !== null && ad.currentlySummedUpClicks < ad.clicks) {
+            shouldInsert = true
+            clicksForToday = ad.clicks - ad.currentlySummedUpClicks
+          }
+        }
+
+        if (shouldInsert) {
+          try {
+            console.log(` Updating, today had ${clicksForToday} new clicks`)
+            await this.databaseFacade.execute(insertAdClicksQuery, [ad.id, today, clicksForToday], 'Error updating advertisement day clicks')
+          }
+          catch (err) {
+            if ('error' in err && err.error.code === 'ER_DUP_ENTRY') {
+              console.error(` Failed due to duplicate entry - ad ${ad.id} already has an entry for today.`)
+            }
+            else {
+              console.error(` BAD UNKNOWN ERROR: FAILED to run nightly cron job for ad ${ad.id}: `, err)
+            }
+          }
+        }
+      }
+    }
+    catch (err) {
+      console.error('VERY BAD ERROR: FAILED to run entire nightly cron job for aggregating ad clicks. Error: ', err)
+    }
+    console.log(`Done updating ad click counts cron`)
   }
 
   async getAdPrices (req, res) {
@@ -258,27 +324,56 @@ export default class AdvertisingRouter extends BaseRouter {
   async getAdClickStats (req, res) {
     try {
       let adId = req.params.adId
-      let user = this.getUser(req)
-
-      let adDetails = await this.getAdById(req, res, adId)
-      if (adDetails.userId !== user.id) {
-        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
-      }
+      let { isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
+      if (!isOk) { return }
 
       let statsQuery = 'SELECT Date AS date, Clicks AS clicks FROM advertisementdayclick WHERE AdId = ? ORDER BY Date ASC'
       let statsResult = await this.databaseFacade.execute(statsQuery, [adId])
-      
-      // todo check if needed - could possibly just return statsResult as json?
-      let stats = []
-      for (let dayStat of statsResult) {
-        stats.push({date: dayStat.date, clicks: dayStat.clicks})
-      }
 
-      res.json(stats)
+      res.json(statsResult)
     }
     catch (err) {
       return this.returnApiError(res, err)
     }
+  }
+
+  async getAdPaymentsStats (req, res) {
+    try {
+      let adId = req.params.adId
+      let { isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
+      if (!isOk) { return }
+
+      let query = 'SELECT Id AS id, Amount AS amount, RegisteredDate AS date FROM advertisementpayment WHERE AdId = ?'
+      let payments = await this.databaseFacade.execute(query, adId, 'Error fetching payments')
+      res.json(payments)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async verifyAdOwnerOrAdmin (adId, req, res) {
+    let user = await this.getUser(req)
+    let adResult = await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true)
+
+    if (adResult.length === 0) {
+      this.returnApiError(res, new ApiError('Ad with this ID not found', 404))
+      return { isOk: false }
+    }
+
+    let ad = adResult[0]
+
+    if (ad.userId === user.id) {
+      return { ad: ad, isOk: true }
+    }
+
+    let isAdmin = await this.isAdmin(req)
+    if (isAdmin) {
+      return { ad: ad, isOk: true }
+    }
+
+    this.returnApiError(res, new ApiError('You do not own this ad', 401))
+    return { isOk: false }
   }
 
   async updateAdAdmin (req, res) {
@@ -359,21 +454,22 @@ export default class AdvertisingRouter extends BaseRouter {
   async deleteOrDeactivateAd (req, res) {
     try {
       let adId = req.params.adId
-      let user = await this.getUser(req)
-      let ad = (await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true))[0]
+      let { ad, isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
+      if (!isOk) { return }
 
-      if (ad.userId !== user.id) {
-        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
-      }
-
-      let isDelete = [adStatuses.pending, adStatuses.needsCorrection, adStatuses.awaitingPayment].includes(ad.status)
+      let deactivateBecausePreviouslyActive = false
       let canDeactivate = [adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection].includes(ad.status)
-      let query
-      if (isDelete) {
-        query = 'DELETE FROM advertisement WHERE advertisement.Id = ?'
+      let isDelete = [adStatuses.pending, adStatuses.needsCorrection, adStatuses.awaitingPayment].includes(ad.status)
+      if (isDelete && ad.clicks > 0) {
+        deactivateBecausePreviouslyActive = true
       }
-      else if (canDeactivate) {
-        query = `UPDATE advertisement SET Status = 'ENDED' WHERE advertisement.Id = ?`
+      
+      let query
+      if (canDeactivate || deactivateBecausePreviouslyActive) {
+        query = `UPDATE advertisement SET Status = 'ENDED', ExpiryDate = NULL WHERE advertisement.Id = ?`
+      }
+      else if (isDelete) {
+        query = 'DELETE FROM advertisement WHERE advertisement.Id = ?'
       }
       else {
         return this.returnApiError(res, new ApiError('You cannot deactivate nor delete this ad', 400))
@@ -390,20 +486,18 @@ export default class AdvertisingRouter extends BaseRouter {
   async updateAdUser (req, res) {
     try {
       let [adId, file1, file2, adName, link, mainText, secondaryText] = 
-        [req.params.adId, req.file1, req.file2, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText, req.file]
+        [req.params.adId, req.files.file1, req.files.file2, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText]
 
-      let existingAd = await this.getAdById(req, res, adId)
-      if (!existingAd) {
-        return this.returnApiError(res, new ApiError('Ad id not found', 404))
-      }
+      if (Array.isArray(file1)) { file1 = file1[0] }
+      if (Array.isArray(file2)) { file2 = file2[0] }
 
-      let user = this.getUser(req)
-      if (existingAd.userId !== user.id) {
-        return this.returnApiError(res, new ApiError('You do not own this ad', 401))
-      }
+      let { ad: existingAd, isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
+      if (!isOk) { return }
 
       let {isValid, error} = this.checkUpdateValidity(file1, file2, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype)
-      if (!isValid) { return res.json({error: error}) }
+      if (!isValid) {
+        return this.returnApiError(res, new ApiError(error, 400))
+      }
     
       if (existingAd.adType === 'card') {
         if (file1) {
