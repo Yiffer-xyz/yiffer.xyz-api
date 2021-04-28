@@ -97,9 +97,9 @@ export default class KeywordsRouter extends BaseRouter {
 
     let query = 'INSERT INTO keyword (KeywordName) VALUES (?)'
     try {
-      await this.databaseFacade.execute(query, [req.body.keyword.trim()])
+      await this.databaseFacade.execute(query, [req.body.keyword.trim().toLowerCase()])
       res.json({success: true})
-			this.addModLog(req, 'Keyword', `Add ${req.body.keyword}`)
+			this.addModLog(req, 'Keyword', `Create ${req.body.keyword}`)
     }
     catch (err) {
       return this.returnError(err.message, res, err.error)
