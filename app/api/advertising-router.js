@@ -4,7 +4,7 @@ import FileSystemFacade from '../fileSystemFacade.js'
 import { sendEmail } from '../emailFacade.js'
 import adPrices from '../../config/ad-prices.js'
 import dateFns from 'date-fns'
-const { addMonths } = dateFns
+const { addMonths, addDays } = dateFns
 import cron from 'cron'
 const CronJob = cron.CronJob
 
@@ -378,31 +378,36 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAdAdmin (req, res) {
     try {
-      let [adId, status, expiryDateExtendMonths, customExpiryDate, adminNotes, correctionNote] = 
-        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.adminNotes, req.body.correctionNote]
+      let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote] = 
+        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote]
 
-      let existingAd = this.getAdById(req, res, adId)
+      let existingAd = await this.getAdById(req, res, adId)
       if (!existingAd) {
         return this.returnApiError(res, new ApiError('Ad with given id not found', 404))
       }
 
-      let newExpiryDate
+      let newExpiryDate = null
       if (expiryDateExtendMonths) {
-        newExpiryDate = addMonths(new Date(existingAd.expiryDate), expiryDateExtendMonths)
+        if (existingAd.expiryDate) {
+          newExpiryDate = addMonths(new Date(existingAd.expiryDate), expiryDateExtendMonths)
+        }
+        else {
+          newExpiryDate = addMonths(addDays(new Date(), 1), expiryDateExtendMonths)
+        }
       }
-      else {
+      else if (customExpiryDate) {
         newExpiryDate = customExpiryDate
       }
 
       let adType = existingAd.adType
 
-      let query = 'UPDATE advertisement Status=?, ExpiryDate=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
-      let queryParams = [status, newExpiryDate, adminNotes, correctionNote||null, adId]
+      let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=? AdminNotes=?, CorrectionNote=? WHERE Id=?'
+      let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(req, res, adId)
       
-      if (status === adStatuses.awaitingPayment || status === adStatuses.needsCorrection) {
+      if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection].includes(status)) {
         let user = this.getUserAccount()
         
         if (status === adStatuses.awaitingPayment) {
@@ -422,13 +427,15 @@ export default class AdvertisingRouter extends BaseRouter {
             'advertising',
             user.email,
             'Ad ready for payment - Yiffer.xyz',
-            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
+            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://advertising.yiffer.xyz/dashboard">https://advertising.yiffer.xyz/dashboard</a>.
+            <br/><br/>
+            One we receive your payment, we will manually activate your ad. We will not send an email when doing so, but you can always check your ads' statuses in your ads dashboard. Processing your payment should take a few days at most.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
           )
         }
-        else if (status === adStatuses.needsCorrection) {
+        else if (status === adStatuses.needsCorrection || status === adStatuses.activeNeedsCorrection) {
           await sendEmail(
             'advertising',
             user.email,
@@ -436,7 +443,7 @@ export default class AdvertisingRouter extends BaseRouter {
             `Your advertisement with ID <b>${adId}</b> is not accepted in its submitted state. Here are the notes from an administrator to help you fix this:<br/><br/>
             <i>${correctionNote}</i>
             <br/><br/>
-            You can make the required changes to your ad at <a href="https://yiffer.xyz/ads-dashboard">https://yiffer.xyz/ads-dashboard</a>.
+            You can make the required changes to your ad at <a href="https://advertising.yiffer.xyz/dashboard">https://advertising.yiffer.xyz/dashboard</a>.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
