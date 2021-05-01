@@ -1,7 +1,11 @@
-import emailSettings from '../config/email-config.js'
 import postmark from 'postmark'
 
-let client = new postmark.ServerClient(emailSettings.apiKey);
+import fs from 'fs'
+import yaml from 'js-yaml'
+let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+const config = yaml.load(fileContents)
+
+let client = new postmark.ServerClient(config.email.apiKey);
 
 export async function sendEmail (sendername, receiver, subject, text) {
   try {

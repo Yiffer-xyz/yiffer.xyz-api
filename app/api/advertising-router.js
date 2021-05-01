@@ -2,7 +2,6 @@ import BaseRouter, { ApiError } from './baseRouter.js'
 import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
 import { sendEmail } from '../emailFacade.js'
-import adPrices from '../../config/ad-prices.js'
 import dateFns from 'date-fns'
 const { addMonths, addDays } = dateFns
 import cron from 'cron'
@@ -20,8 +19,9 @@ var upload = multer({ storage: storage })
 const adImageUploadFormat = upload.fields([{ name: 'file1', maxCount: 1 }, { name: 'file2', maxCount: 1 }])
 
 export default class AdvertisingRouter extends BaseRouter {
-  constructor (app, databaseFacade) {
+  constructor (app, databaseFacade, adPrices) {
 		super(app, databaseFacade)
+    this.adPrices = adPrices
 		this.setupRoutes()
     let cronJob = new CronJob('0 0 * * *', () => {
       this.calculateAdClicks()
@@ -103,7 +103,7 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async getAdPrices (req, res) {
-    res.json(adPrices)
+    res.json(this.adPrices)
   }
 
   async createApplication (req, res) {
@@ -412,7 +412,7 @@ export default class AdvertisingRouter extends BaseRouter {
         
         if (status === adStatuses.awaitingPayment) {
           let adCosts = []
-          for (let adPrice of adPrices[adType]) {
+          for (let adPrice of this.adPrices[adType]) {
             if (adPrice.discountedPrice) {
               adCosts.push(`<b>${adPrice.discountedPrice} USD</b> for ${adPrice.durationMonths} months (limited discount)`)
             }

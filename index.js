@@ -5,14 +5,20 @@ const app = express()
 import cors from 'cors'
 import session from 'express-session'
 
+import fs from 'fs'
+import yaml from 'js-yaml'
+let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+const config = yaml.load(fileContents)
+
 import redis from 'redis'
 import connRedis from 'connect-redis'
-import redisConfig from './config/redis-config.js'
 const redisStore = connRedis(session)
-const redisClient = redis.createClient(redisConfig.port, redisConfig.host);
+const redisClient = redis.createClient(config.redis.port, config.redis.host);
 
 import dotenv from 'dotenv'
 dotenv.config()
+
+const insecureCookie = process.env && process.env.IS_PRODUCTION === '0'
 
 app.use(session({
   secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
@@ -20,19 +26,18 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
   rolling: true,
-  cookie: { secure: process.env.IS_PRODUCTION === '1' },
+  cookie: { secure: !insecureCookie },
   proxy: true,
   store: new redisStore({
-    host: redisConfig.host,
-    port: redisConfig.port,
+    host: config.redis.host,
+    port: config.redis.port,
     client: redisClient,
-    ttl: redisConfig.ttl,
+    ttl: config.redis.ttl,
   }),
 }));
 
 import mysql from 'mysql'
-import mysqlSettings from './config/db-config.js'
-let mysqlPool = mysql.createPool(mysqlSettings)
+let mysqlPool = mysql.createPool(config.db)
 
 import DatabaseFacade from './app/databaseFacade.js'
 let databaseFacade = new DatabaseFacade(mysqlPool)
@@ -44,25 +49,14 @@ app.set('query parser', 'extended')
 
 app.use(express.static('./public'))
 
-import { prerenderToken } from './config/prerender.js'
 import prerender from 'prerender-node'
-prerender.set('prerenderToken', prerenderToken)
+prerender.set('prerenderToken', config.prerender.prerenderToken)
   .blacklisted(['/api/*'])
 
 app.use(prerender);
 
 import routes from './app/routes.js'
-routes(app, databaseFacade)
+routes(app, databaseFacade, config)
 
-const server = app.listen(port)
+app.listen(port)
 console.log('Magic happens on port ' + port)
-
-function startGracefulShutdown () {
-  console.log('Starting shutdown of express...')
-  server.close(function () {
-    console.log('Express shut down.')
-  })
-}
-
-process.on('SIGTERM', startGracefulShutdown);
-process.on('SIGINT', startGracefulShutdown);

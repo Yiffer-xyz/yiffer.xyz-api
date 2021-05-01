@@ -1,7 +1,11 @@
 import fs from 'fs'
 import googleStorage from '@google-cloud/storage'
 const { Storage } = googleStorage
-const storage = new Storage({ keyFilename: './config/google-service-account.json' })
+
+import yaml from 'js-yaml'
+let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+const config = yaml.load(fileContents)
+const storage = new Storage({ credentials: config.googleServiceAccount })
 
 const paidImagesBucketName = 'yiffer-paid-images'
 const comicsBucketName = 'yiffer-comics'

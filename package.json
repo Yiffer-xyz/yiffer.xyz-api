@@ -21,9 +21,10 @@
     "date-fns": "^2.14.0",
     "express": "^4.17.1",
     "express-session": "^1.15.6",
+    "js-yaml": "^4.1.0",
     "multer": "^1.4.2",
     "mysql": "^2.16.0",
-    "postmark": "^2.6.0",
+    "postmark": "^2.7.4",
     "prerender-node": "^3.2.5",
     "sharp": "^0.26.2"
   },
