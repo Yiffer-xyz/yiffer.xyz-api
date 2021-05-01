@@ -401,7 +401,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
       let adType = existingAd.adType
 
-      let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=? AdminNotes=?, CorrectionNote=? WHERE Id=?'
+      let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
       let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
