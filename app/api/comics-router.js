@@ -59,8 +59,8 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getComicListPaginated (req, res) {
 		try {
-			let [categories, tags, keywordIds, search, page, order] = 
-				[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order]
+			let [categories, tags, keywordIds, search, page, order, shouldGetKeywords] = 
+				[req.query.categories, req.query.tags, req.query.keywordIds, req.query.search, req.query.page, req.query.order, req.query.getKeywords]
 
 			keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
@@ -104,11 +104,43 @@ export default class ComicsRouter extends BaseRouter {
 			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])
 			let numberOfPages = Math.ceil(totalNumber[0].count / COMICS_PER_PAGE)
 
+			if (shouldGetKeywords) {
+				comics = await this.getComicsWithKeywords(comics)
+			}
+
 			res.json({ comics, numberOfPages, page: page+1 })
 		}
 		catch (err) {
 			return this.returnApiError(res, err)
 		}
+	}
+
+	async getComicsWithKeywords (comics) {
+		let getKwQuery = 'SELECT keyword.KeywordName AS keywordName, keyword.Id AS keywordId, comic.Id AS comicId FROM comic INNER JOIN comickeyword ON (comic.Id = comickeyword.ComicId) INNER JOIN keyword ON (keyword.Id = comickeyword.KeywordId) WHERE comic.Id IN (?) ORDER BY comicId'
+
+		let comicIds = []
+		let comicsWithKeywords = {}
+
+		for (let comic of comics) {
+			comicsWithKeywords[comic.id] = []
+			comicIds.push(comic.id)
+		}
+
+		let keywords = await this.databaseFacade.execute(getKwQuery, [comicIds], 'Error fetching tags from database')
+
+		for (let keywordResult of keywords) {
+			comicsWithKeywords[keywordResult.comicId].push({
+				id: keywordResult.keywordId,
+				name: keywordResult.keywordName,
+			})
+		}
+
+		let newComics = comics.map(c => ({
+			...c,
+			keywords: comicsWithKeywords[c.id]
+		}))
+
+		return newComics
 	}
 
 	async getAllComics (req, res) {

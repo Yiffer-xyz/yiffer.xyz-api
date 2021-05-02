@@ -344,7 +344,7 @@ export default class MiscRouter extends BaseRouter {
 
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Error logging event')
-			res.json({success: true})
+			res.status(204).end()
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error)
@@ -357,7 +357,7 @@ export default class MiscRouter extends BaseRouter {
 
 		try {
 			await this.databaseFacade.execute(query, queryParams, 'Error logging route')
-			res.json({success: true})
+			res.status(204).end()
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error, err)
