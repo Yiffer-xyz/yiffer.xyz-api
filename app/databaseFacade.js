@@ -18,14 +18,24 @@ export default class DatabaseFacade {
 				}
 				else if (queryParams) {
 					connection.query(queryString, queryParams, (err, results) => {
-						if (err) { reject({error: err, message: errorMessage, customErrorMessage: errorMessage}) }
+						if (err) {
+							if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+								errorMessage = `Sorry, you can't use emojis here!`
+							}
+							reject({error: err, message: errorMessage, customErrorMessage: errorMessage})
+						}
 						resolve(results)
 						connection.release()
 					})
 				}
 				else {
 					connection.query(queryString, (err, results) => {
-						if (err) { reject({error: err, message: errorMessage, customErrorMessage: errorMessage}) }
+						if (err) {
+							if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+								errorMessage = `Sorry, you can't use emojis here!`
+							}
+							reject({error: err, message: errorMessage, customErrorMessage: errorMessage})
+						}
 						resolve(results)
 						connection.release()
 					})
