@@ -47,7 +47,7 @@ export default class AuthenticationRouter extends BaseRouter {
           userType: userResponse.UserType,
         }
         req.session.user = userData
-        return res.json({success: true, userData: userData})
+        return res.json(userData)
       }
     }
     catch (err) {
