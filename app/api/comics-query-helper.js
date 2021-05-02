@@ -15,8 +15,11 @@ export async function getComics (databaseFacade, user, limit, offset, categories
   let orderQueryString = `ORDER BY ${order} DESC`
 
   let paginationQueryString = ''
-  if (limit && offset) {
-    paginationQueryString = ` LIMIT ${limit} OFFSET ? `
+  if (limit) {
+    paginationQueryString += ' LIMIT ? '
+  }
+  if (offset) {
+    paginationQueryString += ' OFFSET ? '
   }
 
   let comicVoteQuery = `
@@ -42,8 +45,16 @@ export async function getComics (databaseFacade, user, limit, offset, categories
   `
   
   let queryParams = []
+
   if (user) { queryParams = [user.id] }
-  queryParams.push(...filterQueryParams, offset)
+  queryParams.push(...filterQueryParams)
+
+  if (limit) {
+    queryParams.push(limit)
+  }
+  if (offset) {
+    queryParams.push(offset)
+  }
 
   let query = `
     SELECT cc.Id AS id, cc.Name AS name, cc.Cat AS cat, cc.Tag AS tag, cc.Artist AS artist, 
