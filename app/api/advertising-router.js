@@ -267,11 +267,45 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async getAdsBase (req, res, whereStatement, whereParams, isAdminRequest) {
     try {
-      let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote FROM advertisement INNER JOIN user ON (user.Id = advertisement.UserId) ${whereStatement} ORDER BY CreatedDate DESC`
+      let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote, advertisementpayment.Amount AS paymentAmount, advertisementpayment.RegisteredDate AS paymentDate
+        FROM advertisement 
+        INNER JOIN user ON (user.Id = advertisement.UserId) 
+        LEFT JOIN advertisementpayment ON (advertisementpayment.AdId = advertisement.Id)
+        ${whereStatement} 
+        ORDER BY CreatedDate, advertisementpayment.RegisteredDate DESC`
 
-      let results = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
+      let adResultsWithPayments = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
 
-      return results
+      let ads = []
+      let currentAd = null
+
+      for (let adPaymentRow of adResultsWithPayments) {
+        if (adPaymentRow.id !== currentAd?.id) {
+          if (currentAd) {
+            ads.push(currentAd)
+          }
+
+          currentAd = {
+            ...adPaymentRow,
+            payments: []
+          }
+          delete currentAd.paymentAmount
+          delete currentAd.paymentDate
+        }
+
+        if (adPaymentRow.paymentAmount) {
+          currentAd.payments.push({
+            amount: adPaymentRow.paymentAmount,
+            date: adPaymentRow.paymentDate,
+          })
+        }
+      }
+
+      if (currentAd) {
+        ads.push(currentAd)
+      }
+
+      return ads
     }
     catch (err) {
       return this.returnApiError(res, err)
@@ -378,8 +412,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAdAdmin (req, res) {
     try {
-      let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote] = 
-        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote]
+      let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote, payment] = 
+        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote, req.body.paymentAmount]
 
       let existingAd = await this.getAdById(req, res, adId)
       if (!existingAd) {
@@ -400,6 +434,10 @@ export default class AdvertisingRouter extends BaseRouter {
       }
 
       let adType = existingAd.adType
+
+      if (payment) {
+        await this.registerAdPayment(adId, payment)
+      }
 
       let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
       let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, adId]
@@ -451,11 +489,18 @@ export default class AdvertisingRouter extends BaseRouter {
         }
       }
       
-      res.json({success: true, ad: updatedAd})
+      res.json(updatedAd)
     }
     catch (err) {
       return this.returnApiError(res, err)
     }
+  }
+
+  async registerAdPayment (adId, payment) {
+    let query = 'INSERT INTO advertisementpayment (AdId, Amount, RegisteredDate) VALUES (?, ?, ?)'
+    let queryParams = [adId, payment, new Date()]
+
+    await this.databaseFacade.execute(query, queryParams, 'Failed to register payment')
   }
 
   async deleteOrDeactivateAd (req, res) {
