@@ -23,11 +23,27 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';	
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+import cron from 'cron'
+const CronJob = cron.CronJob
+
+async function clearUploadsFolder() {
+	console.log('Cron: Cleaning up uploads folder...')
+	let uploadedFiles = await FileSystemFacade.listDir(__dirname + '/../../uploads')
+	console.log(`Found ${uploadedFiles.length} files`)
+	for (let file of uploadedFiles) {
+		console.log(file)
+		await FileSystemFacade.deleteFile(`${__dirname}/../../uploads/${file}`)
+	}
+	console.log(`Deleted all upload files`)
+}
+
 export default class ComicsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
 		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
-		this.setupUploadsFolder()		
+		this.setupUploadsFolder()
+		let cronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
+		cronJob.start()
 	}
 
   setupRoutes () {

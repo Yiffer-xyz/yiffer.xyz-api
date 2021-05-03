@@ -4,8 +4,6 @@ import FileSystemFacade from '../fileSystemFacade.js'
 import { sendEmail } from '../emailFacade.js'
 import dateFns from 'date-fns'
 const { addMonths, addDays } = dateFns
-import cron from 'cron'
-const CronJob = cron.CronJob
 
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -23,10 +21,6 @@ export default class AdvertisingRouter extends BaseRouter {
 		super(app, databaseFacade)
     this.adPrices = adPrices
 		this.setupRoutes()
-    let cronJob = new CronJob('0 0 * * *', () => {
-      this.calculateAdClicks()
-    }, null, true, 'Europe/London')
-    cronJob.start()
   }
 
   setupRoutes () {
@@ -43,65 +37,6 @@ export default class AdvertisingRouter extends BaseRouter {
     this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
   }
   
-  async calculateAdClicks () {
-    console.log('CRON: Calculating ad clicks for today')
-
-    let activeAdStates = [adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection]
-    let today = new Date(new Date().getTime() - 3600*1000*2) // Make sure it's the whole day b4 midnight
-
-    let relevantAdsQuery = `SELECT 
-      Id AS id, Status AS status, advertisement.Clicks AS clicks, SUM(advertisementdayclick.Clicks) AS currentlySummedUpClicks
-      FROM advertisement LEFT JOIN advertisementdayclick ON (advertisement.Id = advertisementdayclick.AdId)
-      GROUP BY Id, clicks`
-
-    let allAds = await this.databaseFacade.execute(relevantAdsQuery, null, 'Error getting all ads with counts for cron')
-    
-    let insertAdClicksQuery = 'INSERT INTO advertisementdayclick (AdId, Date, Clicks) VALUES (?, ?, ?)'
-
-    try {
-      for (let ad of allAds) {
-        console.log(`Processing ad with id ${ad.id}, status ${ad.status}, clicks ${ad.clicks}, sum clicks ${ad.currentlySummedUpClicks}`)
-        let shouldInsert = false
-        let clicksForToday = 0
-
-        if (activeAdStates.includes(ad.status)) {
-          shouldInsert = true
-          if (ad.currentlySummedUpClicks === null) {
-            clicksForToday = ad.clicks
-          }
-          else if (ad.clicks >= ad.currentlySummedUpClicks) {
-            clicksForToday = ad.clicks - ad.currentlySummedUpClicks
-          }
-        }
-        else {
-          if (ad.currentlySummedUpClicks !== null && ad.currentlySummedUpClicks < ad.clicks) {
-            shouldInsert = true
-            clicksForToday = ad.clicks - ad.currentlySummedUpClicks
-          }
-        }
-
-        if (shouldInsert) {
-          try {
-            console.log(` Updating, today had ${clicksForToday} new clicks`)
-            await this.databaseFacade.execute(insertAdClicksQuery, [ad.id, today, clicksForToday], 'Error updating advertisement day clicks')
-          }
-          catch (err) {
-            if ('error' in err && err.error.code === 'ER_DUP_ENTRY') {
-              console.error(` Failed due to duplicate entry - ad ${ad.id} already has an entry for today.`)
-            }
-            else {
-              console.error(` BAD UNKNOWN ERROR: FAILED to run nightly cron job for ad ${ad.id}: `, err)
-            }
-          }
-        }
-      }
-    }
-    catch (err) {
-      console.error('VERY BAD ERROR: FAILED to run entire nightly cron job for aggregating ad clicks. Error: ', err)
-    }
-    console.log(`Done updating ad click counts cron`)
-  }
-
   async getAdPrices (req, res) {
     res.json(this.adPrices)
   }
@@ -598,7 +533,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let queryClicks = 'UPDATE advertisement SET Clicks = Clicks + 1 WHERE Id = ?'
       await this.databaseFacade.execute(queryClicks, [adId], 'Error logging ad click')
 
-      const today = (new Date()).toISOString().substr(0, 10)
+      let today = new Date()
       let queryDayClicks = 'INSERT INTO advertisementdayclick (AdId, Date, Clicks) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE Clicks = Clicks + 1'
       let queryDayClicksParams = [adId, today]
       await this.databaseFacade.execute(queryDayClicks, queryDayClicksParams, 'Error logging ad click')
