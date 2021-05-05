@@ -1,4 +1,4 @@
-import BaseRouter from './baseRouter.js';
+import BaseRouter, { ApiError } from './baseRouter.js'
 
 export default class KeywordsRouter extends BaseRouter {
 	constructor (app, databaseFacade, modLogger) {
@@ -123,26 +123,28 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async processKeywordSuggestion (req, res) {
-		let [suggestionId, comicId, keyword, isAdding, isApproved] = 
-      [req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
-    let updateQuery = 'UPDATE keywordsuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
-    let updateQueryParams = [isApproved ? 1 : 0, suggestionId]
-    let insertQuery = isAdding ? 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM comickeyword WHERE ComicId = ? AND KeywordId = ?'
-    let insertQueryParams = [comicId, keyword.id]
     try {
+      let [suggestionId, comicId, keyword, isAdding, isApproved] = 
+        [req.body.suggestion.id, req.body.suggestion.comicId, req.body.suggestion.keyword, req.body.suggestion.addKeyword, req.body.isApproved]
+      let updateQuery = 'UPDATE keywordsuggestion SET Approved = ?, Processed = 1 WHERE Id = ?'
+      let updateQueryParams = [isApproved ? 1 : 0, suggestionId]
+      let insertQuery = isAdding ? 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES (?, ?)' : 'DELETE FROM comickeyword WHERE ComicId = ? AND KeywordId = ?'
+      let insertQueryParams = [comicId, keyword.id]
+
       if (isApproved) {
         await this.databaseFacade.execute(insertQuery, insertQueryParams, 'Database error: Error adding/deleting tags to/from comic')
       }
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Database error: Error updating suggested tags')
-      res.json({success: true})
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
+      res.status(200).end()
+
+      let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
       this.addModLog(req, 'Keyword', `${isApproved ? 'Approve' : 'Reject'} ${keyword.name} for ${comicName}`)
     }
     catch (err) {
-      if (err.error.sqlMessage && err.error.sqlMessage.includes('Duplicate')) {
-        return this.returnError('Error adding tag: tag already exists on comic. Just reject this one please.', res)
+      if (err?.error?.sqlMessage && err.error.sqlMessage.includes('Duplicate')) {
+        return this.returnApiError(res, new ApiError('Tag already exists on comic. Just reject this one please.', 400))
       }
-      return this.returnError(err.message, res, err.error)
+      return this.returnApiError(res, err)
     }
   }
 
