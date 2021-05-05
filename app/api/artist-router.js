@@ -1,4 +1,4 @@
-import BaseRouter from './baseRouter.js'
+import BaseRouter, { ApiError } from './baseRouter.js'
 import { getComics } from './comics-query-helper.js'
 
 export default class ArtistRouter extends BaseRouter {
@@ -55,6 +55,10 @@ export default class ArtistRouter extends BaseRouter {
   async addArtist (req, res) {
     try {
       let [artistName, e621Name, patreonName] = [req.body.artistName, req.body.e621Name, req.body.patreonName]
+      if (!artistName || artistName.length < 2) {
+        return this.returnApiError(res, new ApiError('Name must be at least 2 characters long', 400))
+      }
+      
       let alreadyExistsQuery = 'SELECT * FROM artist WHERE Name = ?'
       let query = 'INSERT INTO artist (Name, E621Name, PatreonName) VALUES (?, ?, ?)'
       let existingArtist = this.databaseFacade.execute(alreadyExistsQuery, [artistName])
@@ -65,13 +69,22 @@ export default class ArtistRouter extends BaseRouter {
 
 			this.addModLog(req, 'Artist', `Add ${artistName}`)
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      if (err?.error?.code && err.error.code === 'ER_DUP_ENTRY') {
+        return this.returnApiError(res, new ApiError('Artist with this name already exists', 400))
+      }
+      return this.returnApiError(res, err)
+    }
   }
 
   async updateArtist (req, res) {
     try {
       let artistId = req.params.id
       let [artistName, e621Name, patreonName, links] = [req.body.artistName, req.body.e621Name, req.body.patreonName, req.body.links]
+
+      if (!artistName || artistName.length < 2) {
+        return this.returnApiError(res, new ApiError('Name must be at least 2 characters long', 400))
+      }
 
       let typedLinks = extractLinkTypesFromLinkUrls(links)
 
@@ -93,11 +106,13 @@ export default class ArtistRouter extends BaseRouter {
       if (links.length > 0) {
         await this.databaseFacade.execute(insertLinksQuery, insertLinksParams, 'Error adding links')
       }
-      res.json({success: true})
+      res.status(200).end()
 
 			this.addModLog(req, 'Artist', `Update ${artistName} info`)
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 }
 
