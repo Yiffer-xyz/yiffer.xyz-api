@@ -120,7 +120,7 @@ export default class ComicsRouter extends BaseRouter {
 			let [comics, totalNumber] = await Promise.all([comicsPromise, totalNumberPromise])
 			let numberOfPages = Math.ceil(totalNumber[0].count / COMICS_PER_PAGE)
 
-			if (shouldGetKeywords) {
+			if (shouldGetKeywords && comics.length > 0) {
 				comics = await this.getComicsWithKeywords(comics)
 			}
 
