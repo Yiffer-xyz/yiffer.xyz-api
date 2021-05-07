@@ -11,7 +11,7 @@ export async function sendEmail (sendername, receiver, subject, text) {
   try {
     await client.sendEmail({
       From: `${sendername}@yiffer.xyz`,
-      To: 'contact@yiffer.xyz',
+      To: receiver,
       Subject: subject,
       HtmlBody: text,
       MessageStream: 'outbound'
