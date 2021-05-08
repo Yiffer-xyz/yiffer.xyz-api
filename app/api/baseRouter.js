@@ -24,6 +24,12 @@ export default class BaseRouter {
 
 			error = new ApiError(error.customErrorMessage, 500)
 		}
+
+		else if (error?.error?.name === 'ApiInputError') {
+			console.log(`[500] EMAIL error: ${error.error.message}. Stack: ${error.error.stack}`)
+			error = new ApiError('Server error related to email', 500)
+		}
+
 		else if (!(error instanceof ApiError)) {
 			console.error(`[500] UNCAUGHT error: ${error.stack}`)
 			error = new ApiError('Server error', 500)

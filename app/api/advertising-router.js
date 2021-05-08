@@ -87,7 +87,7 @@ export default class AdvertisingRouter extends BaseRouter {
           'advertising',
           user.email,
           'Ad submission confirmation - Yiffer.xyz!',
-          `We have received your advertisement submission and will review it shortly. If the ad is accepted, you will receive another email stating this. Otherwise, you will receive an email detailing what needs to be fixed.
+          `We have received your advertisement submission and will review it shortly. Your ad has been given the ID ${adId}. If the ad is accepted, you will receive another email stating this. Otherwise, you will receive an email detailing what needs to be fixed.
           <br/><br/>
           Regards,<br/>
           Yiffer.xyz`
@@ -381,7 +381,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let updatedAd = await this.getAdById(req, res, adId)
       
       if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection].includes(status)) {
-        let user = this.getUserAccount()
+        let user = this.getUser(req)
         
         if (status === adStatuses.awaitingPayment) {
           let adCosts = []
@@ -390,7 +390,7 @@ export default class AdvertisingRouter extends BaseRouter {
               adCosts.push(`<b>${adPrice.discountedPrice} USD</b> for ${adPrice.durationMonths} months (limited discount)`)
             }
             else {
-              adCosts.push(`<b>${adPrice.discountedPrice} USD</b> for ${adPrice.durationMonths} months`)
+              adCosts.push(`<b>${adPrice.price} USD</b> for ${adPrice.durationMonths} months`)
             }
           }
 
