@@ -339,28 +339,28 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async logEvent (req, res) {
-		let query = 'INSERT INTO eventlog (event, description) VALUES (?, ?)'
-		let queryParams = [req.body.event, req.body.description]
-
 		try {
+			let query = 'INSERT INTO eventlog (event, description) VALUES (?, ?)'
+			let queryParams = [req.body.event, req.body.description]
+
 			await this.databaseFacade.execute(query, queryParams, 'Error logging event')
 			res.status(204).end()
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+      return this.returnApiError(res, err)
 		}
 	}
 
 	async logRoute (req, res) {
-		let query = 'INSERT INTO routelog (route, description, session) VALUES (?, ?, ?)'
-		let queryParams = [req.body.route, req.body.description, req.sessionID]
-
 		try {
+			let query = 'INSERT INTO routelog (route, description, session) VALUES (?, ?, ?)'
+			let queryParams = [req.body.route, req.body.description, req.sessionID]
+
 			await this.databaseFacade.execute(query, queryParams, 'Error logging route')
 			res.status(204).end()
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error, err)
+      return this.returnApiError(res, err)
 		}
 	}
 

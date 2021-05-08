@@ -26,8 +26,13 @@ export default class BaseRouter {
 		}
 
 		else if (error?.error?.name === 'ApiInputError') {
-			console.log(`[500] EMAIL error: ${error.error.message}. Stack: ${error.error.stack}`)
+			console.log(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error related to email', 500)
+		}
+
+		else if (error?.error?.code === 'ECONNREFUSED') {
+			console.log(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			error = new ApiError('Server error: Could not connect to database', 500)
 		}
 
 		else if (!(error instanceof ApiError)) {
