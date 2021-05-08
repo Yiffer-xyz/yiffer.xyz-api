@@ -29,7 +29,7 @@ export default class ArtistRouter extends BaseRouter {
       let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
       let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
 
-      let user = this.getUser(req)
+      let user = await this.getUser(req)
       let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
       let artistId = artistData[0].Id
       let [artistE621Name, artistPatreonName] = [artistData[0].E621Name, artistData[0].PatreonName]

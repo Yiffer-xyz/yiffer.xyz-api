@@ -80,7 +80,7 @@ export default class ComicsRouter extends BaseRouter {
 
 			keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
-			let user = this.getUser(req)
+			let user = await this.getUser(req)
 			page = (page && !isNaN(page)) ? Number(page)-1 : 0
 			let pageOffset = page * COMICS_PER_PAGE
 
@@ -188,7 +188,7 @@ export default class ComicsRouter extends BaseRouter {
 		let queryParams = []
     let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (Id = FirstComic) WHERE LastComic = ?'
     let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (Id = LastComic) WHERE FirstComic = ?'
-		let user = this.getUser(req)
+		let user = await this.getUser(req)
 
 		if (user) {
 			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, comicvote.Vote AS yourRating FROM (SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, comic.Cat AS cat, comic.Tag AS tag, comic.Created, comic.Updated FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN comicvote ON (comicvote.ComicId = T1.id AND comicvote.UserId = ?)'
@@ -498,7 +498,7 @@ export default class ComicsRouter extends BaseRouter {
 
 	async rateComic (req, res) {
 		let [comicId, rating] = [Number(req.params.id), Number(req.body.rating)]
-		let user = this.getUser(req)
+		let user = await this.getUser(req)
 		let deleteQuery = 'DELETE FROM comicvote WHERE UserId = ? AND ComicId = ?'
 		let deleteQueryParams = [user.id, comicId]
 		let insertQuery = 'INSERT INTO comicvote (UserId, ComicId, Vote) VALUES (?, ?, ?)'

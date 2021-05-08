@@ -108,7 +108,7 @@ export default class KeywordsRouter extends BaseRouter {
 
   async addKeywordSuggestion (req, res) {
     let [comicId, keywordId, isAddingKeyword] = [req.body.comicId, req.body.keywordId, req.body.isAdding ? 1 : 0]
-    let user = this.getUser(req) 
+    let user = await this.getUser(req) 
     let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
     let query = `INSERT INTO keywordsuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`

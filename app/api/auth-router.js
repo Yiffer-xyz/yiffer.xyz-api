@@ -25,7 +25,17 @@ export default class AuthenticationRouter extends BaseRouter {
 
   async refreshAuth (req, res) {
     if (req.session && req.session.user) {
-      res.json(req.session.user)
+      try {
+        let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType FROM user WHERE Id = ?'
+        let userResult = await this.databaseFacade.execute(query, [req.session.user.id])
+        if (userResult.length === 0) {
+          return res.json(1)
+        }
+        res.json(userResult[0])
+      }
+      catch (err) {
+        res.json(null)
+      }
     }
     else {
       res.json(null)
@@ -59,12 +69,12 @@ export default class AuthenticationRouter extends BaseRouter {
     let query = 'SELECT * FROM user WHERE Username = ? OR Email = ?'
     let userResult = await this.databaseFacade.execute(query, [usernameOrEmail, usernameOrEmail])
     if (userResult.length === 0) {
-      return {error: 'Non-existing username/email'}
+      return {error: 'Incorrect email/username/password'}
     }
     userResult = userResult[0]
     let passwordMatch = await compare(password, userResult.Password)
     if (!passwordMatch) {
-      return {error: 'Incorrect password'}
+      return {error: 'Incorrect email/username/password'}
     }
     return userResult
   }
@@ -195,6 +205,12 @@ export default class AuthenticationRouter extends BaseRouter {
       let userResponse = await this.authenticate(username, currentPassword)
       if ('error' in userResponse) {
 				return this.returnApiError(res, new ApiError('Incorrect password', 400))
+      }
+
+      let emailQuery = 'SELECT * FROM user WHERE Email = ?'
+      let users = await this.databaseFacade.execute(emailQuery, [email])
+      if (users.length > 0) {
+				return this.returnApiError(res, new ApiError('An account with this email already exists', 409))
       }
 
       let query = 'UPDATE user SET Email=? WHERE Id=?'

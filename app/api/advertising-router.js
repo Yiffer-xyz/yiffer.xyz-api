@@ -43,8 +43,9 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async createApplication (req, res) {
     try {
-      let [file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes, user] = 
-        [req.files.file1, req.files.file2, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes, this.getUser(req)]
+      let [file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
+        [req.files.file1, req.files.file2, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes]
+        let user = await this.getUser(req)
 
         if (Array.isArray(file1)) { file1 = file1[0] }
         if (Array.isArray(file2)) { file2 = file2[0] }
@@ -249,7 +250,10 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async getUserAds (req, res) {
     try {
-      let user = this.getUser(req)
+      let user = await this.getUser(req)
+      if (!user) {
+        return res.json([])
+      }
       let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
       res.json(results)
     }
@@ -381,7 +385,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let updatedAd = await this.getAdById(req, res, adId)
       
       if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection].includes(status)) {
-        let user = this.getUser(req)
+        let user = await this.getUserAccount(existingAd.userId)
         
         if (status === adStatuses.awaitingPayment) {
           let adCosts = []

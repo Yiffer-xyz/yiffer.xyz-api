@@ -91,7 +91,7 @@ export default class MiscRouter extends BaseRouter {
 				return this.returnApiError(res, new ApiError('A comic with this name already exists!', 400))
 			}
 
-			let user = this.getUser(req)
+			let user = await this.getUser(req)
 			let userParam = user ? user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 			let query = `INSERT INTO comicsuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
 			let queryParams = [comicName, artist, comment, userParam]
@@ -503,8 +503,9 @@ export default class MiscRouter extends BaseRouter {
 
 	async createModApplication (req, res) {
 		try {
-			let [user, notes, competentAnswer, telegramUsername] = 
-				[this.getUser(req), req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
+			let [notes, competentAnswer, telegramUsername] = 
+				[req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
+			let user = await this.getUser(req)
 
 			if (!user) {
 				return this.returnApiError(res, new ApiError('Not logged in', 401))
@@ -555,7 +556,7 @@ export default class MiscRouter extends BaseRouter {
 	}
 
 	async getMyModApplicationStatus (req, res) {
-		let user = this.getUser(req)
+		let user = await this.getUser(req)
 		if (!user) { return this.returnError('Not logged in', res, null, null) }
 
 		let query = 'SELECT IsProcessed AS isProcessed, IsRemoved AS isRemoved FROM modapplication WHERE UserId=?'
@@ -592,7 +593,7 @@ export default class MiscRouter extends BaseRouter {
 	async submitFeedback (req, res) {
 		try {
 			let feedback = req.body.feedbackText
-			let user = this.getUser(req)
+			let user = await this.getUser(req)
 			
 			let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
 			await this.databaseFacade.execute(insertQuery, [feedback, user?.id], 'Error saving feedback')

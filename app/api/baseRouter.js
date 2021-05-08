@@ -91,9 +91,29 @@ export default class BaseRouter {
 		}
 	}
 
-	getUser (req) {
+	getUserFromSession (req) {
 		if (req.session && req.session.user) {
 			return req.session.user
+		}
+		else {
+			return null
+		}
+	}
+
+	async getUser (req) {
+		if (req.session && req.session.user) {
+			try {
+				let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType FROM user WHERE Id = ?'
+				let userResult = await this.databaseFacade.execute(query, [req.session.user.id])
+				if (userResult.length === 0) {
+					return null
+				}
+				return userResult[0]
+			}
+			catch (err) {
+				console.log('Error in getUser(req): ', err)
+				return null
+			}
 		}
 		else {
 			return null
@@ -108,8 +128,8 @@ export default class BaseRouter {
     return results[0]
   }
 
-	async authorizeUser (req, res, next) {
-		let user = this.getUser(req)
+	authorizeUser (req, res, next) {
+		let user = this.getUserFromSession(req)
 		if (!user) {
 			res.json({error: 'Not logged in'})
 		}
