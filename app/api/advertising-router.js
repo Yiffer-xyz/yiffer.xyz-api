@@ -402,7 +402,7 @@ export default class AdvertisingRouter extends BaseRouter {
             'Ad ready for payment - Yiffer.xyz',
             `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://advertising.yiffer.xyz/dashboard">https://advertising.yiffer.xyz/dashboard</a>.
             <br/><br/>
-            One we receive your payment, we will manually activate your ad. We will not send an email when doing so, but you can always check your ads' statuses in your ads dashboard. Processing your payment should take a few days at most.
+            One we receive your payment, we will manually activate your ad. We will not send an email when doing so - we don't want to spam you more than necessary - but you can always check your ad's status in your ads dashboard. Processing your payment should take a few days at most.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`

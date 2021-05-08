@@ -7,12 +7,9 @@ let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const storage = new Storage({ credentials: config.googleServiceAccount })
 
-const paidImagesBucketName = 'yiffer-paid-images'
-const comicsBucketName = 'yiffer-comics'
-
 export default class FileSystemFacade {
 	static async writeGooglePaidImageFile(localFilePath, newFilename) {
-		return storage.bucket(paidImagesBucketName).upload(localFilePath, {
+		return storage.bucket(config.storage.paidImagesBucketName).upload(localFilePath, {
 			destination: newFilename,
       gzip: true,
 			metadata: {
@@ -25,12 +22,12 @@ export default class FileSystemFacade {
 	}
 
 	static async renameGoogleComicFile(oldFilename, newFilename) {
-		await storage.bucket(comicsBucketName).file(oldFilename).move(newFilename)
+		await storage.bucket(config.storage.comicsBucketName).file(oldFilename).move(newFilename)
 		return {error: false}
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
-		return storage.bucket(comicsBucketName).upload(localFilePath, {
+		return storage.bucket(config.storage.comicsBucketName).upload(localFilePath, {
 			destination: `comics/${comicName}/${filename}`,
       gzip: true,
 			metadata: {
@@ -40,7 +37,7 @@ export default class FileSystemFacade {
 	}
 
 	static async deleteGoogleComicFile(filepath) {
-		return storage.bucket(comicsBucketName).file(filepath).delete()
+		return storage.bucket(config.storage.comicsBucketName).file(filepath).delete()
 	}
 
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
