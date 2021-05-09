@@ -27,6 +27,8 @@ export default class FileSystemFacade {
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
+		console.log(`  Google file-to-be: comics/${comicName}/${filename}. (local path ${localFilePath})`)
+
 		return storage.bucket(config.storage.comicsBucketName).upload(localFilePath, {
 			destination: `comics/${comicName}/${filename}`,
       gzip: true,

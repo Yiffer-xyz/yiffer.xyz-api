@@ -370,6 +370,8 @@ export default class ComicsRouter extends BaseRouter {
 				}
 			}
 
+			console.log(`Writing ${files.length} files to google, appending to comic ${comicName}.`)
+
 			await this.writeAppendedComicPageFiles(
 				existingNumberOfPages,
 				files.map(f => f.path),
