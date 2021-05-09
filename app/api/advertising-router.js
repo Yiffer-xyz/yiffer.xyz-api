@@ -92,7 +92,7 @@ export default class AdvertisingRouter extends BaseRouter {
           <br/><br/>
           Regards,<br/>
           Yiffer.xyz`
-        )      
+        )
         sendEmail(
           'advertising',
           'advertising@yiffer.xyz',
@@ -523,6 +523,15 @@ export default class AdvertisingRouter extends BaseRouter {
 
       let updatedAd = await this.getAdById(req, res, adId)
       res.json({success: true, ad: updatedAd})
+
+      if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)) {
+        await sendEmail(
+          'advertising',
+          'advertising@yiffer.xyz',
+          'Ad pending - Yiffer.xyz',
+          `An ad of type ${existingAd.adType} with id ${adId} has been edited and is now in the ${newStatus} state.`
+        )
+      }
     }
     catch (err) {
       return this.returnApiError(res, err)

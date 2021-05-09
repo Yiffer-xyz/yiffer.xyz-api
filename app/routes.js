@@ -19,7 +19,4 @@ export default function (app, databaseFacade, config) {
   new UserRouter(app, databaseFacade, modLogger)
   new BlogRouter(app, databaseFacade)
   new AdvertisingRouter(app, databaseFacade, config.ads)
-  app.get('*', function (req, res) {
-    res.sendFile('index.html', {root: '../public'})
-  })
 }

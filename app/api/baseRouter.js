@@ -30,7 +30,7 @@ export default class BaseRouter {
 			error = new ApiError('Server error related to email', 500)
 		}
 
-		else if (error?.error?.code === 'ECONNREFUSED') {
+		else if (error?.error?.code === 'ECONNREFUSED' || error?.error?.code === 'ER_ACCESS_DENIED_ERROR') {
 			console.log(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error: Could not connect to database', 500)
 		}
@@ -38,9 +38,6 @@ export default class BaseRouter {
 		else if (!(error instanceof ApiError)) {
 			console.error(`[500] UNCAUGHT error: ${error.stack}`)
 			error = new ApiError('Server error', 500)
-		}
-		else {
-			console.log(`[${error.status}] Controlled error: ${error.message}`)
 		}
 
 		try {

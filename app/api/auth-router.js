@@ -259,7 +259,7 @@ export default class AuthenticationRouter extends BaseRouter {
           'Password reset - Yiffer.xyz',
           `You have requested a password reset for your account. Click the link below to create a new password. The link will expire in 24 hours.
           <br/><br/>
-          <strong>https://beta.yiffer.xyz/reset-password-link/${resetToken}</strong>
+          <strong>https://yiffer.xyz/reset-password-link/${resetToken}</strong>
           <br/><br/>Regards, Yiffer.xyz`
         )
       }
