@@ -506,12 +506,24 @@ export default class AdvertisingRouter extends BaseRouter {
           await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
         }
       }
+
+      let isOnlyNameChange = false
+      if ((!file1 && !file2)
+        && link === existingAd.link 
+        && mainText === existingAd.mainText 
+        && secondaryText === existingAd.secondaryText
+        && adName !== existingAd.adName) {
+        isOnlyNameChange = true
+      }
       
       let newStatus
-      if ([adStatuses.needsCorrection, adStatuses.pending, adStatuses.ended, adStatuses.awaitingPayment].includes(existingAd.status)) {
+      if (isOnlyNameChange) {
+        newStatus = existingAd.status
+      }
+      else if ([adStatuses.needsCorrection, adStatuses.pending, adStatuses.ended, adStatuses.awaitingPayment].includes(existingAd.status)) {
         newStatus = adStatuses.pending
       }
-      if ([adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection].includes(existingAd.status)) {
+      else if ([adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection].includes(existingAd.status)) {
         newStatus = adStatuses.activeButPending
       }
       
