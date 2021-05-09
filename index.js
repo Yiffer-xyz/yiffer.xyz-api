@@ -49,12 +49,6 @@ app.set('query parser', 'extended')
 
 app.use(express.static('./public'))
 
-import prerender from 'prerender-node'
-prerender.set('prerenderToken', config.prerender.prerenderToken)
-  .blacklisted(['/api/*'])
-
-app.use(prerender);
-
 import routes from './app/routes.js'
 routes(app, databaseFacade, config)
 
