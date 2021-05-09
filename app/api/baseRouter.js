@@ -36,7 +36,7 @@ export default class BaseRouter {
 		}
 
 		else if (!(error instanceof ApiError)) {
-			console.error(`[500] UNCAUGHT error: ${error.stack}`)
+			console.error('[500] UNCAUGHT error: ', error)
 			error = new ApiError('Server error', 500)
 		}
 
