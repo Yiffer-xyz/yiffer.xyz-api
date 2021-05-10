@@ -7,10 +7,11 @@ export class ApiError extends Error {
 }
 
 export default class BaseRouter {
-	constructor (app, databaseFacade, modLogger) {
+	constructor (app, databaseFacade, modLogger, redisClient) {
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.modLogger = modLogger
+		this.redisClient = redisClient
 	}
 
 	returnApiError(res, error) {

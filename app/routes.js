@@ -9,9 +9,9 @@ import KeywordsRouter from './api/keywords-router.js'
 import BlogRouter from './api/blog-router.js'
 import AdvertisingRouter from './api/advertising-router.js'
 
-export default function (app, databaseFacade, config) {
+export default function (app, databaseFacade, config, redisClient) {
   const modLogger = new ModLogger(app, databaseFacade)
-  new ComicsRouter(app, databaseFacade, modLogger)
+  new ComicsRouter(app, databaseFacade, modLogger, redisClient)
   new MiscRouter(app, databaseFacade, modLogger)
   new KeywordsRouter(app, databaseFacade, modLogger)
   new AuthRouter(app, databaseFacade)

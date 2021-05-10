@@ -1,5 +1,6 @@
 import { convertComicPage, convertThumbnailFile } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
+import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -15,7 +16,10 @@ var upload = multer({ storage: storage })
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter, { ApiError } from './baseRouter.js'
 
-const addComicUploadFormat = upload.fields([{ name: 'pageFile' }, { name: 'thumbnailFile', maxCount: 1 }])
+const addComicUploadFormat = upload.fields([
+	{ name: 'pageFile' },
+	{ name: 'thumbnailFile', maxCount: 1 }
+])
 
 const COMICS_PER_PAGE = 75
 
@@ -38,8 +42,8 @@ async function clearUploadsFolder() {
 }
 
 export default class ComicsRouter extends BaseRouter {
-	constructor (app, databaseFacade, modLogger) {
-		super(app, databaseFacade, modLogger)
+	constructor (app, databaseFacade, modLogger, redisClient) {
+		super(app, databaseFacade, modLogger, redisClient)
 		this.setupRoutes()
 		this.setupUploadsFolder()
 		let cronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
@@ -225,36 +229,63 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async createComic (req, res) {
-		let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
-		let [comicName, artistId, cat, tag, state, keywordIds, nextComic, previousComic] = 
-			[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag, req.body.state, req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null]
-		let userId = req.session.user.id
-
-		let hasThumbnail = false
-		if (thumbnailFile && thumbnailFile.length === 1) {
-			thumbnailFile = thumbnailFile[0]
-			hasThumbnail = true
-		}
-
-		if (!newFiles) { return this.returnError('No files added', res) }
-		if (newFiles.length === 1) {
-			FileSystemFacade.deleteFile(newFiles[0].path)
-			return this.returnError('Comic must have more than one page', res)
-		}
-
-		let fileList = newFiles.sort((f1, f2) => f1.f > f2.f ? -1 : 1)
-
 		try {
+			let [newFiles, thumbnailFile] = [req.files.pageFile, req.files.thumbnailFile]
+			let [comicName, artistId, cat, tag, state, keywordIds, nextComic, previousComic, isMultipart] = 
+				[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag, req.body.state, req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null, req.body.isMultipart]
+			let userId = req.session.user.id
+
+			if (isMultipart) {
+				let [multipartNumber, totalNumberOfParts, multipartKey] = 
+					[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
+
+				let filesWithKeys = []
+				if (newFiles) {
+					newFiles.forEach(file => {
+						filesWithKeys.push(['pageFiles', file])
+					})
+				}
+				if (thumbnailFile && thumbnailFile.length === 1) {
+					filesWithKeys.push(['thumbnailFile', thumbnailFile[0]])
+				}
+
+				await storePartialUpload(this.redisClient, filesWithKeys, multipartKey, multipartNumber)
+
+				if (multipartNumber < totalNumberOfParts) {
+					return res.status(204).end()
+				}
+				
+				let allUploads = await retrieveEarlierUploads(this.redisClient, multipartKey, totalNumberOfParts)
+				newFiles = allUploads.pageFiles
+				thumbnailFile = allUploads.thumbnailFile
+			}
+
+			let hasThumbnail = false
+			if (thumbnailFile && thumbnailFile.length === 1) {
+				thumbnailFile = thumbnailFile[0]
+				hasThumbnail = true
+			}
+
+			if (!newFiles) {
+				return this.returnApiError(res, new ApiError('No files added', 400))
+			}
+			if (newFiles.length === 1) {
+				FileSystemFacade.deleteFile(newFiles[0].path)
+				return this.returnApiError(res, new ApiError('Comic must have more than one page', 400))
+			}
+
+			let fileList = newFiles.sort((f1, f2) => f1.originalName > f2.originalName ? -1 : 1)
+
 			let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
 			let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
 
 			let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
 			if (existingResults.length > 0) {
-				return this.returnError('Comic with this name already exists', res)
+				return this.returnApiError(res, new ApiError('Comic with this name already exists', 400))
 			}
 			let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
 			if (existingSuggestedResults.length > 0) {
-				return this.returnError('Comic with this name already exists, is pending', res)
+				return this.returnApiError(res, new ApiError('Comic with this name already exists, is pending', 400))
 			}
 
 			await this.processComicFiles(fileList, thumbnailFile)
@@ -272,7 +303,7 @@ export default class ComicsRouter extends BaseRouter {
 
 			await this.addKeywordsToComic(keywordIds, comicId)
 
-			res.json({success: true})
+			res.status(204).end()
 			
 			FileSystemFacade.deleteFiles(fileList.map(f => f.path))
 			if (hasThumbnail) {
@@ -283,8 +314,7 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Create comic', `Add ${comicName}`)
 		}
 		catch (err) {
-			FileSystemFacade.deleteFiles(newFiles.map(f => f.path))
-			return this.returnError(err.message, res, err.error, err)
+			return this.returnApiError(res, err)
 		}
 	}
 	

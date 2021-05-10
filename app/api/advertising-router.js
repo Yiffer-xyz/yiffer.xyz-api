@@ -536,7 +536,8 @@ export default class AdvertisingRouter extends BaseRouter {
       let updatedAd = await this.getAdById(req, res, adId)
       res.json({success: true, ad: updatedAd})
 
-      if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)) {
+      if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)
+          && !isOnlyNameChange) {
         await sendEmail(
           'advertising',
           'advertising@yiffer.xyz',
