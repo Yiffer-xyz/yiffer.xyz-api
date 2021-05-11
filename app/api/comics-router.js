@@ -485,16 +485,16 @@ export default class ComicsRouter extends BaseRouter {
 		for (let i=1; i<=numberOfPages; i++) {
 			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
 			let pageName = `${pageNumberString}.jpg`
-			let oldPageName = `comics/${oldComicName}/${pageName}`
-			let newPageName = `comics/${newComicName}/${pageName}`
+			let oldPageName = `${oldComicName}/${pageName}`
+			let newPageName = `${newComicName}/${pageName}`
 			allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(oldPageName, newPageName))
 		}
 
 		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(
-			`comics/${oldComicName}/thumbnail.webp`, `comics/${newComicName}/thumbnail.webp`
+			`${oldComicName}/thumbnail.webp`, `${newComicName}/thumbnail.webp`
 		))
 		allRenamePromises.push(FileSystemFacade.renameGoogleComicFile(
-			`comics/${oldComicName}/thumbnail-small.webp`, `comics/${newComicName}/thumbnail-small.webp`
+			`${oldComicName}/thumbnail-small.webp`, `${newComicName}/thumbnail-small.webp`
 		))
 
 		return await Promise.all(allRenamePromises)

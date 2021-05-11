@@ -9,32 +9,36 @@ const storage = new Storage({ credentials: config.googleServiceAccount })
 
 export default class FileSystemFacade {
 	static async writeGooglePaidImageFile(localFilePath, newFilename) {
-		return storage.bucket(config.storage.paidImagesBucketName).upload(localFilePath, {
-			destination: newFilename,
-      gzip: true,
-			metadata: {
-        // Enable long-lived HTTP caching headers
-        // Use only if the contents of the file will never change
-        // (If the contents will change, use cacheControl: 'no-cache')
-        cacheControl: 'no-cache',
-      },
+		return storage.bucket(config.storage.bucketName)
+			.upload(`${config.storage.paidImagesBucketFolder}/${localFilePath}`, {
+				destination: newFilename,
+				gzip: true,
+				metadata: {
+					// Enable long-lived HTTP caching headers
+					// Use only if the contents of the file will never change
+					// (If the contents will change, use cacheControl: 'no-cache')
+					cacheControl: 'no-cache',
+				},
 		})
 	}
 
 	static async renameGoogleComicFile(oldFilename, newFilename) {
-		await storage.bucket(config.storage.comicsBucketName).file(oldFilename).move(newFilename)
+		await storage.bucket(config.storage.bucketName)
+			.file(`${config.storage.comicsBucketFolder}/${oldFilename}`)
+			.move(`${config.storage.comicsBucketFolder}/${newFilename}`)
 		return {error: false}
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
-		console.log(`  Google file-to-be: comics/${comicName}/${filename}. (local path ${localFilePath})`)
+		console.log(`  Google file-to-be: ${config.storage.comicsBucketFolder}/${comicName}/${filename}. (local path ${localFilePath})`)
 
-		let response = await storage.bucket(config.storage.comicsBucketName).upload(localFilePath, {
-			destination: `comics/${comicName}/${filename}`,
-      gzip: true,
-			metadata: {
-        cacheControl: 'no-cache',
-      },
+		let response = await storage.bucket(config.storage.bucketName)
+			.upload(localFilePath, {
+				destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
+				gzip: true,
+				metadata: {
+					cacheControl: 'no-cache',
+				},
 		})
 
 		console.log('  google file response: ', response)
@@ -42,7 +46,9 @@ export default class FileSystemFacade {
 	}
 
 	static async deleteGoogleComicFile(filepath) {
-		return storage.bucket(config.storage.comicsBucketName).file(filepath).delete()
+		return storage.bucket(config.storage.bucketName)
+			.file(`${config.storage.comicsBucketFolder}/${filepath}`)
+			.delete()
 	}
 
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
