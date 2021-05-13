@@ -30,8 +30,6 @@ export default class FileSystemFacade {
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
-		console.log(`  Google file-to-be: ${config.storage.comicsBucketFolder}/${comicName}/${filename}. (local path ${localFilePath})`)
-
 		let response = await storage.bucket(config.storage.bucketName)
 			.upload(localFilePath, {
 				destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
@@ -41,7 +39,6 @@ export default class FileSystemFacade {
 				},
 		})
 
-		console.log('  google file response: ', response)
 		return response
 	}
 
