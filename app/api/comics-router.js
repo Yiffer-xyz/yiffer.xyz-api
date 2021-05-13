@@ -597,7 +597,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 	
 	async approvePendingComic (req, res, comicId) {
-		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, State, Artist, HasThumbnail FROM pendingcomic WHERE Id = ?'
+		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, State, Artist, HasThumbnail, PreviousComicLink, NextComicLink FROM pendingcomic WHERE Id = ?'
 		let getKeywordsQuery = 'SELECT KeywordId FROM pendingcomickeyword WHERE ComicId = ?'
 		let updatePendingComicsQuery = 'UPDATE pendingcomic SET Processed = 1, Approved = 1 WHERE Id = ?'
 		let insertIntoComicQuery = 'INSERT INTO comic (Name, Cat, Tag, NumberOfPages, State, Artist) VALUES (?, ?, ?, ?, ?, ?)'
@@ -627,6 +627,22 @@ export default class ComicsRouter extends BaseRouter {
 		}
 		insertKeywordsQuery = insertKeywordsQuery.substring(0, insertKeywordsQuery.length-2)
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Error adding tags to comic')
+
+		let insertLinksQuery = 'INSERT INTO comiclink (FirstComic, LastComic) VALUES '
+		let linkQueryStrings = []
+		let linkQueryParams = []
+		if (comicData.PreviousComicLink) {
+			linkQueryStrings.push('(?, ?)')
+			linkQueryParams.push(comicData.PreviousComicLink, newComicId)
+		}
+		if (comicData.NextComicLink) {
+			linkQueryStrings.push('(?, ?)')
+			linkQueryParams.push(newComicId, comicData.NextComicLink)
+		}
+		if (comicData.PreviousComicLink || comicData.NextComicLink) {
+			insertLinksQuery += linkQueryStrings.join(', ')
+			await this.databaseFacade.execute(insertLinksQuery, linkQueryParams, 'Error adding links to/from other comic')
+		}
 
 		let comicName = (await this.databaseFacade.execute('SELECT Name FROM pendingcomic WHERE Id=?', [comicId]))[0].Name
 		this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
