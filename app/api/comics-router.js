@@ -545,6 +545,7 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({success: true})
 		}
 		catch (err) {
+			console.log('Rate error, req params: ', req.params, ' and req body: ', req.body)
 			return this.returnError(err.message, res, err.error)
 		}
 	}
