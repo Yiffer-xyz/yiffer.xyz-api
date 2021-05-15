@@ -384,7 +384,7 @@ export default class AdvertisingRouter extends BaseRouter {
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(req, res, adId)
       
-      if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection].includes(status)) {
+      if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection, adStatuses.active].includes(status)) {
         let user = await this.getUserAccount(existingAd.userId)
         
         if (status === adStatuses.awaitingPayment) {
@@ -404,9 +404,9 @@ export default class AdvertisingRouter extends BaseRouter {
             'advertising',
             user.email,
             'Ad ready for payment - Yiffer.xyz',
-            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://paidimages.yiffer.xyz/dashboard">https://paidimages.yiffer.xyz/dashboard</a>.
+            `Your advertisement with ID <b>${adId}</b> has been accepted. This means that you may now pay ad's cost (${adCostsString}) to <b>advertising@yiffer.xyz</b> on PayPal, or use the quick link at <a href="https://www.paypal.com/paypalme/yifferadvertising">paypal.me/yifferadvertising</a>. <b>Remember to include your ad's ID in the PayPal message field</b>. You can find detailed instructions at <a href="https://pi.yiffer.xyz/dashboard">https://pi.yiffer.xyz/dashboard</a>.
             <br/><br/>
-            One we receive your payment, we will manually activate your ad. We will not send an email when doing so - we don't want to spam you more than necessary - but you can always check your ad's status in your ads dashboard. Processing your payment should take a few days at most.
+            One we receive your payment, we will manually activate your ad. We send an email when your ad is activated. You can always check your ad's status in your ads dashboard. Processing your payment should take a few days at most.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
@@ -420,7 +420,20 @@ export default class AdvertisingRouter extends BaseRouter {
             `Your advertisement with ID <b>${adId}</b> is not accepted in its submitted state. Here are the notes from an administrator to help you fix this:<br/><br/>
             <i>${correctionNote}</i>
             <br/><br/>
-            You can make the required changes to your ad at <a href="https://paidimages.yiffer.xyz/dashboard">https://paidimages.yiffer.xyz/dashboard</a>.
+            You can make the required changes to your ad at <a href="https://pi.yiffer.xyz/dashboard">https://pi.yiffer.xyz/dashboard</a>.
+            <br/><br/>
+            Regards,<br/>
+            Yiffer.xyz`
+          )
+        }
+        else if (status === adStatuses.active) {
+          await sendEmail(
+            'advertising',
+            user.email,
+            'Ad activated - Yiffer.xyz',
+            `Your advertisement with ID <b>${adId}</b> has been activated!
+            <br/><br/>
+            You can see the ad and its stats at <a href="https://pi.yiffer.xyz/dashboard">https://pi.yiffer.xyz/dashboard</a>.
             <br/><br/>
             Regards,<br/>
             Yiffer.xyz`
