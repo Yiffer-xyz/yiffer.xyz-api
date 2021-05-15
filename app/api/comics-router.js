@@ -234,10 +234,12 @@ export default class ComicsRouter extends BaseRouter {
 			let [comicName, artistId, cat, tag, state, keywordIds, nextComic, previousComic, isMultipart] = 
 				[req.body.comicName, Number(req.body.artistId), req.body.cat, req.body.tag, req.body.state, req.body.keywordIds, Number(req.body.nextComic)||null, Number(req.body.previousComic)||null, req.body.isMultipart]
 			let userId = req.session.user.id
+			let username = req.session.user.username
 
 			if (isMultipart) {
 				let [multipartNumber, totalNumberOfParts, multipartKey] = 
 					[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
+				console.log(`MULTIPART upload for comic ${comicName}, uploaded by user ${username}`)
 
 				let filesWithKeys = []
 				if (newFiles) {
@@ -548,7 +550,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id'
+		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id ORDER BY pendingcomic.Id ASC'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
