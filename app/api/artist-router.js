@@ -31,6 +31,9 @@ export default class ArtistRouter extends BaseRouter {
 
       let user = await this.getUser(req)
       let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
+      if (!artistData || artistData.length === 0) {
+        return res.status(404).end()
+      }
       let artistId = artistData[0].Id
       let [artistE621Name, artistPatreonName] = [artistData[0].E621Name, artistData[0].PatreonName]
 
@@ -49,7 +52,9 @@ export default class ArtistRouter extends BaseRouter {
 
       res.json(allArtistData)
     }
-    catch (err) { return this.returnStatusError(500, res, err) }
+		catch (err) {
+			return this.returnApiError(res, err)
+		}
   }
 
   async addArtist (req, res) {
