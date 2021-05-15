@@ -10,8 +10,8 @@ const storage = new Storage({ credentials: config.googleServiceAccount })
 export default class FileSystemFacade {
 	static async writeGooglePaidImageFile(localFilePath, newFilename) {
 		return storage.bucket(config.storage.bucketName)
-			.upload(`${config.storage.paidImagesBucketFolder}/${localFilePath}`, {
-				destination: newFilename,
+			.upload(localFilePath, {
+				destination: `${config.storage.paidImagesBucketFolder}/${newFilename}`,
 				gzip: true,
 				metadata: {
 					// Enable long-lived HTTP caching headers
