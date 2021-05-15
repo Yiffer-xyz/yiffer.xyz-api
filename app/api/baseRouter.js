@@ -15,6 +15,7 @@ export default class BaseRouter {
 	}
 
 	returnApiError(res, error) {
+		console.log('Error @', new Date().toISOString().substr(0,19).replace('T', ' '))
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
