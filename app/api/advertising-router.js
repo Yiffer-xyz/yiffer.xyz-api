@@ -578,7 +578,7 @@ export default class AdvertisingRouter extends BaseRouter {
       await this.databaseFacade.execute(queryDayClicks, queryDayClicksParams, 'Error logging ad click')
     }
 		catch (err) {
-      console.error('Error updating ad clicks: ', err)
+      console.log('Error updating ad clicks: ', err)
 		}
   }
 

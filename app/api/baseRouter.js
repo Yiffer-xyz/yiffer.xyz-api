@@ -16,35 +16,35 @@ export default class BaseRouter {
 
 	returnApiError(res, error) {
 		if (error instanceof ApiError) {
-			console.info(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
+			console.log(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
 		}
 		else {
-			console.error(`Error @`, new Date().toISOString().substr(0,19).replace('T', ' '))
+			console.log(`Error @`, new Date().toISOString().substr(0,19).replace('T', ' '))
 		}
 		
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
-			console.info(`[500] Controlled error: ${error.error}`)
+			console.log(`[500] Controlled error: ${error.error}`)
 			if ('error' in error) {
-				console.error(error.error)
+				console.log(error.error)
 			}
 
 			error = new ApiError(error.customErrorMessage, 500)
 		}
 
 		else if (error?.error?.name === 'ApiInputError') {
-			console.error(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.log(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error related to email', 500)
 		}
 
 		else if (error?.error?.code === 'ECONNREFUSED' || error?.error?.code === 'ER_ACCESS_DENIED_ERROR') {
-			console.error(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.log(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error: Could not connect to database', 500)
 		}
 
 		else if (!(error instanceof ApiError)) {
-			console.error('[500] UNCAUGHT error: ', error)
+			console.log('[500] UNCAUGHT error: ', error)
 			error = new ApiError('Server error', 500)
 		}
 
@@ -54,20 +54,20 @@ export default class BaseRouter {
 			}
 		}
 		catch (err2) {
-			console.error('REAL BAD: Error returning error', err2)
+			console.log('REAL BAD: Error returning error', err2)
 		}
 	}
 
 	// TODO SWAP ALL USAGES for returnStatusError
 	returnError (errorMessage, res, err, fullErr) {
-		console.info('returnError: ', errorMessage)
-		console.info('returnError err and fullErr: ', err, fullErr)
+		console.log('returnError: ', errorMessage)
+		console.log('returnError err and fullErr: ', err, fullErr)
 	
 		try {
 			if (res) { res.json({ error: errorMessage }) }
 		}
 		catch (err2) {
-			console.error('Error returning error', err2)
+			console.log('Error returning error', err2)
 		}
 	}
 

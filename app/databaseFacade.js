@@ -22,7 +22,7 @@ export default class DatabaseFacade {
 							if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
 								errorMessage = `Sorry, you can't use emojis here!`
 							}
-							console.error(err)
+							console.log(err)
 							reject({error: err, message: errorMessage, customErrorMessage: errorMessage})
 						}
 						resolve(results)
@@ -35,7 +35,7 @@ export default class DatabaseFacade {
 							if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
 								errorMessage = `Sorry, you can't use emojis here!`
 							}
-							console.error(err)
+							console.log(err)
 							reject({error: err, message: errorMessage, customErrorMessage: errorMessage})
 						}
 						resolve(results)
