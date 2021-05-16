@@ -6,19 +6,31 @@ import yaml from 'js-yaml'
 let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const storage = new Storage({ credentials: config.googleServiceAccount })
+const bucket = storage.bucket(config.storage.bucketName)
 
 export default class FileSystemFacade {
 	static async writeGooglePaidImageFile(localFilePath, newFilename) {
-		return storage.bucket(config.storage.bucketName)
-			.upload(localFilePath, {
-				destination: `${config.storage.paidImagesBucketFolder}/${newFilename}`,
-				gzip: true,
-				metadata: {
-					// Enable long-lived HTTP caching headers
-					// Use only if the contents of the file will never change
-					// (If the contents will change, use cacheControl: 'no-cache')
-					cacheControl: 'no-cache',
-				},
+		let uploadOptions = {
+			destination: `${config.storage.paidImagesBucketFolder}/${newFilename}`,
+			gzip: true,
+			metadata: {
+				// Enable long-lived HTTP caching headers
+				// Use only if the contents of the file will never change
+				// (If the contents will change, use cacheControl: 'no-cache')
+				cacheControl: 'no-cache',
+			},
+		}
+
+		return new Promise((resolve, reject) => {
+			bucket.upload(localFilePath, uploadOptions, (err) => {
+				if (err) {
+					console.log('GOOGLE UPLOAD ERROR: ', err)
+					reject(err)
+				}
+				else {
+					resolve()
+				}
+			})
 		})
 	}
 
@@ -30,16 +42,24 @@ export default class FileSystemFacade {
 	}
 	
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
-		let response = await storage.bucket(config.storage.bucketName)
-			.upload(localFilePath, {
-				destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
-				gzip: true,
-				metadata: {
-					cacheControl: 'no-cache',
-				},
+		let uploadOptions = {
+			destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
+			gzip: true,
+			metadata: {
+				cacheControl: 'no-cache',
+			},
+		}
+		return new Promise((resolve, reject) => {
+			bucket.upload(localFilePath, uploadOptions, (err) => {
+				if (err) {
+					console.log('GOOGLE UPLOAD ERROR: ', err)
+					reject(err)
+				}
+				else {
+					resolve()
+				}
+			})
 		})
-
-		return response
 	}
 
 	static async deleteGoogleComicFile(filepath) {

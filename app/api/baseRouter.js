@@ -15,11 +15,17 @@ export default class BaseRouter {
 	}
 
 	returnApiError(res, error) {
-		console.log('Error @', new Date().toISOString().substr(0,19).replace('T', ' '))
+		if (error instanceof ApiError) {
+			console.info(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
+		}
+		else {
+			console.error(`Error @`, new Date().toISOString().substr(0,19).replace('T', ' '))
+		}
+		
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
-			console.log(`[500] Controlled error: ${error.error}`)
+			console.info(`[500] Controlled error: ${error.error}`)
 			if ('error' in error) {
 				console.error(error.error)
 			}
@@ -28,12 +34,12 @@ export default class BaseRouter {
 		}
 
 		else if (error?.error?.name === 'ApiInputError') {
-			console.log(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.error(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error related to email', 500)
 		}
 
 		else if (error?.error?.code === 'ECONNREFUSED' || error?.error?.code === 'ER_ACCESS_DENIED_ERROR') {
-			console.log(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.error(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error: Could not connect to database', 500)
 		}
 
@@ -54,29 +60,29 @@ export default class BaseRouter {
 
 	// TODO SWAP ALL USAGES for returnStatusError
 	returnError (errorMessage, res, err, fullErr) {
-		console.log('Error: ', errorMessage)
-		console.log(fullErr)
+		console.info('returnError: ', errorMessage)
+		console.info('returnError err and fullErr: ', err, fullErr)
 	
 		try {
 			if (res) { res.json({ error: errorMessage }) }
 		}
 		catch (err2) {
-			console.log('Error returning error', err2)
+			console.error('Error returning error', err2)
 		}
 	}
 
 	returnStatusError(status, res, error) {
 		let errorToSend
 		if (typeof(error) === 'string') {
-			console.log(`Controlled error with status ${status}: ${error.customErrorMessage}`)
+			console.log(`Controlled returnStatusError with status ${status}: ${error.customErrorMessage}`)
 			errorToSend = error
 		}
 		else if ('customErrorMessage' in error) {
-			console.log(`Controlled error with status ${status}: ${error.customErrorMessage}`)
+			console.log(`Controlled returnStatusError with status ${status}: ${error.customErrorMessage}`)
 			errorToSend = error.customErrorMessage
 		}
 		else {
-			console.log(`FATAL error with status ${status}:`, error)
+			console.log(`FATAL returnStatusError with status ${status}:`, error)
 			errorToSend = 'Server error'
 		}
 
@@ -194,7 +200,7 @@ export default class BaseRouter {
 		}
 		catch (err) {
 			res.json({error: 'Error authorizing user'})
-			console.log(err)
+			console.log(`Error authorizing user: `, err)
 		}
 	}
 

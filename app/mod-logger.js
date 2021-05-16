@@ -12,7 +12,7 @@ export default class ModLogger {
       await this.databaseFacade.execute(query, queryParams)
     }
     catch (err) {
-      console.log(err)
+      console.error(`Error adding mod log: `, err)
     }
   }
 }

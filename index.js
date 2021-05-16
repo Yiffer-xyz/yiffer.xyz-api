@@ -53,4 +53,4 @@ import routes from './app/routes.js'
 routes(app, databaseFacade, config, redisClient)
 
 app.listen(port)
-console.log('Magic happens on port ' + port)
+console.info('Magic happens on port ' + port)

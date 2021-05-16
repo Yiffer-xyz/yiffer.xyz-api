@@ -427,7 +427,7 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Comic', `Append ${files.length} pages to ${comicName}`)
 		}
 		catch (err) {
-			console.log(err)
+			console.log('Add pages err: ', err)
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
 			return this.returnError(err.message, res, err.error, err)
 		}
