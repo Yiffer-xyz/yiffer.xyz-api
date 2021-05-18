@@ -209,6 +209,12 @@ export default class MiscRouter extends BaseRouter {
       if (actionDescription.includes(' keywords to ') || actionDescription.includes(' keywords from ')) {
         return 10
       }
+      if (actionDescription.includes('Append ')) {
+        return 30
+      }
+      if (actionDescription.includes('Delete old')) {
+        return 70
+      }
     }
     else if (actionType === 'Artist') {
       if (actionDescription.includes('Add ')) {

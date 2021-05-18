@@ -56,7 +56,7 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
 		this.app.get ('/api/comics/:name', (req, res) => this.getComicByName(req, res))
 		this.app.post('/api/comics', this.authorizeMod.bind(this), addComicUploadFormat, (req, res) => this.createComic(req, res))
-		this.app.post('/api/comics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false))
+		this.app.post('/api/comics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, false, false))
 		this.app.post('/api/comics/:id/updatedetails', this.authorizeMod.bind(this), (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		this.app.post('/api/comics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
@@ -67,7 +67,8 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.post('/api/pendingcomics/:id/addkeywords', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromPendingComic(req, res))
-		this.app.post('/api/pendingcomics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true))
+		this.app.post('/api/pendingcomics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true, false))
+		this.app.post('/api/pendingcomics/:id/replacepages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true, true))
 	}
 
 	async setupUploadsFolder () {
@@ -378,7 +379,7 @@ export default class ComicsRouter extends BaseRouter {
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Database error adding tags')
 	}
 
-	async addPagesToComic (req, res, isPendingComic) {
+	async addPagesToComic (req, res, isPendingComic, deleteExistingPages) {
 		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, Number(req.params.id)]
 
 		if (!uploadedFiles || uploadedFiles.length === 0) {
@@ -404,11 +405,20 @@ export default class ComicsRouter extends BaseRouter {
 
 			console.log(`Writing ${files.length} files to google, appending to comic ${comicName}.`)
 
-			await this.writeAppendedComicPageFiles(
-				existingNumberOfPages,
-				files.map(f => f.path),
-				comicName
-			)
+			if (!deleteExistingPages) {
+				await this.writeAppendedComicPageFiles(
+					existingNumberOfPages,
+					files.map(f => f.path),
+					comicName,
+				)
+			}
+			else {
+				await this.overwriteComicPageFiles(
+					existingNumberOfPages,
+					files.map(f => f.path),
+					comicName,
+				)
+			}
 
 			if (!isPendingComic) {
 				let updateUpdatedTimeQuery = 'UPDATE comic SET Updated = NOW() WHERE Id=?'
@@ -417,14 +427,26 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'pendingcomic' : 'comic'} SET NumberOfPages = ? WHERE Id = ?`
-			let queryParams = [existingNumberOfPages + files.length, comicId]
+			let queryParams = [files.length, comicId]
+			if (!deleteExistingPages) {
+				queryParams[0] += existingNumberOfPages
+			}
+
 			await this.databaseFacade.execute(updateNumberOfPagesQuery,
 				queryParams, 'Database error: Error updating number of pages')
 			
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
 			res.json({success: true})
 			
-			this.addModLog(req, 'Comic', `Append ${files.length} pages to ${comicName}`)
+			let modLogEntry = 'Comic'
+			let descFirstWord = 'Append'
+			if (isPendingComic) {
+				modLogEntry = 'Pending comic'
+				if (deleteExistingPages) {
+					descFirstWord = 'Delete old, upload new'
+				}
+			}
+			this.addModLog(req, modLogEntry, `${descFirstWord} ${files.length} pages to ${comicName}`)
 		}
 		catch (err) {
 			console.log('Add pages err: ', err)
@@ -438,6 +460,28 @@ export default class ComicsRouter extends BaseRouter {
     for (let i=0; i < filePaths.length; i++) {
 			let filePath = filePaths[i]
 			let pageNo = existingNumPages + i + 1
+			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
+			let pageName = `${pageNumString}.jpg`
+			fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePath, comicName, pageName))
+		}
+
+		await Promise.all(fileWritePromises)
+	}
+
+	async overwriteComicPageFiles(existingNumPages, filePaths, comicName) {
+		let fileDeletePromises = []
+		for (let i=0; i < existingNumPages; i++) {
+			let pageNo = i + 1
+			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
+			let filePath = `${comicName}/${pageNumString}.jpg`
+			fileDeletePromises.push(FileSystemFacade.deleteGoogleComicFile(filePath))
+		}
+		await Promise.all(fileDeletePromises)
+
+		let fileWritePromises = []
+    for (let i=0; i < filePaths.length; i++) {
+			let filePath = filePaths[i]
+			let pageNo = i + 1
 			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
 			let pageName = `${pageNumString}.jpg`
 			fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePath, comicName, pageName))
