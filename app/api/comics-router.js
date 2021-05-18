@@ -207,7 +207,7 @@ export default class ComicsRouter extends BaseRouter {
 			let result = await this.databaseFacade.execute(comicDataQuery, queryParams)
 			let comicData = result[0]
 			if (!comicData) {
-				return this.returnApiError(res, new ApiError('There are no comics with this name', 404))
+				return this.returnApiError(res, new ApiError(`There is no comic with the name ${comicName}`, 404))
 			}
 			
 			let comicId = comicData.id
@@ -569,6 +569,7 @@ export default class ComicsRouter extends BaseRouter {
 		let comicName = req.params.name
 		let comicDataQuery = 'SELECT artist.Name AS artistName, pendingcomic.Id AS id, pendingcomic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, keyword.Id AS id FROM pendingcomickeyword INNER JOIN keyword ON (pendingcomickeyword.KeywordId = keyword.Id) WHERE pendingcomickeyword.ComicId = ?'
+		
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
 			if (comicData.length === 0) { return this.returnError('No pending comic with that name', res) }
@@ -704,42 +705,42 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async addKeywordsToPendingComic (req, res) {
-		let [comicId, keywords] = [req.params.id, req.body.keywords]
-		let addKeywordsQuery = 'INSERT INTO pendingcomickeyword (ComicId, KeywordId) VALUES '
-		let addKeywordsQueryParams = []
-		for (let keywordObject of keywords) {
-			addKeywordsQuery += '(?, ?), '
-			addKeywordsQueryParams.push(comicId)
-			addKeywordsQueryParams.push(keywordObject.id)
-		}
-		addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
-
 		try {
+			let [comicId, keywords] = [req.params.id, req.body.keywords]
+			let addKeywordsQuery = 'INSERT INTO pendingcomickeyword (ComicId, KeywordId) VALUES '
+			let addKeywordsQueryParams = []
+			for (let keywordObject of keywords) {
+				addKeywordsQuery += '(?, ?), '
+				addKeywordsQueryParams.push(comicId)
+				addKeywordsQueryParams.push(keywordObject.id)
+			}
+			addKeywordsQuery = addKeywordsQuery.substring(0, addKeywordsQuery.length-2)
+
 			await this.databaseFacade.execute(addKeywordsQuery, addKeywordsQueryParams)
 			res.json({success: true})
 			let comicName = (await this.databaseFacade.execute('SELECT Name FROM pendingcomic WHERE Id=?', [comicId]))[0].Name
 			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
-      if (err.error.code === 'ER_DUP_ENTRY') {
-        return this.returnError('Some tags already exist on this comic', res)
+      if (err.error?.code === 'ER_DUP_ENTRY') {
+				return this.returnApiError(res, new ApiError('Some tags already exist on this comic', 400))
       }
-			return this.returnError(err.message, res, err.error)
+			return this.returnApiError(res, err)
 		}
 	}
 
 	async removeKeywordsFromPendingComic (req, res) {
-		let [comicId, keywords] = [req.params.id, req.body.keywords]
-		let removeKeywordsQuery = 'DELETE FROM pendingcomickeyword WHERE (ComicId, KeywordId) IN ('
-		let removeKeywordsQueryParams = []
-		for (let keyword of req.body.keywords) {
-			removeKeywordsQuery += '(?, ?), '
-			removeKeywordsQueryParams.push(comicId)
-			removeKeywordsQueryParams.push(keyword.id)
-		}
-		removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
-
 		try {
+			let [comicId, keywords] = [req.params.id, req.body.keywords]
+			let removeKeywordsQuery = 'DELETE FROM pendingcomickeyword WHERE (ComicId, KeywordId) IN ('
+			let removeKeywordsQueryParams = []
+			for (let keyword of req.body.keywords) {
+				removeKeywordsQuery += '(?, ?), '
+				removeKeywordsQueryParams.push(comicId)
+				removeKeywordsQueryParams.push(keyword.id)
+			}
+			removeKeywordsQuery = removeKeywordsQuery.substring(0, removeKeywordsQuery.length-2) + ')'
+
 			await this.databaseFacade.execute(removeKeywordsQuery, removeKeywordsQueryParams)
 			res.json({success: true})
 			
@@ -747,8 +748,7 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Pending comic', `Remove ${keywords.length} keywords from ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error)
+			return this.returnApiError(res, err)
 		}
-
 	}
 }

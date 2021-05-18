@@ -30,10 +30,10 @@ export default class KeywordsRouter extends BaseRouter {
   }
 
   async getComicKeywords (req, res) {
-    let keywordId = req.params.comicId
+    let comicId = req.params.comicId
     let query = 'SELECT keyword.KeywordName AS name, keyword.Id AS id FROM keyword INNER JOIN comickeyword ON (keyword.Id = comickeyword.KeywordId) WHERE ComicId = ?'
     try {
-      let result = await this.databaseFacade.execute(query, [Number(keywordId)])
+      let result = await this.databaseFacade.execute(query, [Number(comicId)])
       res.json(result)
     }
     catch (err) {
