@@ -3,7 +3,11 @@ sharp.cache(false)
 
 export async function convertComicPage(filepath) {
   let buffer = await sharp(filepath)
-    .jpeg({quality: 95})
+    .jpeg({
+      quality: 100,
+      progressive: true,
+      chromaSubsampling: '4:4:4',
+    })
     .toBuffer()
 
   return sharp(buffer).toFile(filepath)
