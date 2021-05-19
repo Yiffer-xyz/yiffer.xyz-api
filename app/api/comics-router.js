@@ -212,15 +212,24 @@ export default class ComicsRouter extends BaseRouter {
 			}
 			
 			let comicId = comicData.id
-			if (!comicData.keywords) { comicData.keywords = [] }
-			else { comicData.keywords = comicData.keywords.split(',') }
+			if (!comicData.keywords) {
+				comicData.keywords = []
+			}
+			else {
+				comicData.keywords = comicData.keywords.split(',')
+			}
+
 			comicData.previousComic = null
 			comicData.nextComic = null
 
 			let prevLink = await this.databaseFacade.execute(prevLinkQuery, [comicId])
-			if (prevLink.length > 0) { comicData.previousComic = prevLink[0].Name }
+			if (prevLink.length > 0) {
+				comicData.previousComic = prevLink[0].Name
+			}
 			let nextLink = await this.databaseFacade.execute(nextLinkQuery, [comicId])
-			if (nextLink.length > 0) { comicData.nextComic = nextLink[0].Name }
+			if (nextLink.length > 0) {
+				comicData.nextComic = nextLink[0].Name
+			}
 
 			res.json(comicData)
 		}
@@ -611,9 +620,11 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
-		let comicDataQuery = 'SELECT artist.Name AS artistName, pendingcomic.Id AS id, pendingcomic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
+		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, keyword.Id AS id FROM pendingcomickeyword INNER JOIN keyword ON (pendingcomickeyword.KeywordId = keyword.Id) WHERE pendingcomickeyword.ComicId = ?'
-		
+		let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (Id = FirstComic) WHERE LastComic = ?'
+    let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (Id = LastComic) WHERE FirstComic = ?'
+
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
 			if (comicData.length === 0) { return this.returnError('No pending comic with that name', res) }
@@ -621,6 +632,18 @@ export default class ComicsRouter extends BaseRouter {
 
 			let keywords = await this.databaseFacade.execute(keywordsQuery, [comicData.id])
 			comicData.keywords = keywords.map(k => ({name: k.name, id: k.id}))
+			
+			comicData.previousComic = null
+			comicData.nextComic = null
+
+			let prevLink = await this.databaseFacade.execute(prevLinkQuery, [comicData.id])
+			if (prevLink.length > 0) {
+				comicData.previousComic = prevLink[0].Name
+			}
+			let nextLink = await this.databaseFacade.execute(nextLinkQuery, [comicData.id])
+			if (nextLink.length > 0) {
+				comicData.nextComic = nextLink[0].Name
+			}
 
 			res.json(comicData)
 		}
