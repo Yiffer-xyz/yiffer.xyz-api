@@ -184,16 +184,16 @@ export default class MiscRouter extends BaseRouter {
         return 15
       }
       if (actionDescription.includes('thumbnail to')) {
-        return 20
+        return 30
       }
       if (actionDescription.includes('Swap pages')) {
-        return 20
+        return 40
       }
       if (actionDescription.includes('Insert page')) {
-        return 20
+        return 40
       }
       if (actionDescription.includes('Delete page')) {
-        return 20
+        return 40
       }
     }
     else if (actionType === 'Create comic') {
@@ -204,7 +204,7 @@ export default class MiscRouter extends BaseRouter {
         return 15
       }
       if (actionDescription.includes('Add thumbnail to')) {
-        return 20
+        return 30
       }
       if (actionDescription.includes(' keywords to ') || actionDescription.includes(' keywords from ')) {
         return 10
@@ -214,6 +214,9 @@ export default class MiscRouter extends BaseRouter {
       }
       if (actionDescription.includes('Delete old')) {
         return 70
+      }
+      if (actionDescription.includes('Update data of')) {
+        return 15
       }
     }
     else if (actionType === 'Artist') {
