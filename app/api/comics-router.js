@@ -812,8 +812,10 @@ export default class ComicsRouter extends BaseRouter {
 
 		await this.transferLinksFromPendingToLiveComic(comicId, newComicId)
 
-		let comicName = (await this.databaseFacade.execute('SELECT Name FROM pendingcomic WHERE Id=?', [comicId]))[0].Name
-		this.addModLog(req, 'Pending comic', `Approve ${comicName}`)
+		let deletePendingComicQuery = 'DELETE FROM pendingcomic WHERE Id = ?'
+		await this.databaseFacade.execute(deletePendingComicQuery, [comicId], 'Error deleting the comic from pending in database')
+
+		this.addModLog(req, 'Pending comic', `Approve ${comicData.Name}`)
 
 		res.json({success: true})
 	}
