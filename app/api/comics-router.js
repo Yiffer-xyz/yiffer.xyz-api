@@ -66,6 +66,7 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.put ('/api/pendingcomics/:id', this.authorizeMod.bind(this), (req, res) => this.updatePendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id', this.authorizeAdmin.bind(this), (req, res) => this.processPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
+		this.app.patch('/api/pendingcomics/:id/set-error', this.authorizeAdmin.bind(this), (req, res) => this.setPendingComicError(req, res))
 		this.app.post('/api/pendingcomics/:id/addkeywords', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/removekeywords', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromPendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addpages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true, false))
@@ -687,7 +688,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id ORDER BY pendingcomic.Id ASC'
+		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id ORDER BY pendingcomic.Id ASC'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
@@ -703,7 +704,7 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
-		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
+		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, keyword.Id AS id FROM pendingcomickeyword INNER JOIN keyword ON (pendingcomickeyword.KeywordId = keyword.Id) WHERE pendingcomickeyword.ComicId = ?'
 
 		try {
@@ -875,8 +876,16 @@ export default class ComicsRouter extends BaseRouter {
 			])
 
 			if (isPendingComic) {
-				let updateComicDataQuery = 'UPDATE pendingcomic SET HasThumbnail = 1 WHERE Id = ?'
-				await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+				let getPendingComicDataQuery = 'SELECT HasThumbnail AS hasThumbnail, ErrorText AS errorText FROM pendingcomic WHERE Id = ?'
+				let comicData = await this.databaseFacade.execute(getPendingComicDataQuery, [comicId])
+				comicData = comicData[0]
+
+				if (!comicData.hasThumbnail || comicData.errorText === 'Thumbnail') {
+					let updateComicDataQuery = `UPDATE pendingcomic SET HasThumbnail = 1
+						${comicData.errorText === 'Thumbnail' ? ', ErrorText = NULL' : ''}
+						WHERE Id = ?`
+					await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+				}
 			}
 
 			res.json({success: true})
@@ -889,6 +898,21 @@ export default class ComicsRouter extends BaseRouter {
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async setPendingComicError (req, res) {
+		try {
+			let comicId = Number(req.params.id)
+			let errorText = req.body.errorText
+
+			let updateQuery = 'UPDATE pendingcomic SET ErrorText = ? WHERE Id = ?'
+			await this.databaseFacade.execute(updateQuery, [errorText, comicId])
+
+			res.status(200).end()
+		}
+		catch (err) {
+			return this.returnApiError(res, err)
 		}
 	}
 
