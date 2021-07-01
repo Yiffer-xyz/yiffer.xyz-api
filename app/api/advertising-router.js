@@ -3,7 +3,10 @@ import multer from 'multer'
 import FileSystemFacade from '../fileSystemFacade.js'
 import { sendEmail } from '../emailFacade.js'
 import dateFns from 'date-fns'
-const { addMonths, addDays } = dateFns
+const { addMonths, addDays, isPast } = dateFns
+
+import cron from 'cron'
+const CronJob = cron.CronJob
 
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -21,6 +24,8 @@ export default class AdvertisingRouter extends BaseRouter {
 		super(app, databaseFacade)
     this.adPrices = adPrices
 		this.setupRoutes()
+		let cronJob = new CronJob('1 0 * * *', this.checkAdExpiries.bind(this), null, true, 'Europe/London')
+		cronJob.start()
   }
 
   setupRoutes () {
@@ -36,7 +41,60 @@ export default class AdvertisingRouter extends BaseRouter {
     this.app.post('/api/paid-images/:adId/update-user', this.authorizeUser.bind(this), adImageUploadFormat, (req, res) => this.updateAdUser(req, res))
     this.app.post('/api/paid-images-click', (req, res) => this.logAdClick(req, res))
   }
+
+  async checkAdExpiries() {
+    console.log('Cron: Checking ads...')
+    
+    let relevantStatuses = [adStatuses.active, adStatuses.activeButPending, adStatuses.activeNeedsCorrection]
+    let activeAds = await this.getAdsBase(`WHERE Status IN (?, ?, ?)`, relevantStatuses, true)
+
+    let adsToBeDeactivated = []
+
+    for (let ad of activeAds) {
+      if (!ad.expiryDate) { continue }
+
+      let expiryDate = new Date(ad.expiryDate)
+      if (isPast(expiryDate)) {
+        adsToBeDeactivated.push(ad)
+      }
+    }
   
+    console.log('Ads to be deactivated: ', adsToBeDeactivated.map(ad => `${ad.id} by user id ${ad.userId}`))
+
+    for (let ad of adsToBeDeactivated) {
+      await this.deactivateAdAndSendEmail(ad.id, ad.userId)
+    }
+
+    console.log(`Done checking all ads.`)
+  }
+
+  async deactivateAdAndSendEmail(adId, userId) {
+    try {
+      let deleteQuery = `UPDATE advertisement SET Status = 'ENDED', ExpiryDate = NULL WHERE advertisement.Id = ?`
+      await this.databaseFacade.execute(deleteQuery, [adId], 'Cron error deactivating ad in database')
+
+      let getUserQuery = `SELECT Username AS username, Email AS email FROM user WHERE Id = ?`
+      let results = await this.databaseFacade.execute(getUserQuery, [userId], 'Cron err looking up user in database')
+      if (!results || results.length === 0) {
+        return
+      }
+      let user = results[0]
+
+      await sendEmail(
+        'advertising',
+        user.email,
+        'Ad expired - Yiffer.xyz',
+        `Dear ${user.username}, your ad with ID ${adId} has expired. If you would like to reactivate it, you can do so at <a href="https://pi.yiffer.xyz/dashboard">https://pi.yiffer.xyz/dashboard</a>. Otherwise, we hope you have enjoyed our advertising service!
+        <br/><br/>
+        Regards,<br/>
+        Yiffer.xyz`
+      )
+    }
+    catch (err) {
+      console.log('CRON ERROR deactivating ad: ', err)
+    }    
+  }
+
   async getAdPrices (req, res) {
     res.json(this.adPrices)
   }
@@ -201,51 +259,56 @@ export default class AdvertisingRouter extends BaseRouter {
     return {isValid: true}
   }
 
-  async getAdsBase (req, res, whereStatement, whereParams, isAdminRequest) {
-    try {
-      let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote, advertisementpayment.Amount AS paymentAmount, advertisementpayment.RegisteredDate AS paymentDate
-        FROM advertisement 
-        INNER JOIN user ON (user.Id = advertisement.UserId) 
-        LEFT JOIN advertisementpayment ON (advertisementpayment.AdId = advertisement.Id)
-        ${whereStatement} 
-        ORDER BY CreatedDate, advertisementpayment.RegisteredDate DESC`
+  async getAdsBase (whereStatement, whereParams, isAdminRequest) {
+    let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote, advertisementpayment.Amount AS paymentAmount, advertisementpayment.RegisteredDate AS paymentDate
+      FROM advertisement 
+      INNER JOIN user ON (user.Id = advertisement.UserId) 
+      LEFT JOIN advertisementpayment ON (advertisementpayment.AdId = advertisement.Id)
+      ${whereStatement} 
+      ORDER BY ExpiryDate, CreatedDate, advertisementpayment.RegisteredDate DESC`
 
-      let adResultsWithPayments = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
+    let adResultsWithPayments = await this.databaseFacade.execute(query, whereParams, 'Error fetching ads')
 
-      let ads = []
-      let currentAd = null
+    let ads = []
+    let currentAd = null
 
-      for (let adPaymentRow of adResultsWithPayments) {
-        if (adPaymentRow.id !== currentAd?.id) {
-          if (currentAd) {
-            ads.push(currentAd)
-          }
-
-          currentAd = {
-            ...adPaymentRow,
-            payments: []
-          }
-          delete currentAd.paymentAmount
-          delete currentAd.paymentDate
+    for (let adPaymentRow of adResultsWithPayments) {
+      if (adPaymentRow.id !== currentAd?.id) {
+        if (currentAd) {
+          ads.push(currentAd)
         }
 
-        if (adPaymentRow.paymentAmount) {
-          currentAd.payments.push({
-            amount: adPaymentRow.paymentAmount,
-            date: adPaymentRow.paymentDate,
-          })
+        currentAd = {
+          ...adPaymentRow,
+          payments: []
         }
+        delete currentAd.paymentAmount
+        delete currentAd.paymentDate
       }
 
-      if (currentAd) {
-        ads.push(currentAd)
+      if (adPaymentRow.paymentAmount) {
+        currentAd.payments.push({
+          amount: adPaymentRow.paymentAmount,
+          date: adPaymentRow.paymentDate,
+        })
       }
+    }
 
-      return ads
+    if (currentAd) {
+      ads.push(currentAd)
     }
-    catch (err) {
-      return this.returnApiError(res, err)
+
+    // Place the ads with expiry dates in front
+    let adsWithExpiry = []
+    let adsWithoutExpiry = []
+    for (let ad of ads) {
+      if (ad.expiryDate) { adsWithExpiry.push(ad) }
+      else { adsWithoutExpiry.push(ad) }
     }
+
+    let correctlyOrderedAds = adsWithExpiry.concat(adsWithoutExpiry)
+
+    return correctlyOrderedAds
   }
 
   async getUserAds (req, res) {
@@ -254,7 +317,7 @@ export default class AdvertisingRouter extends BaseRouter {
       if (!user) {
         return res.json([])
       }
-      let results = await this.getAdsBase(req, res, 'WHERE UserId=?', [user.id], false)
+      let results = await this.getAdsBase('WHERE UserId=?', [user.id], false)
       res.json(results)
     }
     catch (err) {
@@ -263,23 +326,28 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async getAllAds (req, res) {
-    let whereQueryString = ''
-    let whereQueryParams = null
-    let statuses = req.query.statuses
-    if ((typeof statuses) === 'string') {
-      statuses = [statuses]
-    }
-
-    if (statuses && statuses.length > 0) {
-      whereQueryParams = statuses
-      whereQueryString = 'WHERE Status = ?'
-      for (let i=0; i<statuses.length-1; i++) {
-        whereQueryString += ' OR Status = ?'
+    try {
+      let whereQueryString = ''
+      let whereQueryParams = null
+      let statuses = req.query.statuses
+      if ((typeof statuses) === 'string') {
+        statuses = [statuses]
       }
-    }
 
-    let results = await this.getAdsBase(req, res, whereQueryString, whereQueryParams, true)
-    res.json(results)
+      if (statuses && statuses.length > 0) {
+        whereQueryParams = statuses
+        whereQueryString = 'WHERE Status = ?'
+        for (let i=0; i<statuses.length-1; i++) {
+          whereQueryString += ' OR Status = ?'
+        }
+      }
+
+      let results = await this.getAdsBase(whereQueryString, whereQueryParams, true)
+      res.json(results)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
   }
 
   async getAdsForFrontEnd (req, res) {
@@ -327,7 +395,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async verifyAdOwnerOrAdmin (adId, req, res) {
     let user = await this.getUser(req)
-    let adResult = await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true)
+    let adResult = await this.getAdsBase('WHERE advertisement.Id=?', [adId], true)
 
     if (adResult.length === 0) {
       this.returnApiError(res, new ApiError('Ad with this ID not found', 404))
@@ -354,7 +422,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote, payment] = 
         [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote, req.body.paymentAmount]
 
-      let existingAd = await this.getAdById(req, res, adId)
+      let existingAd = await this.getAdById(adId)
       if (!existingAd) {
         return this.returnApiError(res, new ApiError('Ad with given id not found', 404))
       }
@@ -382,7 +450,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
-      let updatedAd = await this.getAdById(req, res, adId)
+      let updatedAd = await this.getAdById(adId)
       
       if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection, adStatuses.active].includes(status)) {
         let user = await this.getUserAccount(existingAd.userId)
@@ -546,7 +614,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
 
-      let updatedAd = await this.getAdById(req, res, adId)
+      let updatedAd = await this.getAdById(adId)
       res.json({success: true, ad: updatedAd})
 
       if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)
@@ -582,8 +650,8 @@ export default class AdvertisingRouter extends BaseRouter {
 		}
   }
 
-  async getAdById (req, res, adId) {
-    let ad = await this.getAdsBase(req, res, 'WHERE advertisement.Id=?', [adId], true)
+  async getAdById (adId) {
+    let ad = await this.getAdsBase('WHERE advertisement.Id=?', [adId], true)
     if (ad.length === 0) {
       return false
     }
@@ -616,7 +684,6 @@ const adStatuses = {
   activeButPending: 'ACTIVE BUT PENDING',
   activeNeedsCorrection: 'ACTIVE BUT NEEDS CORR.',
   ended: 'ENDED',
-  cancelled: 'CANCELLED',
 }
 
 function makeId (length) {
