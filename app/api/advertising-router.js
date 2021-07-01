@@ -427,6 +427,12 @@ export default class AdvertisingRouter extends BaseRouter {
         return this.returnApiError(res, new ApiError('Ad with given id not found', 404))
       }
 
+      if (status === 'DELETED') {
+        await this.deleteAd(adId)
+        res.status(200).end()
+        return
+      }
+
       let newExpiryDate = null
       if (expiryDateExtendMonths) {
         if (existingAd.expiryDate) {
@@ -553,6 +559,12 @@ export default class AdvertisingRouter extends BaseRouter {
     catch (err) {
       return this.returnApiError(res, err)
     }
+  }
+
+  async deleteAd (adId) {
+    let query = 'DELETE FROM advertisement WHERE advertisement.Id = ?'
+    await this.databaseFacade.execute(query, [adId], 'Error deleting ad in database')
+    return
   }
 
   async updateAdUser (req, res) {
