@@ -515,15 +515,22 @@ export default class ComicsRouter extends BaseRouter {
 
 			console.log(`Writing ${files.length} files to google, appending to comic ${comicName}.`)
 
-			if (!deleteExistingPages) {
-				await this.writeAppendedComicPageFiles(
+			if (deleteExistingPages) {
+				await this.overwriteComicPageFiles(
 					existingNumberOfPages,
 					files.map(f => f.path),
 					comicName,
 				)
+
+				if (isPendingComic) {
+					if (comic.ErrorText === 'Varying page res.') {
+						let updateComicDataQuery = `UPDATE pendingcomic SET ErrorText = NULL WHERE Id = ?`
+						await this.databaseFacade.execute(updateComicDataQuery, [comicId])
+					}
+				}
 			}
 			else {
-				await this.overwriteComicPageFiles(
+				await this.writeAppendedComicPageFiles(
 					existingNumberOfPages,
 					files.map(f => f.path),
 					comicName,
@@ -920,16 +927,7 @@ export default class ComicsRouter extends BaseRouter {
 			])
 
 			if (isPendingComic) {
-				let getPendingComicDataQuery = 'SELECT HasThumbnail AS hasThumbnail, ErrorText AS errorText FROM pendingcomic WHERE Id = ?'
-				let comicData = await this.databaseFacade.execute(getPendingComicDataQuery, [comicId])
-				comicData = comicData[0]
-
-				if (!comicData.hasThumbnail || comicData.errorText === 'Thumbnail') {
-					let updateComicDataQuery = `UPDATE pendingcomic SET HasThumbnail = 1
-						${comicData.errorText === 'Thumbnail' ? ', ErrorText = NULL' : ''}
-						WHERE Id = ?`
-					await this.databaseFacade.execute(updateComicDataQuery, [comicId])
-				}
+				await this.setPendingComicThumbnailAndRemoveThumbError(comicId)
 			}
 
 			res.json({success: true})
@@ -942,6 +940,19 @@ export default class ComicsRouter extends BaseRouter {
 		}
 		catch (err) {
 			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async setPendingComicThumbnailAndRemoveThumbError (comicId) {
+		let getPendingComicDataQuery = 'SELECT HasThumbnail AS hasThumbnail, ErrorText AS errorText FROM pendingcomic WHERE Id = ?'
+		let comicData = await this.databaseFacade.execute(getPendingComicDataQuery, [comicId])
+		comicData = comicData[0]
+
+		if (!comicData.hasThumbnail || comicData.errorText === 'Thumbnail') {
+			let updateComicDataQuery = `UPDATE pendingcomic SET HasThumbnail = 1
+				${comicData.errorText === 'Thumbnail' ? ', ErrorText = NULL' : ''}
+				WHERE Id = ?`
+			await this.databaseFacade.execute(updateComicDataQuery, [comicId])
 		}
 	}
 
