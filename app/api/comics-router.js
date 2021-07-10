@@ -51,8 +51,7 @@ export default class ComicsRouter extends BaseRouter {
 		let uploadsFolderCronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
 		uploadsFolderCronJob.start()
 
-		let scheduledPendingCronJob = new CronJob('* * * * *', this.publishScheduledComics.bind(this), null, true, 'Europe/London')
-		// let scheduledPendingCronJob = new CronJob('0 12 * * *', this.publishScheduledComics.bind(this), null, true, 'Europe/London')
+		let scheduledPendingCronJob = new CronJob('0 12 * * *', this.publishScheduledComics.bind(this), null, true, 'Europe/London')
 		scheduledPendingCronJob.start()
 	}
 
