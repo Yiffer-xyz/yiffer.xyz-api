@@ -4,10 +4,20 @@ export default class ModLogger {
     this.databaseFacade = databaseFacade
   }
 
-  async addModLog (req, actionType, ationDescription, actionDetails) {
-		if (!req.session || !req.session.user || !req.session.user.id) { return }
+  async addModLog (reqOrUserId, actionType, ationDescription, actionDetails) {
+    let userId
+    if (typeof(reqOrUserId) === 'number') {
+      userId = reqOrUserId
+    }
+    else {
+      userId = reqOrUserId.session?.user?.id
+    }
+    if (!userId) {
+      return
+    }
+
     let query = 'INSERT INTO modlog (User, ActionType, ActionDescription, ActionDetails) VALUES (?, ?, ?, ?)'
-    let queryParams = [req.session.user.id, actionType, ationDescription, actionDetails]
+    let queryParams = [userId, actionType, ationDescription, actionDetails]
     try {
       await this.databaseFacade.execute(query, queryParams)
     }

@@ -1,6 +1,8 @@
 import { convertComicPage, convertThumbnailFile } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
 import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
+import dateFns from 'date-fns'
+const { format } = dateFns
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -46,8 +48,12 @@ export default class ComicsRouter extends BaseRouter {
 		super(app, databaseFacade, modLogger, redisClient)
 		this.setupRoutes()
 		this.setupUploadsFolder()
-		let cronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
-		cronJob.start()
+		let uploadsFolderCronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
+		uploadsFolderCronJob.start()
+
+		let scheduledPendingCronJob = new CronJob('* * * * *', this.publishScheduledComics.bind(this), null, true, 'Europe/London')
+		// let scheduledPendingCronJob = new CronJob('0 12 * * *', this.publishScheduledComics.bind(this), null, true, 'Europe/London')
+		scheduledPendingCronJob.start()
 	}
 
   setupRoutes () {
@@ -65,6 +71,7 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.get ('/api/pendingcomics/:name', this.authorizeMod.bind(this), (req, res) => this.getPendingComic(req, res))
 		this.app.put ('/api/pendingcomics/:id', this.authorizeMod.bind(this), (req, res) => this.updatePendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id', this.authorizeAdmin.bind(this), (req, res) => this.processPendingComic(req, res))
+		this.app.post('/api/pendingcomics/:id/schedule', this.authorizeMod.bind(this), (req, res) => this.schedulePendingComic(req, res))
 		this.app.post('/api/pendingcomics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, true))
 		this.app.patch('/api/pendingcomics/:id/set-error', this.authorizeAdmin.bind(this), (req, res) => this.setPendingComicError(req, res))
 		this.app.post('/api/pendingcomics/:id/addkeywords', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToPendingComic(req, res))
@@ -78,6 +85,21 @@ export default class ComicsRouter extends BaseRouter {
 		if (!folders.includes('uploads')) {
 			await FileSystemFacade.createDirectory(__dirname + '/../../uploads')
 		}
+	}
+
+	async publishScheduledComics() {
+		console.log('Cron: Publishing scheduled comics...')
+
+		let todayDate = format(new Date(), 'yyyy-MM-dd')
+		let query = `SELECT Id FROM pendingcomic WHERE ScheduledPublish <= ?`
+		let scheduledComicIds = await this.databaseFacade.execute(query, [todayDate])
+
+		console.log(`Found ${scheduledComicIds.length} comics`)
+		for (let comic of scheduledComicIds) {
+			await this.approvePendingComic(null, null, comic.Id)
+		}
+
+		console.log(`Done approving scheduled pending comics`)
 	}
 
 	async getComicListPaginated (req, res) {
@@ -688,7 +710,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async getPendingComics (req, res) {
-		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id ORDER BY pendingcomic.Id ASC'
+		let query = 'SELECT artist.Name AS artist, pendingcomic.Id AS id, pendingcomic.Name AS name, user.Username AS modName, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, ScheduledPublish AS scheduledPublish, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) INNER JOIN user ON (user.Id=pendingcomic.Moderator) LEFT JOIN pendingcomickeyword ON (pendingcomickeyword.ComicId = pendingcomic.Id) LEFT JOIN keyword ON (keyword.Id = pendingcomickeyword.KeywordId) WHERE Processed=0 GROUP BY name, numberOfPages, artist, id ORDER BY pendingcomic.Id ASC'
 		try {
 			let comics = await this.databaseFacade.execute(query)
 			for (let comic of comics) {
@@ -704,7 +726,7 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
-		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
+		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, ScheduledPublish AS scheduledPublish FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, keyword.Id AS id FROM pendingcomickeyword INNER JOIN keyword ON (pendingcomickeyword.KeywordId = keyword.Id) WHERE pendingcomickeyword.ComicId = ?'
 
 		try {
@@ -786,6 +808,22 @@ export default class ComicsRouter extends BaseRouter {
 			return this.returnError(err.message, res, err.error, err)
 		}
 	}
+
+	async schedulePendingComic (req, res) {
+    try {
+			let [comicId, scheduledTime] = [req.params.id, req.body.scheduledTime]
+			if (scheduledTime) { scheduledTime = new Date(scheduledTime) }
+
+			let query = 'UPDATE pendingcomic SET ScheduledPublish = ? WHERE Id = ?'
+			let queryParams = [scheduledTime, comicId]
+			await this.databaseFacade.execute(query, queryParams, 'Error updating scheduled publish date')
+
+			res.status(204).end()
+		}
+		catch (err) {
+			return this.returnApiError(res, err)
+		}
+	}
 	
 	async approvePendingComic (req, res, comicId) {
 		let getFullPendingComicDataQuery = 'SELECT Name, Cat, Tag, NumberOfPages, State, Artist, HasThumbnail FROM pendingcomic WHERE Id = ?'
@@ -816,9 +854,16 @@ export default class ComicsRouter extends BaseRouter {
 		let deletePendingComicQuery = 'DELETE FROM pendingcomic WHERE Id = ?'
 		await this.databaseFacade.execute(deletePendingComicQuery, [comicId], 'Error deleting the comic from pending in database')
 
-		this.addModLog(req, 'Pending comic', `Approve ${comicData.Name}`)
+		if (req) {
+			this.addModLog(req, 'Pending comic', `Approve ${comicData.Name}`)
+		}
+		else {
+			this.addModLog(1, 'Pending comic', `Approve ${comicData.Name}`)
+		}
 
-		res.json({success: true})
+		if (res) {
+			res.json({success: true})
+		}
 	}
 
 	async transferLinksFromPendingToLiveComic (pendingComicId, liveComicId) {

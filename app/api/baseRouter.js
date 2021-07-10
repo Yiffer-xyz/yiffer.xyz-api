@@ -204,7 +204,7 @@ export default class BaseRouter {
 		}
 	}
 
-	addModLog (req, actionType, ationDescription, actionDetails) {
-		this.modLogger.addModLog(req, actionType, ationDescription, actionDetails)
+	addModLog (reqOrUserId, actionType, ationDescription, actionDetails) {
+		this.modLogger.addModLog(reqOrUserId, actionType, ationDescription, actionDetails)
 	}
 }
