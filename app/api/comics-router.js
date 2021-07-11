@@ -1,4 +1,4 @@
-import { convertComicPage, convertThumbnailFile } from '../image-processing.js'
+import { convertThumbnailFile, processComicPage } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
 import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
 import dateFns from 'date-fns'
@@ -407,11 +407,15 @@ export default class ComicsRouter extends BaseRouter {
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		for (let file of fileList) {
-			if (file.mimetype.endsWith('png')) {
-				await convertComicPage(file.path)
+			// todo not needed when all things handle api errors, this one already does
+			try {
+				await processComicPage(file)
 			}
-			else if (!file.mimetype.endsWith('jpeg')) {
-				throw new Error(`Some file is of an unsupported format (${file.originalname})`)
+			catch (err) {
+				if (err.message.includes('format')) {
+					throw new ApiError(err.message, 400)
+				}
+				throw new ApiError('Error converting or resizing a page', 500)
 			}
 		}
 
@@ -511,12 +515,7 @@ export default class ComicsRouter extends BaseRouter {
 			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
 			
 			for (let file of files) {
-				if (file.mimetype.endsWith('png')) {
-					await convertComicPage(file.path)
-				}
-				else if (!file.mimetype.endsWith('jpeg')) {
-					throw new Error(`Some file is of an unsupported format (${file.originalname})`)
-				}
+				await processComicPage(file)
 			}
 
 			console.log(`Writing ${files.length} files to google, appending to comic ${comicName}.`)

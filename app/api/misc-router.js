@@ -1,6 +1,6 @@
 import FileSystemFacade from '../fileSystemFacade.js'
 import BaseRouter, { ApiError } from './baseRouter.js'
-import { convertComicPage } from '../image-processing.js'
+import { processComicPage } from '../image-processing.js'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
@@ -283,14 +283,16 @@ export default class MiscRouter extends BaseRouter {
     let [comicName, comicId, newPageFile, insertAfterPageNumber] =
       [req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
 
-    if (!newPageFile || (!newPageFile.mimetype.endsWith('jpeg') && !newPageFile.mimetype.endsWith('png'))) {
-      return this.returnError('File must exist and be .jpg or .png or .jpeg', res)
+    if (!newPageFile) {
+      return this.returnError('Uploaded file not found', res)
     }
 
     try {
       let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id=?'
       let numberOfPagesRes = await this.databaseFacade.execute(numberOfPagesQuery, [comicId])
       let numberOfPages = numberOfPagesRes[0].NumberOfPages
+
+      await processComicPage(newPageFile)
 
       for (let pageNo=numberOfPages; pageNo >= insertAfterPageNumber+1; pageNo--) {
         await FileSystemFacade.renameGoogleComicFile(
@@ -299,9 +301,6 @@ export default class MiscRouter extends BaseRouter {
         )
       }
 
-      if (newPageFile.mimetype.endsWith('png')) {
-        await convertComicPage(newPageFile.path)
-      }
       await FileSystemFacade.writeGoogleComicFile(
         newPageFile.path,
         comicName,
