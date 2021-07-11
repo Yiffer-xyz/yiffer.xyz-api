@@ -1,3 +1,7 @@
+import dateFns from 'date-fns'
+import { nb } from 'date-fns/locale'
+const { format } = dateFns
+
 export class ApiError extends Error {
 	constructor(message, status) {
 		super(message)
@@ -15,38 +19,36 @@ export default class BaseRouter {
 	}
 
 	returnApiError(res, error) {
+		let timeString = format(new Date(), 'PPPPppp', {locale: nb})
+
 		if (error instanceof ApiError) {
-			if (error.status !== 404) {
-				console.log(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
+			if (error.status < 400 || error.status >= 500) {
+				console.log(`[${error.status}] Error @ ${timeString}: ${error.message}`)
 			}
 		}
 		else {
-			console.log(`Error @`, new Date().toISOString().substr(0,19).replace('T', ' '))
+			console.log(`Error @ ${timeString}`)
 		}
 		
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
-			console.log(`[500] Controlled error: ${error.error}`)
-			if ('error' in error) {
-				console.log(error.error)
-			}
-
+			console.log(`[500] Error (with customErrorMessage) @ ${timeString}: ${error.error}`)
 			error = new ApiError(error.customErrorMessage, 500)
 		}
 
 		else if (error?.error?.name === 'ApiInputError') {
-			console.log(`[500] EMAIL error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.log(`[500] EMAIL error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error related to email', 500)
 		}
 
 		else if (error?.error?.code === 'ECONNREFUSED' || error?.error?.code === 'ER_ACCESS_DENIED_ERROR') {
-			console.log(`[500] DB error: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.log(`[500] DB error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error: Could not connect to database', 500)
 		}
 
 		else if (!(error instanceof ApiError)) {
-			console.log('[500] UNCAUGHT error: ', error)
+			console.log(`[500] UNCAUGHT error @ ${timeString}: ${error}`)
 			error = new ApiError('Server error', 500)
 		}
 
