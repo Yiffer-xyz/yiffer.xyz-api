@@ -1,3 +1,5 @@
+import { ApiError } from './api/baseRouter.js';
+
 import sharp from 'sharp'
 sharp.cache(false)
 
@@ -7,13 +9,12 @@ let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const pageConfig = config.dimensions.page
 
-// TODO APIerror handling for all places calling this
 export async function processComicPage(file) {
   let image = await sharp(file.path)
   let metadata = await image.metadata()
 
   if (!file.mimetype.endsWith('png') && !file.mimetype.endsWith('jpeg')) {
-    throw new Error(`File format not supported (${file.originalname})`)
+    throw new ApiError(`File format not supported (${file.originalname})`, 400)
   }
   let needsTypeConvert = file.mimetype.endsWith('png')
 

@@ -406,25 +406,18 @@ export default class ComicsRouter extends BaseRouter {
 	}
 	
 	async processComicFiles (fileList, thumbnailFile) {
+		let fileProcessPromises = []
 		for (let file of fileList) {
-			// todo not needed when all things handle api errors, this one already does
-			try {
-				await processComicPage(file)
-			}
-			catch (err) {
-				if (err.message.includes('format')) {
-					throw new ApiError(err.message, 400)
-				}
-				throw new ApiError('Error converting or resizing a page', 500)
-			}
+			fileProcessPromises.push(processComicPage(file))
 		}
+		await Promise.all(fileProcessPromises)
 
 		if (thumbnailFile) {
 			if (thumbnailFile.mimetype.endsWith('png') || thumbnailFile.mimetype.endsWith('jpeg')) {
 				await convertThumbnailFile(thumbnailFile.path)
 			}
 			else {
-				throw new Error(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`)
+				throw new ApiError(`Thumbnail file is of an unsupported format (${thumbnailFile.originalname})`, 400)
 			}
 		}
 	}
@@ -501,12 +494,11 @@ export default class ComicsRouter extends BaseRouter {
 
 	async addPagesToComic (req, res, isPendingComic, deleteExistingPages) {
 		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, Number(req.params.id)]
-
-		if (!uploadedFiles || uploadedFiles.length === 0) {
-			return this.returnError('No files added!', res)
-		}
-
 		try {
+			if (!uploadedFiles || uploadedFiles.length === 0) {
+        return this.returnApiError(res, new ApiError('No files added', 400))
+			}
+
 			let comicQuery = `SELECT * FROM ${isPendingComic ? 'pendingcomic' : 'comic'} WHERE Id=?`
 			let comicQueryRes = await this.databaseFacade.execute(comicQuery, [comicId])
 			let comic = comicQueryRes[0]
@@ -545,7 +537,7 @@ export default class ComicsRouter extends BaseRouter {
 			if (!isPendingComic) {
 				let updateUpdatedTimeQuery = 'UPDATE comic SET Updated = NOW() WHERE Id=?'
 				await this.databaseFacade.execute(updateUpdatedTimeQuery, [comicId],
-					'Database error: Error updating comic updated timestamp')
+					'Error updating comic updated timestamp')
 			}
 
 			let updateNumberOfPagesQuery = `UPDATE ${isPendingComic ? 'pendingcomic' : 'comic'} SET NumberOfPages = ? WHERE Id = ?`
@@ -554,11 +546,10 @@ export default class ComicsRouter extends BaseRouter {
 				queryParams[0] += existingNumberOfPages
 			}
 
-			await this.databaseFacade.execute(updateNumberOfPagesQuery,
-				queryParams, 'Database error: Error updating number of pages')
+			await this.databaseFacade.execute(updateNumberOfPagesQuery, queryParams, 'Error updating number of pages')
 			
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
-			res.json({success: true})
+			res.status(204).end()
 			
 			let modLogEntry = 'Comic'
 			let descFirstWord = 'Append'
@@ -571,9 +562,8 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, modLogEntry, `${descFirstWord} ${files.length} pages to ${comicName}`)
 		}
 		catch (err) {
-			console.log('Add pages err: ', err)
 			FileSystemFacade.deleteFiles(uploadedFiles.map(f => f.path))
-			return this.returnError(err.message, res, err.error, err)
+			return this.returnApiError(res, err)
 		}
 	}
 

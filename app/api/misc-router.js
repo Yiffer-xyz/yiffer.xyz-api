@@ -283,11 +283,11 @@ export default class MiscRouter extends BaseRouter {
     let [comicName, comicId, newPageFile, insertAfterPageNumber] =
       [req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
 
-    if (!newPageFile) {
-      return this.returnError('Uploaded file not found', res)
-    }
-
     try {
+      if (!newPageFile) {
+        return this.returnApiError('Uploaded file not found', 400)
+      }
+
       let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id=?'
       let numberOfPagesRes = await this.databaseFacade.execute(numberOfPagesQuery, [comicId])
       let numberOfPages = numberOfPagesRes[0].NumberOfPages
@@ -311,12 +311,12 @@ export default class MiscRouter extends BaseRouter {
       let queryParams = [numberOfPages+1, comicId]
       await this.databaseFacade.execute(query, queryParams, 'Error updating number of pages')
 
-      res.json({success: true})
+      res.status(204).end()
       FileSystemFacade.deleteFile(newPageFile.path)
       this.addModLog(req, 'Comic', `Insert page in ${comicName}`, `Page at position ${insertAfterPageNumber+1}`)
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+      return this.returnApiError(res, err)
     }
   }
 
