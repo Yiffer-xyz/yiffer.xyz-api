@@ -16,7 +16,9 @@ export default class BaseRouter {
 
 	returnApiError(res, error) {
 		if (error instanceof ApiError) {
-			console.log(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
+			if (error.status !== 404) {
+				console.log(`${error.status} Error @ ${new Date().toISOString().substr(0,19).replace('T', ' ')}: ${error.message}`)
+			}
 		}
 		else {
 			console.log(`Error @`, new Date().toISOString().substr(0,19).replace('T', ' '))

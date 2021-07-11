@@ -95,7 +95,13 @@ export default class ComicsRouter extends BaseRouter {
 
 		console.log(`Found ${scheduledComicIds.length} comics`)
 		for (let comic of scheduledComicIds) {
-			await this.approvePendingComic(null, null, comic.Id)
+			console.log(`Approving comic ${comic.Id}`)
+			try {
+				await this.approvePendingComic(null, null, comic.Id)
+			}
+			catch (err) {
+				console.log('ERROR approving the comic!')
+			}
 		}
 
 		console.log(`Done approving scheduled pending comics`)
@@ -697,6 +703,11 @@ export default class ComicsRouter extends BaseRouter {
 
 	async rateComic (req, res) {
 		let [comicId, rating] = [Number(req.params.id), Number(req.body.rating)]
+		if (!comicId) {
+			res.json({error: 'Missing comicId somehow - if you see this message, please use the submit feedback functionality and tell us exactly how you navigated/what you clicked to achieve this!'})
+			return
+		}
+
 		let user = await this.getUser(req)
 		let deleteQuery = 'DELETE FROM comicvote WHERE UserId = ? AND ComicId = ?'
 		let deleteQueryParams = [user.id, comicId]
