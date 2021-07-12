@@ -985,7 +985,7 @@ export default class ComicsRouter extends BaseRouter {
 
 			FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
 			
-			res.status(204).end()
+			res.json({numberOfResizedPages: numberOfResizedPages, totalNumberOfPages: comic.NumberOfPages})
 		}
 		catch (err) {
 			this.returnApiError(res, err)
