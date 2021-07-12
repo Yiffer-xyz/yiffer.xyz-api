@@ -1,6 +1,7 @@
 import dateFns from 'date-fns'
-import { nb } from 'date-fns/locale'
+import locale from 'date-fns/locale/index.js'
 const { format } = dateFns
+const { nb } = locale
 
 export class ApiError extends Error {
 	constructor(message, status) {

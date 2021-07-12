@@ -68,6 +68,12 @@ export default class FileSystemFacade {
 			.delete()
 	}
 
+	static async downloadGoogleComicPage(comicName, filename) {
+		await storage.bucket(config.storage.bucketName)
+			.file(`${config.storage.comicsBucketFolder}/${comicName}/${filename}`)
+			.download({destination: `uploads/${comicName}/${filename}`})
+	}
+
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
 		return new Promise(async (resolve, reject) => {
 			fs.rename(oldFilename, newFilename, err => {
@@ -97,7 +103,7 @@ export default class FileSystemFacade {
 
 	static async deleteDirectory (pathToDirectory) {
 		return new Promise(async (resolve, reject) => {
-			fs.rmdir(pathToDirectory, err => {
+			fs.rm(pathToDirectory, {recursive: true}, err => {
 				if (err) { reject({error: err, message: 'Error deleting directory'}) }
 				else { resolve({error: false}) }
 			})

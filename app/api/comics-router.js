@@ -1,4 +1,4 @@
-import { convertThumbnailFile, processComicPage } from '../image-processing.js'
+import { convertThumbnailFile, processComicPage, resizeComicPageIfNeeded } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
 import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
 import dateFns from 'date-fns'
@@ -65,6 +65,7 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/comics/:id/updatedetails', this.authorizeMod.bind(this), (req, res) => this.updateComicDetails(req, res))
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		this.app.post('/api/comics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
+		this.app.post('/api/comics/:id/auto-resize', this.authorizeMod.bind(this), (req, res) => this.autoResizeComic(req, res))
 		
 		this.app.get ('/api/pendingcomics', this.authorizeMod.bind(this), (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', this.authorizeMod.bind(this), (req, res) => this.getPendingComic(req, res))
@@ -499,9 +500,7 @@ export default class ComicsRouter extends BaseRouter {
         return this.returnApiError(res, new ApiError('No files added', 400))
 			}
 
-			let comicQuery = `SELECT * FROM ${isPendingComic ? 'pendingcomic' : 'comic'} WHERE Id=?`
-			let comicQueryRes = await this.databaseFacade.execute(comicQuery, [comicId])
-			let comic = comicQueryRes[0]
+			let comic = await this.getComicById(comicId, isPendingComic)
 			let existingNumberOfPages = comic.NumberOfPages
 
 			let files = uploadedFiles.sort((f1, f2) => f1.originalname > f2.originalname ? 1 : -1)
@@ -567,6 +566,12 @@ export default class ComicsRouter extends BaseRouter {
 		}
 	}
 
+	async getComicById (comicId, isPendingComic) {
+		let comicQuery = `SELECT * FROM ${isPendingComic ? 'pendingcomic' : 'comic'} WHERE Id=?`
+		let comicQueryRes = await this.databaseFacade.execute(comicQuery, [comicId])
+		return comicQueryRes[0]
+	}
+
 	async writeAppendedComicPageFiles(existingNumPages, filePaths, comicName) {
 		let fileWritePromises = []
     for (let i=0; i < filePaths.length; i++) {
@@ -625,8 +630,8 @@ export default class ComicsRouter extends BaseRouter {
 
 			res.json({success: true})
 
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Comic', `Update details of ${comicName}`, queryParams.slice(0,-1).join(', '))
+			let comic = await this.getComicById(comicId)
+			this.addModLog(req, 'Comic', `Update details of ${comic.Name}`, queryParams.slice(0,-1).join(', '))
 		}
 		catch (err) {
 			if (hasMovedFiles) {
@@ -941,6 +946,68 @@ export default class ComicsRouter extends BaseRouter {
 		catch (err) {
 			return this.returnError(err.message, res, err.error, err)
 		}
+	}
+
+	async autoResizeComic (req, res) {
+		try {
+			let [comicId] = [req.params.id]
+			let comic = await this.getComicById(comicId)
+
+			let [filePaths, pageNames] = await this.downloadComicFilesTemp(comic)
+
+			let resizePromises = []
+			for (let filepath of filePaths) {
+				resizePromises.push(resizeComicPageIfNeeded(filepath, false))
+			}
+
+			let resizeResults = await Promise.all(resizePromises)
+			let numberOfResizedPages = resizeResults.filter(r => r).length
+
+			console.log(`Manual resize of ${comic.Name}, scaled down ${numberOfResizedPages}/${comic.NumberOfPages} pages.`)
+
+			let fileWritePromises = []
+			for (let i=0; i<resizeResults.length; i++) {
+				let wasResized = resizeResults[i]
+				if (wasResized) {
+					fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePaths[i], comic.Name, pageNames[i]))
+				}
+			}
+
+			await Promise.all(fileWritePromises)
+			console.log('Wrote all files to google.')
+
+			res.status(204).end()
+			
+			FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+		}
+		catch (err) {
+			return this.returnError(err.message, res, err.error, err)
+		}
+	}
+
+	async downloadComicFilesTemp (comic) {
+		try {
+			await FileSystemFacade.createDirectory(`uploads/${comic.Name}`)
+		}
+		catch (err) {
+			await FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+		}
+
+		console.log(`Downloading ${comic.NumberOfPages} files for comic ${comic.Name}`)
+		let downloadPromises = []
+		let filePaths = []
+		let pageNames = []
+
+		for (let i=1; i<=comic.NumberOfPages; i++) {
+			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
+			downloadPromises.push(FileSystemFacade.downloadGoogleComicPage(comic.Name, `${pageNumberString}.jpg`))
+			filePaths.push(`uploads/${comic.Name}/${pageNumberString}.jpg`)
+			pageNames.push(`${pageNumberString}.jpg`)
+		}
+
+		await Promise.all(downloadPromises)
+
+		return [filePaths, pageNames]
 	}
 
 	async setPendingComicThumbnailAndRemoveThumbError (comicId) {
