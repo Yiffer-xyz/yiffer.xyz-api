@@ -1,6 +1,7 @@
 import { convertThumbnailFile, processComicPage, resizeComicPageIfNeeded } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
 import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
+import { purgePagesFromCache } from '../cloudflareFacade.js'
 import dateFns from 'date-fns'
 const { format } = dateFns
 
@@ -965,23 +966,29 @@ export default class ComicsRouter extends BaseRouter {
 
 			console.log(`Manual resize of ${comic.Name}, scaled down ${numberOfResizedPages}/${comic.NumberOfPages} pages.`)
 
+			let resizedPageNames = []
 			let fileWritePromises = []
 			for (let i=0; i<resizeResults.length; i++) {
 				let wasResized = resizeResults[i]
 				if (wasResized) {
 					fileWritePromises.push(FileSystemFacade.writeGoogleComicFile(filePaths[i], comic.Name, pageNames[i]))
+					resizedPageNames.push(pageNames[i])
 				}
 			}
 
 			await Promise.all(fileWritePromises)
-			console.log('Wrote all files to google.')
+			console.log(`Wrote all ${numberOfResizedPages} files to google.`)
 
-			res.status(204).end()
-			
+			if (numberOfResizedPages > 0) {
+				await purgePagesFromCache(comic.Name, resizedPageNames)
+			}
+
 			FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+			
+			res.status(204).end()
 		}
 		catch (err) {
-			return this.returnError(err.message, res, err.error, err)
+			this.returnApiError(res, err)
 		}
 	}
 
