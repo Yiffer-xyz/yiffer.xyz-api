@@ -28,6 +28,12 @@ export default class MiscRouter extends BaseRouter {
     this.app.post('/api/comicsuggestions', (req, res) => this.addComicSuggestion(req, res))
     this.app.post('/api/comicsuggestions/:id/process', this.authorizeMod.bind(this), (req, res) => this.processComicSuggestion(req, res))
 
+    this.app.get ('/api/comic-problems', this.authorizeMod.bind(this), (req, res) => this.handleGetComicProblems(req, res))
+    this.app.get ('/api/comic-problems/:comicId', this.authorizeMod.bind(this), (req, res) => this.handleGetSingleComicProblemCategories(req, res))
+    this.app.post('/api/comic-problems', (req, res) => this.addComicProblem(req, res))
+    this.app.delete('/api/comic-problems/:id', this.authorizeMod.bind(this), (req, res) => this.removeComicProblem(req, res))
+    this.app.patch('/api/comic-problems/:id/assign', this.authorizeMod.bind(this), (req, res) => this.assignComicProblem(req, res))
+
     this.app.get ('/api/modlog', this.authorizeMod.bind(this), (req, res) => this.getModLog(req, res))
     this.app.get ('/api/modscores', this.authorizeMod.bind(this), (req, res) => this.getModScores(req, res))
   
@@ -125,6 +131,114 @@ export default class MiscRouter extends BaseRouter {
     }
     catch (err) {
       return this.returnError(err.message, res, err.error)
+    }
+  }
+
+  async handleGetComicProblems (req, res) {
+    try {
+      let problems = await this.getComicProblems(null, null)
+      res.json(problems)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async handleGetSingleComicProblemCategories (req, res) {
+    try {
+      let comicId = Number(req.params.comicId)
+      let problems = await this.getComicProblems(comicId, null)
+      let problemCategories = problems.map(p => p.problemCategory)
+      res.json(problemCategories)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async getComicProblems(comicId, problemCategory) {
+    let query = `SELECT comicproblem.Id AS id, comic.Name AS comicName, comic.Id AS comicId, comicproblem.ProblemCategory AS problemCategory, comicproblem.Description AS description, user.username AS user, comicproblem.UserIP AS userIP, comicproblem.AssignedMod AS assignedMod
+    FROM comicproblem INNER JOIN comic ON (comic.Id = comicproblem.ComicId)
+      LEFT JOIN user ON (comicproblem.UserId = user.Id)`
+
+    let queryParams = null
+    if (comicId && problemCategory) {
+      query += ' WHERE ComicId = ? AND ProblemCategory = ? '
+      queryParams = [comicId, problemCategory]
+    }
+    else if (comicId || problemCategory) {
+      query += ` WHERE ${comicId ? 'ComicId' : 'ProblemCategory'} = ? `
+      queryParams = [comicId || problemCategory]
+    }
+
+    query += ' ORDER BY comicproblem.Id ASC'
+
+    let problems = await this.databaseFacade.execute(query, queryParams, 'Error fetching problems')
+
+    return problems
+  }
+
+  async addComicProblem (req, res) {
+    try {
+      let [comicId, problemCategory, description] = 
+        [req.body.comicId, req.body.problemCategory, req.body.description]
+
+      let user = await this.getUser(req)
+      let userParam = user ? user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+
+      let existingProblem = await this.getComicProblems(comicId, problemCategory)
+      if (existingProblem.length > 0) {
+        return this.returnApiError(res, new ApiError('This problem has already been reported for this comic', 409))
+      }
+
+      let insertProblemQuery = `INSERT INTO comicproblem (ComicId, ProblemCategory, ProblemDescription, ${user ? 'UserId' : 'UserIP'})
+        VALUES (?, ?, ?, ?)`
+      let queryParams = [comicId, problemCategory, description, userParam]
+
+      await this.databaseFacade.execute(insertProblemQuery, queryParams, 'Database error saving problem')
+
+      res.status(204).end()
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async removeComicProblem (req, res) {
+    try {
+      let problemId = Number(req.params.id)
+      let query = 'DELETE FROM comicproblem WHERE Id = ?'
+      let queryParams = [problemId]
+
+      await this.databaseFacade.execute(query, queryParams, 'DB error deleting comic problem')
+      res.status(204).end()
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async assignComicProblem (req, res) {
+    try {
+      let problemId = Number(req.params.id)
+      let user = await this.getUser(req)
+
+      let existingProblemQuery = 'SELECT * FROM comicproblem WHERE Id = ?'
+      let existingProblemQueryParams = [problemId]
+      let existingProblem = await this.databaseFacade.execute(existingProblemQuery, existingProblemQueryParams, 'Error getting existing problem')
+      if (existingProblem[0].AssignedMod) {
+        return this.returnApiError(res, new ApiError(`Already assigned to mod ${existingProblem[0].AssignedMod}`, 409))
+      }
+
+      let updateQuery = 'UPDATE comicproblem SET AssignedMod = ? WHERE Id = ?'
+      let updateQueryParams = [user.username, problemId]
+
+      await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error assigning problem')
+
+      res.status(204).end()
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
     }
   }
 
