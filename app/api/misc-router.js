@@ -28,11 +28,16 @@ export default class MiscRouter extends BaseRouter {
     this.app.post('/api/comicsuggestions', (req, res) => this.addComicSuggestion(req, res))
     this.app.post('/api/comicsuggestions/:id/process', this.authorizeMod.bind(this), (req, res) => this.processComicSuggestion(req, res))
 
-    this.app.get ('/api/comic-problems', this.authorizeMod.bind(this), (req, res) => this.handleGetComicProblems(req, res))
-    this.app.get ('/api/comic-problems/:comicId', this.authorizeMod.bind(this), (req, res) => this.handleGetSingleComicProblemCategories(req, res))
-    this.app.post('/api/comic-problems', (req, res) => this.addComicProblem(req, res))
+    this.app.get   ('/api/comic-problems', this.authorizeMod.bind(this), (req, res) => this.handleGetComicProblems(req, res))
+    this.app.get   ('/api/comic-problems/:comicId', this.authorizeMod.bind(this), (req, res) => this.handleGetSingleComicProblemCategories(req, res))
+    this.app.post  ('/api/comic-problems', (req, res) => this.addComicProblem(req, res))
     this.app.delete('/api/comic-problems/:id', this.authorizeMod.bind(this), (req, res) => this.removeComicProblem(req, res))
-    this.app.patch('/api/comic-problems/:id/assign', this.authorizeMod.bind(this), (req, res) => this.assignComicProblem(req, res))
+    this.app.patch ('/api/comic-problems/:id/assign', this.authorizeMod.bind(this), (req, res) => this.assignComicProblem(req, res))
+
+    this.app.get   ('/api/comic-problem-categories', (req, res) => this.handleGetProblemCategories(req, res))
+    this.app.put   ('/api/comic-problem-categories/:id', (req, res) => this.updateProblemCategory(req, res))
+    this.app.post  ('/api/comic-problem-categories', (req, res) => this.createProblemCategory(req, res))
+    this.app.delete('/api/comic-problem-categories/:id', (req, res) => this.deleteProblemCategory(req, res))
 
     this.app.get ('/api/modlog', this.authorizeMod.bind(this), (req, res) => this.getModLog(req, res))
     this.app.get ('/api/modscores', this.authorizeMod.bind(this), (req, res) => this.getModScores(req, res))
@@ -148,7 +153,10 @@ export default class MiscRouter extends BaseRouter {
     try {
       let comicId = Number(req.params.comicId)
       let problems = await this.getComicProblems(comicId, null)
-      let problemCategories = problems.map(p => p.problemCategory)
+      let problemCategories = problems.map(p => ({
+        categoryId: p.problemCategoryId,
+        categoryName: p.problemCategoryName,
+      }))
       res.json(problemCategories)
     }
     catch (err) {
@@ -156,19 +164,26 @@ export default class MiscRouter extends BaseRouter {
     }
   }
 
-  async getComicProblems(comicId, problemCategory) {
-    let query = `SELECT comicproblem.Id AS id, comic.Name AS comicName, comic.Id AS comicId, comicproblem.ProblemCategory AS problemCategory, comicproblem.Description AS description, user.username AS user, comicproblem.UserIP AS userIP, comicproblem.AssignedMod AS assignedMod
-    FROM comicproblem INNER JOIN comic ON (comic.Id = comicproblem.ComicId)
-      LEFT JOIN user ON (comicproblem.UserId = user.Id)`
+  async getComicProblems(comicId, problemCategoryId) {
+    let query = `SELECT 
+      comicproblem.Id AS id, comic.Name AS comicName, comic.Id AS comicId,
+      comicproblemcategory.Name AS problemCategoryName, comicproblemcategory.Id AS problemCategoryId,
+      comicproblem.Description AS description, user.username AS user,
+      comicproblem.UserIPOrName AS userIPOrName,
+      comicproblem.AssignedModId AS assignedModId, user.Username AS assignedModName
+    FROM comicproblem
+    INNER JOIN comic ON (comic.Id = comicproblem.ComicId)
+    INNER JOIN comicproblemcategory ON (comicproblem.ProblemCategoryId = comicproblemcategory.Id)
+    LEFT JOIN user ON (comicproblem.AssignedModId = user.Id)`
 
     let queryParams = null
-    if (comicId && problemCategory) {
-      query += ' WHERE ComicId = ? AND ProblemCategory = ? '
-      queryParams = [comicId, problemCategory]
+    if (comicId && problemCategoryId) {
+      query += ' WHERE ComicId = ? AND comicproblemcategory.Id = ? '
+      queryParams = [comicId, problemCategoryId]
     }
-    else if (comicId || problemCategory) {
-      query += ` WHERE ${comicId ? 'ComicId' : 'ProblemCategory'} = ? `
-      queryParams = [comicId || problemCategory]
+    else if (comicId || problemCategoryId) {
+      query += ` WHERE ${comicId ? 'ComicId' : 'comicproblemcategory.Id'} = ? `
+      queryParams = [comicId || problemCategoryId]
     }
 
     query += ' ORDER BY comicproblem.Id ASC'
@@ -178,22 +193,85 @@ export default class MiscRouter extends BaseRouter {
     return problems
   }
 
+  async handleGetProblemCategories (req, res) {
+    try {
+      let query = 'SELECT Id AS id, Name AS name, HelperText AS helperText FROM comicproblemcategory ORDER BY Name ASC'
+      let categories = await this.databaseFacade.execute(query, null, 'Database error getting comic problem categories')
+
+      let sortedCategories = categories.sort((c1) => c1.name === 'Other' ? 0 : -1)
+      res.json(sortedCategories)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async updateProblemCategory (req, res) {
+    try {
+      let [categoryId, name, helperText] = [Number(req.params.id), req.body.name, req.body.helperText]
+      let query = 'UPDATE comicproblemcategory SET Name = ?, HelperText = ? WHERE Id = ?'
+      let queryParams = [name, helperText, categoryId]
+
+      await this.databaseFacade.execute(query, queryParams, 'DB error updating category')
+      
+      let newProblem = { id: categoryId, name, helperText }
+      res.json(newProblem)
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async createProblemCategory (req, res) {
+    try {
+      let [name, helperText] = [req.body.name, req.body.helperText]
+      let query = 'INSERT INTO comicproblemcategory (Name, HelperText) VALUES (?, ?)'
+      let queryParams = [name, helperText]
+
+      let result = await this.databaseFacade.execute(query, queryParams, 'DB error creating category')
+
+      let newProblem = { id: result.insertId, name, helperText }
+      res.json(newProblem)
+    }
+    catch (err) {
+      if (err.error?.code === 'ER_DUP_ENTRY') {
+        return this.returnApiError(res, new ApiError('Category with this name already exists', 400))
+      }
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async deleteProblemCategory (req, res) {
+    try {
+      let id = Number(req.params.id)
+      let deleteQuery = 'DELETE FROM comicproblemcategory WHERE Id = ?'
+      let deleteQueryParams = [id]
+
+      await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'DB error deleting category')
+
+      res.status(204).end()
+    }
+    catch (err) {
+      return this.returnApiError(res, err)
+    }
+  }
+
   async addComicProblem (req, res) {
     try {
-      let [comicId, problemCategory, description] = 
-        [req.body.comicId, req.body.problemCategory, req.body.description]
+      let [comicId, categoryId, description] = 
+        [req.body.comicId, req.body.categoryId, req.body.description]
 
       let user = await this.getUser(req)
-      let userParam = user ? user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+      let userParam = user ? user.username : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
-      let existingProblem = await this.getComicProblems(comicId, problemCategory)
-      if (existingProblem.length > 0) {
+      let existingProblem = await this.getComicProblems(comicId, categoryId)
+      if (existingProblem.length > 0 && existingProblem[0].problemCategoryName !== 'Other') {
         return this.returnApiError(res, new ApiError('This problem has already been reported for this comic', 409))
       }
 
-      let insertProblemQuery = `INSERT INTO comicproblem (ComicId, ProblemCategory, ProblemDescription, ${user ? 'UserId' : 'UserIP'})
+      let insertProblemQuery = `INSERT INTO comicproblem (ComicId, ProblemCategoryId, Description, UserIPOrName)
         VALUES (?, ?, ?, ?)`
-      let queryParams = [comicId, problemCategory, description, userParam]
+      let queryParams = [comicId, categoryId, description, userParam]
 
       await this.databaseFacade.execute(insertProblemQuery, queryParams, 'Database error saving problem')
 
@@ -207,11 +285,27 @@ export default class MiscRouter extends BaseRouter {
   async removeComicProblem (req, res) {
     try {
       let problemId = Number(req.params.id)
+
+      let problemQuery = `SELECT 
+        comicproblem.Id AS id, comic.Name AS comicName,
+        comicproblemcategory.Name AS problemCategoryName,
+        comicproblem.Description AS description,
+        comicproblem.AssignedModId AS assignedModId,
+        comic.Name AS comicName
+      FROM comicproblem
+        INNER JOIN comic ON (comic.Id = comicproblem.ComicId)
+        INNER JOIN comicproblemcategory ON (comicproblem.ProblemCategoryId = comicproblemcategory.Id)
+      WHERE comicproblem.Id = ?`
+      let comicProblem = await this.databaseFacade.execute(problemQuery, [problemId], 'Database error getting comic problem')
+      comicProblem = comicProblem[0]
+
       let query = 'DELETE FROM comicproblem WHERE Id = ?'
       let queryParams = [problemId]
 
       await this.databaseFacade.execute(query, queryParams, 'DB error deleting comic problem')
       res.status(204).end()
+
+      this.addModLog(req, 'Problem', `Removed ${comicProblem.assignedModId ? 'assigned' : 'unassigned'} problem ${comicProblem.problemCategoryName} from comic ${comicProblem.comicName}`, `Description: ${comicProblem.description}`)
     }
     catch (err) {
       return this.returnApiError(res, err)
@@ -222,16 +316,22 @@ export default class MiscRouter extends BaseRouter {
     try {
       let problemId = Number(req.params.id)
       let user = await this.getUser(req)
+      let shouldUnassign = false
 
       let existingProblemQuery = 'SELECT * FROM comicproblem WHERE Id = ?'
       let existingProblemQueryParams = [problemId]
       let existingProblem = await this.databaseFacade.execute(existingProblemQuery, existingProblemQueryParams, 'Error getting existing problem')
-      if (existingProblem[0].AssignedMod) {
-        return this.returnApiError(res, new ApiError(`Already assigned to mod ${existingProblem[0].AssignedMod}`, 409))
+      if (existingProblem[0].AssignedModId) {
+        if (existingProblem[0].AssignedModId === user.id) {
+          shouldUnassign = true
+        }
+        else {
+          return this.returnApiError(res, new ApiError(`Already assigned to mod ${existingProblem[0].AssignedMod}`, 409))
+        }
       }
 
-      let updateQuery = 'UPDATE comicproblem SET AssignedMod = ? WHERE Id = ?'
-      let updateQueryParams = [user.username, problemId]
+      let updateQuery = 'UPDATE comicproblem SET AssignedModId = ? WHERE Id = ?'
+      let updateQueryParams = [shouldUnassign ? null : user.id, problemId]
 
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error assigning problem')
 
@@ -295,7 +395,7 @@ export default class MiscRouter extends BaseRouter {
         return 30
       }
       if (actionDescription.includes('Update details of')) {
-        return 15
+        return 20
       }
       if (actionDescription.includes('thumbnail to')) {
         return 30
@@ -315,7 +415,10 @@ export default class MiscRouter extends BaseRouter {
     }
     else if (actionType === 'Pending comic') {
       if (actionDescription.includes('Approve ') || actionDescription.includes('Reject ')) {
-        return 15
+        return 40
+      }
+      if (actionDescription.includes('Schedule')) {
+        return 40
       }
       if (actionDescription.includes('Add thumbnail to')) {
         return 30
@@ -331,6 +434,16 @@ export default class MiscRouter extends BaseRouter {
       }
       if (actionDescription.includes('Update data of')) {
         return 15
+      }
+    }
+    else if (actionType === 'Problem') {
+      if (actionDescription.includes('Removed ')) {
+        if (actionDescription.includes('unassigned')) {
+          return 10
+        }
+        else {
+          return 30
+        }
       }
     }
     else if (actionType === 'Artist') {
