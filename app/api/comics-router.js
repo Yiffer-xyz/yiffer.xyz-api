@@ -831,6 +831,8 @@ export default class ComicsRouter extends BaseRouter {
 			await this.databaseFacade.execute(query, queryParams, 'Error updating scheduled publish date')
 
 			res.status(204).end()
+
+			this.addModLog(req, 'Pending comic', `Schedule pending comic id ${comicId}`, `Time: ${scheduledTime}`)
 		}
 		catch (err) {
 			return this.returnApiError(res, err)
