@@ -738,8 +738,10 @@ export default class ComicsRouter extends BaseRouter {
 
 	async getPendingComic (req, res) {
 		let comicName = req.params.name
-		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, pendingcomic.Id AS id, pendingcomic.Name AS name, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, ScheduledPublish AS scheduledPublish FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
+		let comicDataQuery = 'SELECT artist.Name AS artistName, artist.Id AS artistId, artist.PatreonName AS artistPatreonName, artist.E621Name AS artistE621Name, pendingcomic.Id AS id, pendingcomic.Name AS name, ErrorText AS errorText, Cat AS cat, Tag AS tag, NumberOfPages AS numberOfPages, State AS state, HasThumbnail AS hasThumbnail, ScheduledPublish AS scheduledPublish FROM pendingcomic INNER JOIN artist ON (pendingcomic.Artist=artist.Id) WHERE pendingcomic.Name = ?'
 		let keywordsQuery = 'SELECT KeywordName AS name, keyword.Id AS id FROM pendingcomickeyword INNER JOIN keyword ON (pendingcomickeyword.KeywordId = keyword.Id) WHERE pendingcomickeyword.ComicId = ?'
+		let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
+
 
 		try {
 			let comicData = await this.databaseFacade.execute(comicDataQuery, [comicName])
@@ -752,6 +754,10 @@ export default class ComicsRouter extends BaseRouter {
 			let { previousComic, nextComic } = await this.getPendingComicLinks(comicData.id)
 			comicData.previousComic = previousComic
 			comicData.nextComic = nextComic
+
+			let artistLinks = await this.databaseFacade.execute(linksQuery, [comicData.artistId], 'Error getting artist links')
+
+			comicData.artistLinks = artistLinks
 
 			res.json(comicData)
 		}
