@@ -321,6 +321,11 @@ export default class ComicsRouter extends BaseRouter {
 			let userId = req.session.user.id
 			let username = req.session.user.username
 
+			comicName = comicName.trim()
+			if (comicName.includes('#') || comicName.includes('/')) {
+				return this.returnApiError(res, new ApiError(`Comic name cannot include '#' or '/'`, 400))
+			}
+
 			if (isMultipart) {
 				let [multipartNumber, totalNumberOfParts, multipartKey] = 
 					[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
