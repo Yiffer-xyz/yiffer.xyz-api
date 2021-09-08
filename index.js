@@ -30,6 +30,7 @@ app.use(session({
     secure: !insecureCookie,
     domain: '.yiffer.xyz',
     maxAge: 86400000 * 60,
+    sameSite: true,
   },
   proxy: true,
   store: new redisStore({
