@@ -21,12 +21,16 @@ dotenv.config()
 const insecureCookie = process.env && process.env.IS_PRODUCTION === '0'
 
 app.use(session({
-  secret: 'de78asdta8dyasdhi2jadajadazuckerbergzuperc00l',
+  secret: config.sessionCookieSecret,
   name: 'yifferCookie',
   resave: false,
   saveUninitialized: true,
   rolling: true,
-  cookie: { secure: !insecureCookie },
+  cookie: {
+    secure: !insecureCookie,
+    domain: '.yiffer.xyz',
+    maxAge: 86400000 * 60,
+  },
   proxy: true,
   store: new redisStore({
     host: config.redis.host,
