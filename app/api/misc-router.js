@@ -721,7 +721,7 @@ export default class MiscRouter extends BaseRouter {
     let query
 
     if (interval === 'All') {
-      query = `select COUNT(*) AS count, route AS dataKey from routelog GROUP BY dataKey ORDER BY count DESC`
+      query = `SELECT COUNT(*) AS count, route AS dataKey FROM routelog GROUP BY dataKey ORDER BY count DESC`
     }
     else {
       query = `select COUNT(*) AS count, route AS dataKey from routelog where timestamp>DATE_SUB(now(), INTERVAL ${intervalToIntervalQueryString[interval]}) GROUP BY route ORDER BY count DESC`
@@ -738,8 +738,7 @@ export default class MiscRouter extends BaseRouter {
 
   async createModApplication (req, res) {
     try {
-      let [notes, competentAnswer, telegramUsername] = 
-        [req.body.notes, req.body.competentAnswer, req.body.telegramUsername]
+      let [notes, telegramUsername] = [req.body.notes, req.body.telegramUsername]
       let user = await this.getUser(req)
 
       if (!user) {
@@ -752,8 +751,8 @@ export default class MiscRouter extends BaseRouter {
         return this.returnApiError(res, new ApiError('You already have a pending application', 400))
       }
 
-      let addApplicationQuery = 'INSERT INTO modapplication (UserId, Notes, CompetentAnswer, TelegramUsername) VALUES (?, ?, ?, ?)'
-      let addApplicationQueryParams = [user.id, notes, competentAnswer, telegramUsername]
+      let addApplicationQuery = `INSERT INTO modapplication (UserId, Notes, CompetentAnswer, TelegramUsername) VALUES (?, ?, ' ', ?)`
+      let addApplicationQueryParams = [user.id, notes, telegramUsername]
       await this.databaseFacade.execute(addApplicationQuery, addApplicationQueryParams, 'Database error: Error adding application')
 
       res.end()
@@ -764,7 +763,7 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async getModApplications (req, res) {
-    let existingApplicationQuery = 'SELECT modapplication.Id AS id, user.Username AS username, Timestamp AS timestamp, Notes AS notes, CompetentAnswer AS competentAnswer, TelegramUsername AS telegramUsername, IsProcessed AS isProcessed, isRemoved AS isRemoved FROM modapplication INNER JOIN user ON (user.Id = modapplication.UserId)'
+    let existingApplicationQuery = 'SELECT modapplication.Id AS id, user.Username AS username, Timestamp AS timestamp, Notes AS notes, TelegramUsername AS telegramUsername, IsProcessed AS isProcessed, isRemoved AS isRemoved FROM modapplication INNER JOIN user ON (user.Id = modapplication.UserId)'
 
     try {
       let results = await this.databaseFacade.execute(existingApplicationQuery, null, 'Error getting mod applications')

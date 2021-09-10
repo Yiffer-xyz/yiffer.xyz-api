@@ -18,7 +18,7 @@ const redisClient = redis.createClient(config.redis.port, config.redis.host);
 import dotenv from 'dotenv'
 dotenv.config()
 
-const insecureCookie = process.env && process.env.IS_PRODUCTION === '0'
+const isDevEnv = process.env && process.env.IS_PRODUCTION === '0'
 
 app.use(session({
   secret: config.sessionCookieSecret,
@@ -27,10 +27,10 @@ app.use(session({
   saveUninitialized: true,
   rolling: true,
   cookie: {
-    secure: !insecureCookie,
-    domain: '.yiffer.xyz',
+    secure: !isDevEnv,
+    domain: isDevEnv ? undefined : '.yiffer.xyz',
     maxAge: 86400000 * 60,
-    sameSite: true,
+    sameSite: !isDevEnv,
   },
   proxy: true,
   store: new redisStore({
