@@ -34,22 +34,22 @@ export default class BaseRouter {
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
-			console.log(`[500] Error (with customErrorMessage) @ ${timeString}: ${error.error}`)
+			console.error(`[500] Error (with customErrorMessage) @ ${timeString}:` ,error.error)
 			error = new ApiError(error.customErrorMessage, 500)
 		}
 
 		else if (error?.error?.name === 'ApiInputError') {
-			console.log(`[500] EMAIL error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.error(`[500] EMAIL error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error related to email', 500)
 		}
 
 		else if (error?.error?.code === 'ECONNREFUSED' || error?.error?.code === 'ER_ACCESS_DENIED_ERROR') {
-			console.log(`[500] DB error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
+			console.error(`[500] DB error @ ${timeString}: ${error.error.message}.\nError stack: ${error.error.stack}`)
 			error = new ApiError('Server error: Could not connect to database', 500)
 		}
 
 		else if (!(error instanceof ApiError)) {
-			console.log(`[500] UNCAUGHT error @ ${timeString}: ${error}`)
+			console.error(`[500] UNCAUGHT error @ ${timeString}: `, error)
 			error = new ApiError('Server error', 500)
 		}
 
