@@ -3,9 +3,7 @@ export async function storePartialUpload(redisClient, filesWithKeys, multipartKe
   let redisValue = JSON.stringify(filesWithKeys)
 
   console.log(` Storing partial upload ${redisKey} - ${filesWithKeys.length} files`)
-  console.log(redisValue)
   await storeRedisValue(redisClient, redisKey, redisValue)
-  console.log(' Stored')
 }
 
 export async function retrieveEarlierUploads(redisClient, multipartKey, numberToFetch) {
@@ -15,8 +13,6 @@ export async function retrieveEarlierUploads(redisClient, multipartKey, numberTo
     console.log(` Retrieving partial upload for  ${redisKey} - ${i}/${numberToFetch}`)
     
     let value = await getRedisValue(redisClient, redisKey)
-
-    console.log(value)
 
     let valuesAsJson = JSON.parse(value)
     allUploads.push(...valuesAsJson)
