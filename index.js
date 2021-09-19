@@ -28,9 +28,9 @@ app.use(session({
   rolling: true,
   cookie: {
     secure: !isDevEnv,
-    domain: isDevEnv ? undefined : '.yiffer.xyz',
     maxAge: 86400000 * 60,
-    sameSite: !isDevEnv,
+    // domain: isDevEnv ? undefined : '.yiffer.xyz',
+    // sameSite: !isDevEnv,
   },
   proxy: true,
   store: new redisStore({
