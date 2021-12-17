@@ -26,7 +26,7 @@ export default class AuthenticationRouter extends BaseRouter {
   async refreshAuth (req, res) {
     if (req.session && req.session.user) {
       try {
-        let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType FROM user WHERE Id = ?'
+        let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, PatreonTier AS patreonTier, PatreonDisplayName AS patreonDisplayName, PatreonDisplayLink AS patreonDisplayLink, HasPatreonPicture AS hasPatreonPicture FROM user WHERE Id = ?'
         let userResult = await this.databaseFacade.execute(query, [req.session.user.id])
         if (userResult.length === 0) {
           return res.json(1)
@@ -55,6 +55,12 @@ export default class AuthenticationRouter extends BaseRouter {
           email: userResponse.Email,
           id: userResponse.Id,
           userType: userResponse.UserType,
+        }
+        if (userResponse.PatreonTier) {
+          userData.patreonTier = userResponse.PatreonTier
+          userData.hasPatreonPicture = userResponse.HasPatreonPicture
+          userData.patreonDisplayName = userResponse.patreonDisplayName
+          userData.patreonDisplayLink = userResponse.patreonDisplayLink
         }
         req.session.user = userData
         return res.json(userData)

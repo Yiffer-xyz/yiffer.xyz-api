@@ -74,6 +74,33 @@ export default class FileSystemFacade {
 			.download({destination: `uploads/${comicName}/${filename}`})
 	}
 
+	static async writeGooglePatronImage(userId, localFilePath) {
+		let uploadOptions = {
+			destination: `${config.storage.patronImagesBucketFolder}/${userId}.jpg`,
+			gzip: true,
+			metadata: {
+				cacheControl: 'no-cache',
+			},
+		}
+		return new Promise((resolve, reject) => {
+			bucket.upload(localFilePath, uploadOptions, (err) => {
+				if (err) {
+					console.error('GOOGLE UPLOAD PATRON IMAGE ERROR: ', err)
+					reject(err)
+				}
+				else {
+					resolve()
+				}
+			})
+		})
+	}
+
+	static async deleteGooglePatronImage(userId) {
+		return storage.bucket(config.storage.bucketName)
+			.file(`${config.storage.patronImagesBucketFolder}/${userId}.jpg`)
+			.delete()
+	}
+
 	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
 		return new Promise(async (resolve, reject) => {
 			fs.rename(oldFilename, newFilename, err => {

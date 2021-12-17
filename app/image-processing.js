@@ -49,12 +49,12 @@ export async function resizeComicPageIfNeeded(filepath, forceConvert) {
 export async function convertThumbnailFile(filepath) {
   await sharp(filepath)
     .resize(200)
-    .webp({quality: 90})
+    .webp({quality: 95})
     .toFile(filepath + '-thumb')
 
   await sharp(filepath)
     .resize(100)
-    .webp({quality: 90})
+    .webp({quality: 95})
     .toFile(filepath + '-thumbsmall')
 
   let jpgBuffer = await sharp(filepath)
@@ -64,3 +64,13 @@ export async function convertThumbnailFile(filepath) {
 
   return sharp(jpgBuffer).toFile(filepath)
 }
+
+export async function convertPatreonProfilePic(filepath) {
+  let jpgBuffer = await sharp(filepath)
+    .resize(200)
+    .jpeg({quality: 95})
+    .toBuffer()
+
+  return sharp(jpgBuffer).toFile(filepath)
+}
+

@@ -8,15 +8,17 @@ import AuthRouter from './api/auth-router.js'
 import KeywordsRouter from './api/keywords-router.js'
 import BlogRouter from './api/blog-router.js'
 import AdvertisingRouter from './api/advertising-router.js'
+import PatreonRouter from './api/patreon-router.js'
 
 export default function (app, databaseFacade, config, redisClient) {
   const modLogger = new ModLogger(app, databaseFacade)
   new ComicsRouter(app, databaseFacade, modLogger, redisClient)
   new MiscRouter(app, databaseFacade, modLogger)
   new KeywordsRouter(app, databaseFacade, modLogger)
-  new AuthRouter(app, databaseFacade)
+  const authRouter = new AuthRouter(app, databaseFacade)
   new ArtistRouter(app, databaseFacade, modLogger)
   new UserRouter(app, databaseFacade, modLogger)
   new BlogRouter(app, databaseFacade)
   new AdvertisingRouter(app, databaseFacade, config.ads)
+  new PatreonRouter(app, databaseFacade, config.patreon, authRouter)
 }

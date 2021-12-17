@@ -12,10 +12,15 @@ const config = yaml.load(fileContents)
 
 import redis from 'redis'
 import connRedis from 'connect-redis'
-const redisStore = connRedis(session)
-const redisClient = redis.createClient(config.redis.port, config.redis.host);
 
 import dotenv from 'dotenv'
+import mysql from 'mysql'
+import DatabaseFacade from './app/databaseFacade.js'
+import routes from './app/routes.js'
+
+const redisStore = connRedis(session)
+const redisClient = redis.createClient(config.redis.port, config.redis.host)
+
 dotenv.config()
 
 const isDevEnv = process.env && process.env.IS_PRODUCTION === '0'
@@ -28,7 +33,7 @@ app.use(session({
   rolling: true,
   cookie: {
     secure: !isDevEnv,
-    maxAge: 86400000 * 60,
+    maxAge: 86400000 * 30,
     // domain: isDevEnv ? undefined : '.yiffer.xyz',
     // sameSite: !isDevEnv,
   },
@@ -41,10 +46,8 @@ app.use(session({
   }),
 }));
 
-import mysql from 'mysql'
 let mysqlPool = mysql.createPool(config.db)
 
-import DatabaseFacade from './app/databaseFacade.js'
 let databaseFacade = new DatabaseFacade(mysqlPool)
 
 app.use(cors())
@@ -54,7 +57,6 @@ app.set('query parser', 'extended')
 
 app.use(express.static('./public'))
 
-import routes from './app/routes.js'
 routes(app, databaseFacade, config, redisClient)
 
 app.listen(port)

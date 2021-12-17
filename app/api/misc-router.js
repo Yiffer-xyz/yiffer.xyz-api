@@ -413,12 +413,20 @@ export default class MiscRouter extends BaseRouter {
     else if (actionType === 'Create comic') {
       return 170
     }
+    else if (actionType === 'Patreon') {
+      if (actionDescription.includes('Remove ')) {
+        return 15
+      }
+      if (actionDescription.includes('link for userId')) {
+        return 15
+      }
+    }
     else if (actionType === 'Pending comic') {
       if (actionDescription.includes('Approve ') || actionDescription.includes('Reject ')) {
-        return 40
+        return 30
       }
       if (actionDescription.includes('Schedule')) {
-        return 40
+        return 30
       }
       if (actionDescription.includes('Add thumbnail to')) {
         return 30
