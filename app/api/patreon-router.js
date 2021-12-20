@@ -105,7 +105,7 @@ export default class PatreonRouter extends BaseRouter {
     userId = Number(userId)
 
     try {
-      let tokensResponse = await this.patreonOAuthClient.getTokens(oauthGrantCode, 'https://beta2.yiffer.xyz/api/patreon/callback')
+      let tokensResponse = await this.patreonOAuthClient.getTokens(oauthGrantCode, 'https://yiffer.xyz/api/patreon/callback')
       let accessToken = tokensResponse.access_token
       let refreshToken = tokensResponse.refresh_token
 
