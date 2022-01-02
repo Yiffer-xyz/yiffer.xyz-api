@@ -527,10 +527,8 @@ export default class ComicsRouter extends BaseRouter {
 				)
 
 				if (isPendingComic) {
-					if (comic.ErrorText === 'Varying page res.') {
-						let updateComicDataQuery = `UPDATE pendingcomic SET ErrorText = NULL WHERE Id = ?`
-						await this.databaseFacade.execute(updateComicDataQuery, [comicId])
-					}
+					let updateComicDataQuery = `UPDATE pendingcomic SET ErrorText = NULL WHERE Id = ?`
+					await this.databaseFacade.execute(updateComicDataQuery, [comicId])
 				}
 			}
 			else {
