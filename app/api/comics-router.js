@@ -26,6 +26,8 @@ const addComicUploadFormat = upload.fields([
 
 const COMICS_PER_PAGE = 75
 
+const illegalComicNameChars = ['#', '/', '?', '\\']
+
 import { dirname } from 'path';	
 import { fileURLToPath } from 'url';	
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -322,8 +324,8 @@ export default class ComicsRouter extends BaseRouter {
 			let username = req.session.user.username
 
 			comicName = comicName.trim()
-			if (comicName.includes('#') || comicName.includes('/')) {
-				return this.returnApiError(res, new ApiError(`Comic name cannot include '#' or '/'`, 400))
+			if (illegalComicNameChars.some(char => comicName.includes(char))) {
+				return this.returnApiError(res, new ApiError(`Comic name cannot include any of the following: #/?\\`, 400))
 			}
 
 			if (isMultipart) {
@@ -624,6 +626,9 @@ export default class ComicsRouter extends BaseRouter {
 		let hasMovedFiles = false
 		try {
 			if (oldName !== newName) {
+				if (illegalComicNameChars.some(char => newName.includes(char))) {
+					return this.returnApiError(res, new ApiError(`Comic name cannot include any of the following: #/?\\`, 400))
+				}
 				await this.renameComicFiles(comicId, oldName, newName)
 				hasMovedFiles = true
 			}
@@ -704,8 +709,11 @@ export default class ComicsRouter extends BaseRouter {
 	async rateComic (req, res) {
 		let [comicId, rating] = [Number(req.params.id), Number(req.body.rating)]
 		if (!comicId) {
-			res.json({error: 'Missing comicId somehow - if you see this message, please use the submit feedback functionality and tell us exactly how you navigated/what you clicked to achieve this!'})
+			res.json({error: 'Missing comicId'})
 			return
+		}
+		if (rating < 0 || rating > 10 || !Number.isInteger(rating)) {
+			res.json({error: 'Rating must be an integer between 0 and 10'})
 		}
 
 		let user = await this.getUser(req)
