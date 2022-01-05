@@ -101,12 +101,11 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async createApplication (req, res) {
     try {
-      let [file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
-        [req.files.file1, req.files.file2, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes]
+      let [file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
+        [req.files.file1, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes]
         let user = await this.getUser(req)
 
         if (Array.isArray(file1)) { file1 = file1[0] }
-        if (Array.isArray(file2)) { file2 = file2[0] }
         if (adMainText === '') { adMainText = null }
         if (adSecondaryText === '') { adSecondaryText = null }
         if (advertiserNotes === '') { advertiserNotes = null }
@@ -118,7 +117,9 @@ export default class AdvertisingRouter extends BaseRouter {
           return this.returnApiError(res, new ApiError('You must add an email address to your account first', 403))
         }
         
-        let {isValid, error} = this.checkApplicationValidity(file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes)
+        let { isValid, error } = this.checkApplicationValidity(
+          file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes
+        )
         if (!isValid) {
           return this.returnApiError(res, new ApiError(error, 400))
         }
@@ -126,21 +127,16 @@ export default class AdvertisingRouter extends BaseRouter {
         let filetype = file1.originalname.substring(file1.originalname.length-3)
 
         let adId = await this.generateAdId()
-        let query = 'INSERT INTO advertisement (Id, AdType, AdName, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        let query = `
+          INSERT INTO advertisement (Id, AdType, AdName, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
         let queryParams = [adId, adType, adName, adLink, adMainText, adSecondaryText, filetype, user.id, advertiserNotes]
 
         await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
 
-        if (adType === 'card') {
-          let newFilenameBig = `${adId}-big.${filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilenameBig)
-          let newFilenameSmall = `${adId}-small.${filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file2.path, newFilenameSmall)
-        }
-        else {
-          let newFilename = `${adId}.${filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
-        }
+        let newFilename = `${adId}.${filetype}`
+        await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
 
         sendEmail(
           'advertising',
@@ -165,98 +161,75 @@ export default class AdvertisingRouter extends BaseRouter {
     }
   }
 
-  checkUpdateValidity (file1, file2, adType, adName, adLink, adMainText, adSecondaryText, existingFileType) {
+  checkUpdateValidity (file1, adType, adName, adLink, adMainText, adSecondaryText, existingFileType) {
     if (file1) {
       let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
       if (filetype1 !== existingFileType) {
-        return {isValid: false, error: `You cannot change the file format (must be ${existingFileType})`}
-      }
-    }
-
-    if (file2) {
-      let filetype2 = file2.originalname.substring(file2.originalname.length-3).toLowerCase()
-      if (filetype2 !== existingFileType) {
-        return {isValid: false, error: `You cannot change the file format (must be ${existingFileType})`}
+        return { isValid: false, error: `You cannot change the file format (must be ${existingFileType})` }
       }
     }
 
     if (!adLink) {
-      return {isValid: false, error: 'Missing link'}
+      return { isValid: false, error: 'Missing link' }
     }
 
     if (adType === 'card') {
       if (!adMainText) {
-        return {isValid: false, error: 'Missing main text'}
+        return { isValid: false, error: 'Missing main text' }
       }
       if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 60)) {
-        return {isValid: false, error: 'One of the texts are too long (max 25 and 60 characters)'}
+        return { isValid: false, error: 'One of the texts are too long (max 25 and 60 characters)' }
       }
     }
 
     if (!adName || adName.length === 0) {
-      return {isValid: false, error: 'Ad name missing'}
+      return { isValid: false, error: 'Ad name missing' }
     }
     if (adName.length > 64) {
-      return {isValid: false, error: 'Ad name too long - max 64 characters'}
+      return { isValid: false, error: 'Ad name too long - max 64 characters' }
     }
 
-    return {isValid: true}
+    return { isValid: true }
   }
 
-  checkApplicationValidity (file1, file2, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes) {
+  checkApplicationValidity (file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes) {
     let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
 
     if (!file1) {
-      return {isValid: false, error: 'File missing'}
+      return { isValid: false, error: 'File missing' }
     }
     if (file1 && !(['jpg', 'png', 'gif'].includes(filetype1))) {
-      return {isValid: false, error: 'Invalid file format (must be jpg/png/gif)'}
+      return { isValid: false, error: 'Invalid file format (must be jpg/png/gif)'}
     }
 
-    if (adType === 'card') {
-      if (!file2) {
-        return {isValid: false, error: 'Second file missing'}
-      }
-
-      let filetype2 = file2.originalname.substring(file2.originalname.length-3).toLowerCase()
-
-      if (file2 && !(['jpg', 'png', 'gif'].includes(filetype2))) {
-        return {isValid: false, error: 'Invalid second file format (must be jpg/png/gif)'}
-      }
-
-      if (filetype1 !== filetype2) {
-        return {isValid: false, error: 'The two files must be of the same type (jpg/png/gif)'}
-      }
-    }
-
-    if (!adTypes.includes(adType)) {
-      return {isValid: false, error: 'Invalid ad type'}
+    if (!Object.keys(adTypes).includes(adType)) {
+      return { isValid: false, error: 'Invalid ad type' }
     }
     if (!adLink) {
-      return {isValid: false, error: 'Missing link'}
+      return { isValid: false, error: 'Missing link' }
     }
 
     if (adType === 'card') {
       if (!adMainText) {
-        return {isValid: false, error: 'Missing main text'}
+        return { isValid: false, error: 'Missing main text' }
       }
       if (adMainText.length > 25 || (adSecondaryText && adSecondaryText.length > 60)) {
-        return {isValid: false, error: 'One of the texts are too long'}
+        return { isValid: false, error: 'One of the texts are too long' }
       }
     }
 
     if (advertiserNotes && advertiserNotes.length > 255) {
-      return {isValid: false, error: 'Notes too long - max 255 characters'}
+      return { isValid: false, error: 'Notes too long - max 255 characters' }
     }
 
     if (!adName || adName.length === 0) {
-      return {isValid: false, error: 'Ad name missing'}
+      return { isValid: false, error: 'Ad name missing' }
     }
     if (adName.length > 64) {
-      return {isValid: false, error: 'Ad name too long - max 64 characters'}
+      return { isValid: false, error: 'Ad name too long - max 64 characters' }
     }
 
-    return {isValid: true}
+    return { isValid: true }
   }
 
   async getAdsBase (whereStatement, whereParams, isAdminRequest) {
@@ -569,43 +542,34 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAdUser (req, res) {
     try {
-      let [adId, file1, file2, adName, link, mainText, secondaryText] = 
-        [req.params.adId, req.files.file1, req.files.file2, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText]
+      let [adId, file1, adName, link, mainText, secondaryText] = 
+        [req.params.adId, req.files.file1, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText]
 
       if (Array.isArray(file1)) { file1 = file1[0] }
-      if (Array.isArray(file2)) { file2 = file2[0] }
 
       let { ad: existingAd, isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
       if (!isOk) { return }
 
-      let {isValid, error} = this.checkUpdateValidity(file1, file2, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype)
+      let { isValid, error } = this.checkUpdateValidity(
+        file1, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype
+      )
       if (!isValid) {
         return this.returnApiError(res, new ApiError(error, 400))
       }
     
-      if (existingAd.adType === 'card') {
-        if (file1) {
-          let newFilenameBig = `${adId}-big.${existingAd.filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilenameBig)
-        }
-        if (file2) {
-          let newFilenameSmall = `${adId}-small.${existingAd.filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file2.path, newFilenameSmall)
-        }
-      }
-      else {
-        if (file1) {
-          let newFilename = `${adId}.${existingAd.filetype}`
-          await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
-        }
+      if (file1) {
+        let newFilename = `${adId}.${existingAd.filetype}`
+        await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
       }
 
       let isOnlyNameChange = false
-      if ((!file1 && !file2)
+      if (
+        !file1
         && link === existingAd.link 
         && mainText === existingAd.mainText 
         && secondaryText === existingAd.secondaryText
-        && adName !== existingAd.adName) {
+        && adName !== existingAd.adName
+      ) {
         isOnlyNameChange = true
       }
       
@@ -627,7 +591,7 @@ export default class AdvertisingRouter extends BaseRouter {
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
 
       let updatedAd = await this.getAdById(adId)
-      res.json({success: true, ad: updatedAd})
+      res.json({ success: true, ad: updatedAd })
 
       if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)
           && !isOnlyNameChange) {
@@ -686,7 +650,11 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 }
 
-const adTypes = ['card', 'banner']
+const adTypes = {
+  card: { displayName: 'Comic card' },
+  banner: { displayName: 'Comic banner' },
+  topSmall: { displayName: 'Top of page' },
+}
 
 const adStatuses = {
   pending: 'PENDING',
