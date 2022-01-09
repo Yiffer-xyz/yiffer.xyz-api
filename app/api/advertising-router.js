@@ -6,6 +6,7 @@ import dateFns from 'date-fns'
 const { addMonths, addDays, isPast } = dateFns
 
 import cron from 'cron'
+import { uploadCloudinaryMedia } from '../cloudinary-service.js'
 const CronJob = cron.CronJob
 
 var storage = multer.diskStorage({
@@ -18,6 +19,8 @@ var storage = multer.diskStorage({
 })
 var upload = multer({ storage: storage })
 const adImageUploadFormat = upload.fields([{ name: 'file1', maxCount: 1 }, { name: 'file2', maxCount: 1 }])
+
+const legalFiletypes = ['jpg', 'webp', 'webm', 'gif']
 
 export default class AdvertisingRouter extends BaseRouter {
   constructor (app, databaseFacade, adPrices) {
@@ -124,19 +127,20 @@ export default class AdvertisingRouter extends BaseRouter {
           return this.returnApiError(res, new ApiError(error, 400))
         }
 
-        let filetype = file1.originalname.substring(file1.originalname.length-3)
-
         let adId = await this.generateAdId()
+
+        let uploadedFiletype = file1.originalname.substring(file1.originalname.length-3)
+        let newFiletypes = this.getNewFiletypes(uploadedFiletype)
+
+        await this.convertAndSaveAdFile(file1.path, newFiletypes, adId)
+
         let query = `
           INSERT INTO advertisement (Id, AdType, AdName, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
-        let queryParams = [adId, adType, adName, adLink, adMainText, adSecondaryText, filetype, user.id, advertiserNotes]
+        let queryParams = [adId, adType, adName, adLink, adMainText, adSecondaryText, newFiletypes[0], user.id, advertiserNotes]
 
         await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
-
-        let newFilename = `${adId}.${filetype}`
-        await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
 
         sendEmail(
           'advertising',
@@ -159,6 +163,19 @@ export default class AdvertisingRouter extends BaseRouter {
     catch (err) {
       return this.returnApiError(res, err)
     }
+  }
+
+  getNewFiletypes (oldFiletype) {
+    if (oldFiletype.toLowerCase() === 'gif') {
+      return ['webm', 'mp4', 'gif']
+    }
+
+    return ['webp', 'jpg']
+  }
+
+  async convertAndSaveAdFile (filepath, newFiletypes, adId) {
+    let cloudinaryId = await uploadCloudinaryMedia(filepath)
+    FileSystemFacade.writeGooglePaidImageFromUrl(cloudinaryId, adId, newFiletypes)
   }
 
   checkUpdateValidity (file1, adType, adName, adLink, adMainText, adSecondaryText, existingFileType) {
@@ -392,8 +409,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAdAdmin (req, res) {
     try {
-      let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote, payment] = 
-        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote, req.body.paymentAmount]
+      let [adId, status, expiryDateExtendMonths, customExpiryDate, link, adminNotes, correctionNote, payment, filetype] = 
+        [req.params.adId, req.body.status, req.body.expiryDateExtendMonths, req.body.customExpiryDate, req.body.link, req.body.adminNotes, req.body.correctionNote, req.body.paymentAmount, req.body.filetype]
 
       let existingAd = await this.getAdById(adId)
       if (!existingAd) {
@@ -421,12 +438,16 @@ export default class AdvertisingRouter extends BaseRouter {
 
       let adType = existingAd.adType
 
+      if (!legalFiletypes.includes(filetype)) {
+        return this.returnApiError(res, new ApiError('Illegal file type', 400))
+      }
+
       if (payment) {
         await this.registerAdPayment(adId, payment)
       }
 
-      let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=?, AdminNotes=?, CorrectionNote=? WHERE Id=?'
-      let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, adId]
+      let query = 'UPDATE advertisement SET Status=?, ExpiryDate=?, Link=?, AdminNotes=?, CorrectionNote=?, Filetype=? WHERE Id=?'
+      let queryParams = [status, newExpiryDate, link, adminNotes, correctionNote||null, filetype, adId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
       let updatedAd = await this.getAdById(adId)
