@@ -70,33 +70,6 @@ export default class FileSystemFacade {
 		return
 	}
 
-
-	// TODO: should be obsolete when done
-	static async writeGooglePaidImageFile(localFilePath, newFilename) {
-		let uploadOptions = {
-			destination: `${config.storage.paidImagesBucketFolder}/${newFilename}`,
-			gzip: true,
-			metadata: {
-				// Enable long-lived HTTP caching headers
-				// Use only if the contents of the file will never change
-				// (If the contents will change, use cacheControl: 'no-cache')
-				cacheControl: 'no-cache',
-			},
-		}
-
-		return new Promise((resolve, reject) => {
-			bucket.upload(localFilePath, uploadOptions, (err) => {
-				if (err) {
-					console.log('GOOGLE UPLOAD ERROR: ', err)
-					reject(err)
-				}
-				else {
-					resolve()
-				}
-			})
-		})
-	}
-
 	static async renameGoogleComicFile(oldFilename, newFilename) {
 		await storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${oldFilename}`)

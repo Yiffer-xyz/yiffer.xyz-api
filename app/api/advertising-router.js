@@ -21,6 +21,12 @@ var upload = multer({ storage: storage })
 const adImageUploadFormat = upload.fields([{ name: 'file1', maxCount: 1 }, { name: 'file2', maxCount: 1 }])
 
 const legalFiletypes = ['jpg', 'webp', 'webm', 'gif']
+const legalUploadFiletypes = ['jpg', 'png', 'gif']
+const uploadToDbFiletype = {
+  jpg: 'webp',
+  png: 'webp',
+  gif: 'webm'
+}
 
 export default class AdvertisingRouter extends BaseRouter {
   constructor (app, databaseFacade, adPrices) {
@@ -104,11 +110,11 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async createApplication (req, res) {
     try {
-      let [file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
+      let [file, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
         [req.files.file1, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes]
         let user = await this.getUser(req)
 
-        if (Array.isArray(file1)) { file1 = file1[0] }
+        if (Array.isArray(file)) { file = file[0] }
         if (adMainText === '') { adMainText = null }
         if (adSecondaryText === '') { adSecondaryText = null }
         if (advertiserNotes === '') { advertiserNotes = null }
@@ -121,7 +127,7 @@ export default class AdvertisingRouter extends BaseRouter {
         }
         
         let { isValid, error } = this.checkApplicationValidity(
-          file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes
+          file, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes
         )
         if (!isValid) {
           return this.returnApiError(res, new ApiError(error, 400))
@@ -129,10 +135,10 @@ export default class AdvertisingRouter extends BaseRouter {
 
         let adId = await this.generateAdId()
 
-        let uploadedFiletype = file1.originalname.substring(file1.originalname.length-3)
+        let uploadedFiletype = file.originalname.substring(file.originalname.length-3)
         let newFiletypes = this.getNewFiletypes(uploadedFiletype)
 
-        await this.convertAndSaveAdFile(file1.path, newFiletypes, adId)
+        await this.convertAndSaveAdFile(file.path, newFiletypes, adId)
 
         let query = `
           INSERT INTO advertisement (Id, AdType, AdName, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes)
@@ -178,11 +184,11 @@ export default class AdvertisingRouter extends BaseRouter {
     FileSystemFacade.writeGooglePaidImageFromUrl(cloudinaryId, adId, newFiletypes)
   }
 
-  checkUpdateValidity (file1, adType, adName, adLink, adMainText, adSecondaryText, existingFileType) {
+  checkUpdateValidity (file1, adType, adName, adLink, adMainText, adSecondaryText) {
     if (file1) {
-      let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
-      if (filetype1 !== existingFileType) {
-        return { isValid: false, error: `You cannot change the file format (must be ${existingFileType})` }
+      let filetype = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
+      if (!legalUploadFiletypes.includes(filetype)) {
+        return { isValid: false, error: `Invalid file type (must be .jpg, .png, or .gif)` }
       }
     }
 
@@ -210,12 +216,12 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   checkApplicationValidity (file1, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes) {
-    let filetype1 = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
+    let filetype = file1.originalname.substring(file1.originalname.length-3).toLowerCase()
 
     if (!file1) {
       return { isValid: false, error: 'File missing' }
     }
-    if (file1 && !(['jpg', 'png', 'gif'].includes(filetype1))) {
+    if (file1 && !(['jpg', 'png', 'gif'].includes(filetype))) {
       return { isValid: false, error: 'Invalid file format (must be jpg/png/gif)'}
     }
 
@@ -563,29 +569,38 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async updateAdUser (req, res) {
     try {
-      let [adId, file1, adName, link, mainText, secondaryText] = 
+      let [existingAdId, file, adName, link, mainText, secondaryText] = 
         [req.params.adId, req.files.file1, req.body.adName, req.body.link, req.body.mainText, req.body.secondaryText]
 
-      if (Array.isArray(file1)) { file1 = file1[0] }
+      if (Array.isArray(file)) { file = file[0] }
 
-      let { ad: existingAd, isOk } = await this.verifyAdOwnerOrAdmin(adId, req, res)
+      let { ad: existingAd, isOk } = await this.verifyAdOwnerOrAdmin(existingAdId, req, res)
       if (!isOk) { return }
 
+      // TODO: Handle file type change
       let { isValid, error } = this.checkUpdateValidity(
-        file1, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype
+        file, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype
       )
       if (!isValid) {
         return this.returnApiError(res, new ApiError(error, 400))
       }
-    
-      if (file1) {
-        let newFilename = `${adId}.${existingAd.filetype}`
-        await FileSystemFacade.writeGooglePaidImageFile(file1.path, newFilename)
+
+      let newAdId = existingAd.id
+      let newFiletype = existingAd.filetype
+
+      if (file) {
+        let uploadedFiletype = file.originalname.substring(file.originalname.length-3).toLowerCase()
+        let newFiletypes = this.getNewFiletypes(uploadedFiletype)
+
+        newFiletype = newFiletypes[0]
+        newAdId = await this.generateAdId(existingAd.id)
+
+        await this.convertAndSaveAdFile(file.path, newFiletypes, newAdId)
       }
 
       let isOnlyNameChange = false
       if (
-        !file1
+        !file
         && link === existingAd.link 
         && mainText === existingAd.mainText 
         && secondaryText === existingAd.secondaryText
@@ -606,12 +621,12 @@ export default class AdvertisingRouter extends BaseRouter {
       }
       
       let query, queryParams
-      query = 'UPDATE advertisement SET Status=?, AdName=?, Link=?, MainText=?, SecondaryText=? WHERE Id=?'
-      queryParams = [newStatus, adName, link, mainText, secondaryText, adId]
+      query = 'UPDATE advertisement SET Id=?, Status=?, AdName=?, Link=?, MainText=?, SecondaryText=?, Filetype=? WHERE Id=?'
+      queryParams = [newAdId, newStatus, adName, link, mainText, secondaryText, newFiletype, existingAdId]
 
       await this.databaseFacade.execute(query, queryParams, 'Error updating ad')
 
-      let updatedAd = await this.getAdById(adId)
+      let updatedAd = await this.getAdById(newAdId)
       res.json({ success: true, ad: updatedAd })
 
       if ([adStatuses.needsCorrection, adStatuses.ended, adStatuses.awaitingPayment, adStatuses.active, adStatuses.activeNeedsCorrection].includes(existingAd.status)
@@ -620,7 +635,7 @@ export default class AdvertisingRouter extends BaseRouter {
           'advertising',
           'advertising@yiffer.xyz',
           'Ad pending - Yiffer.xyz',
-          `An ad of type ${existingAd.adType} with id ${adId} has been edited and is now in the ${newStatus} state.`
+          `An ad of type ${existingAd.adType} with id ${newAdId} has been edited and is now in the ${newStatus} state.`
         )
       }
     }
@@ -655,14 +670,22 @@ export default class AdvertisingRouter extends BaseRouter {
     return ad[0]
   }
 
-  async generateAdId () {
+  async generateAdId (existingAdId=null) {
     let allIdsQuery = 'SELECT id FROM advertisement'
     let ids = await this.databaseFacade.execute(allIdsQuery, null, 'Error fetching ad IDs')
 
     let isIdNew = false
     let newId
+
     while (!isIdNew) {
-      newId = makeId(6)
+      if (existingAdId) {
+        let newTwoLastChars = makeId(2)
+        newId = existingAdId.substr(0, existingAdId.length-2) + newTwoLastChars
+      }
+      else {
+        newId = makeId(6)
+      }
+
       let doesIdExist = [...ids].includes(newId)
       isIdNew = ids.length===0 || !doesIdExist
     }
