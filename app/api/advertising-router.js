@@ -256,7 +256,7 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async getAdsBase (whereStatement, whereParams, isAdminRequest) {
-    let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertisreNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote, advertisementpayment.Amount AS paymentAmount, advertisementpayment.RegisteredDate AS paymentDate
+    let query = `SELECT advertisement.Id AS id, AdType AS adType, AdName AS adName, Link AS link, MainText AS mainText, SecondaryText AS secondaryText, UserId AS userId, Username AS username, Status AS status, Filetype AS filetype, ExpiryDate AS expiryDate, CreatedDate AS createdDate, AdvertiserNotes AS advertiserNotes, Clicks AS clicks ${isAdminRequest ? ', AdminNotes AS adminNotes' : ''}, CorrectionNote AS correctionNote, advertisementpayment.Amount AS paymentAmount, advertisementpayment.RegisteredDate AS paymentDate
       FROM advertisement 
       INNER JOIN user ON (user.Id = advertisement.UserId) 
       LEFT JOIN advertisementpayment ON (advertisementpayment.AdId = advertisement.Id)
