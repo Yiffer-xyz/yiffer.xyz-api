@@ -370,18 +370,35 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async getModScores (req, res) {
-    let query = 'SELECT modlog.ActionType, modlog.ActionDescription, user.Username FROM modlog INNER JOIN user ON (user.Id=modlog.User)'
+    let { startDate, endDate } = req.query
+
+    let query = `
+      SELECT modlog.ActionType, modlog.ActionDescription, user.Username
+      FROM modlog INNER JOIN user ON (user.Id = modlog.User)
+    `
+    let queryParams = null
+
+    if (startDate && endDate) {
+      query += ` WHERE Timestamp > ? AND Timestamp < ?`
+      queryParams = [startDate, endDate]
+    }
+
     try {
-      let logs = await this.databaseFacade.execute(query)
+      let logs = await this.databaseFacade.execute(query, queryParams)
       
       let userScores = {}
       for (var log of logs) {
-        if (!(log.Username in userScores)) { userScores[log.Username] = 0 }
+        if (!(log.Username in userScores)) {
+          userScores[log.Username] = 0
+        }
         userScores[log.Username] += this.getActionScore(log.ActionType, log.ActionDescription)
       }
+      
       let userScoreList = Object.keys(userScores).map(us => 
         new Object({'username': us, 'score': userScores[us]}))
+      
       userScoreList.sort((a, b) => a.score > b.score ? 1 : -1)
+
       res.json(userScoreList)
     }
     catch (err) {
