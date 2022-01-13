@@ -9,8 +9,8 @@ export default class KeywordsRouter extends BaseRouter {
   setupRoutes () {
     this.app.get ('/api/keywords', (req, res) => this.getAllKeywords(req, res))
     this.app.get ('/api/comic-keywords/:comicId', (req, res) => this.getComicKeywords(req, res))
-    this.app.post('/api/keywords/removefromcomic', this.authorizeMod.bind(this), (req, res) => this.removeKeywordsFromComic(req, res))
-    this.app.post('/api/keywords/addtocomic', this.authorizeMod.bind(this), (req, res) => this.addKeywordsToComic(req, res))
+    this.app.post('/api/keywords/removefromcomic', this.authorizeMod.bind(this), (req, res) => this.handleAddOrRemoveKeywordsFromComic(req, res, false))
+    this.app.post('/api/keywords/addtocomic', this.authorizeMod.bind(this), (req, res) => this.handleAddOrRemoveKeywordsFromComic(req, res, true))
     this.app.post('/api/keywords', this.authorizeMod.bind(this), (req, res) => this.createKeyword(req, res))
     this.app.post('/api/keywordsuggestions/process', this.authorizeMod.bind(this), (req, res) => this.processKeywordSuggestion(req, res))
     this.app.post('/api/keywordsuggestions', (req, res) => this.addKeywordSuggestion(req, res))
@@ -41,46 +41,22 @@ export default class KeywordsRouter extends BaseRouter {
     }
   }
 
-	async removeKeywordsFromComic (req, res) {
+  async handleAddOrRemoveKeywordsFromComic (req, res, isAdd) {
     let [comicId, keywords] = [req.body.comicId, req.body.keywords]
-    if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
-
-		let deleteQuery = 'DELETE FROM comickeyword WHERE (ComicId, KeywordId) IN ('
-		let queryParams = []
-		for (let keyword of keywords) {
-			deleteQuery += '(?, ?), '
-			queryParams.push(comicId, keyword.id)
-		}
-		deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
+    if ('name' in keywords) { keywords = [keywords] }
+    let keywordIds = keywords.map(kw => kw.id)
 
     try {
-      await this.databaseFacade.execute(deleteQuery, queryParams)
+      if (isAdd) {
+        await this.addKeywordsToComic(keywordIds, comicId)
+      }
+      else {
+        await this.removeKeywordsFromComic(keywordIds, comicId)
+      }
       res.json({success: true})
+
 			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Keyword', `Remove ${keywords.length} from ${comicName}`, keywords.map(kw => kw.name).join(', '))
-    }
-    catch (err) {
-			return this.returnError(err.message, res, err.error)
-    }
-	}
-
-  async addKeywordsToComic (req, res) {
-    let [comicId, keywords] = [req.body.comicId, req.body.keywords]
-    if (keywords.hasOwnProperty('name')) { keywords = [keywords] }
-
-    let insertQuery = 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES '
-    let queryParams = []
-    for (var keyword of keywords) {
-			insertQuery += '(?, ?), '
-			queryParams.push(comicId, keyword.id)
-    }
-		insertQuery = insertQuery.substring(0, insertQuery.length-2)
-
-    try {
-      await this.databaseFacade.execute(insertQuery, queryParams)
-      res.json({success: true})
-			let comicName = (await this.databaseFacade.execute('SELECT Name FROM comic WHERE Id=?', [comicId]))[0].Name
-			this.addModLog(req, 'Keyword', `Add ${keywords.length} to ${comicName}`, keywords.map(kw => kw.name).join(', '))
+			this.addModLog(req, 'Keyword', `${isAdd ? 'Add' : 'Remove'} ${keywords.length} ${isAdd ? 'to' : 'from'} ${comicName}`, keywords.map(kw => kw.name).join(', '))
     }
     catch (err) {
       if (err.error.code === 'ER_DUP_ENTRY') {
@@ -88,6 +64,30 @@ export default class KeywordsRouter extends BaseRouter {
       }
 			return this.returnError(err.message, res, err.error)
     }
+  }
+
+  async removeKeywordsFromComic (keywordIds, comicId) {
+    let deleteQuery = 'DELETE FROM comickeyword WHERE (ComicId, KeywordId) IN ('
+    let queryParams = []
+    for (let keywordId of keywordIds) {
+      deleteQuery += '(?, ?), '
+      queryParams.push(comicId, keywordId)
+    }
+    deleteQuery = deleteQuery.substring(0, deleteQuery.length-2) + ')'
+
+    await this.databaseFacade.execute(deleteQuery, queryParams)
+  }
+
+  async addKeywordsToComic (keywordIds, comicId) {
+    let insertQuery = 'INSERT INTO comickeyword (ComicId, KeywordId) VALUES '
+    let queryParams = []
+    for (var keywordId of keywordIds) {
+			insertQuery += '(?, ?), '
+			queryParams.push(comicId, keywordId)
+    }
+		insertQuery = insertQuery.substring(0, insertQuery.length-2)
+
+    await this.databaseFacade.execute(insertQuery, queryParams)
   }
 
   async createKeyword (req, res) {
@@ -108,17 +108,29 @@ export default class KeywordsRouter extends BaseRouter {
 
   async addKeywordSuggestion (req, res) {
     let [comicId, keywordId, isAddingKeyword] = [req.body.comicId, req.body.keywordId, req.body.isAdding ? 1 : 0]
-    let user = await this.getUser(req) 
+    let user = await this.getUser(req)
+
+    if (user && (user.userType === 'moderator' || user.userType === 'admin')) {
+      if (isAddingKeyword) {
+        await this.addKeywordsToComic([keywordId], comicId)
+      }
+      else {
+        await this.removeKeywordsFromComic([keywordId], comicId)
+      }
+      res.status(204).end()
+      return
+    }
+
     let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
     let query = `INSERT INTO keywordsuggestion (ComicId, KeywordId, IsAdding, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
     let queryParams = [comicId, keywordId, isAddingKeyword ? 1:0, user ? user.id : userIp]
     try {
       await this.databaseFacade.execute(query, queryParams)
-      res.json({success: true})
+      res.status(200).end()
     }
     catch (err) {
-      return this.returnError(err.message, res, err.error)
+      return this.returnApiError(res, err)
     }
   }
 
