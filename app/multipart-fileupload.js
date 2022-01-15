@@ -1,66 +1,43 @@
-export async function storePartialUpload(redisClient, filesWithKeys, multipartKey, uploadNumber) {
-  let redisKey = `${multipartKey}-${uploadNumber}`
-  let redisValue = JSON.stringify(filesWithKeys)
+import FileSystemFacade from "./fileSystemFacade.js"
 
-  console.log(` Storing partial upload ${redisKey} - ${filesWithKeys.length} files`)
-  await storeRedisValue(redisClient, redisKey, redisValue)
+const tempFolder = 'temp-files'
+
+export async function storePartialUpload(filesForStorage, multipartKey, uploadNumber) {
+  let dataValue = filesForStorage.map(ffs => JSON.stringify(ffs)).join('\n') + '\n'
+  console.log(` Storing partial upload no. ${uploadNumber} for ${multipartKey} - ${filesForStorage.length} files`)
+  await storeTempValue(multipartKey, dataValue)
 }
 
-export async function retrieveEarlierUploads(redisClient, multipartKey, numberToFetch) {
-  let allUploads = []
-  for (let i=1; i <= numberToFetch; i++) {
-    let redisKey = `${multipartKey}-${i}`
-    console.log(` Retrieving partial upload for  ${redisKey} - ${i}/${numberToFetch}`)
-    
-    let value = await getRedisValue(redisClient, redisKey)
+export async function retrieveEarlierUploads(multipartKey) {
+  let fileContents = await FileSystemFacade.readFile(`${tempFolder}/${multipartKey}.txt`)
+  let lines = fileContents.split('\n')
 
-    let valuesAsJson = JSON.parse(value)
-    allUploads.push(...valuesAsJson)
-
-    await deleteRedisValue(redisClient, redisKey)
+  let uploadedFiles = {
+    pageFiles: [],
+    thumbnailFile: null,
   }
 
-  let uploadedFiles = {}
-  for (let [fileKey, fileData] of allUploads) {
-    if (!(fileKey in uploadedFiles)) {
-      uploadedFiles[fileKey] = []
+  for (let line of lines) {
+    line = line.trim()
+    if (!line.length) { continue }
+    line = JSON.parse(line)
+
+    if (line.type === 'pageFile') {
+      uploadedFiles.pageFiles.push(line)
     }
-
-    uploadedFiles[fileKey].push(fileData)
+    if (line.type === 'thumbnailFile') {
+      uploadedFiles.thumbnailFile = line
+    }
   }
 
+  deleteTempFile(multipartKey)
   return uploadedFiles
 }
 
-async function storeRedisValue(redisClient, redisKey, redisValue) {
-  return new Promise((resolve, reject) => {
-    redisClient.set(redisKey, redisValue, (err) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+async function deleteTempFile (dataKey) {
+  FileSystemFacade.deleteFile(`${tempFolder}/${dataKey}.txt`)
 }
 
-async function getRedisValue(redisClient, redisKey) {
-  return new Promise((resolve, reject) => {
-    redisClient.get(redisKey, (err, result) => {
-      if (err) {
-        reject(err)
-      }
-      resolve(result)
-    })
-  })
-}
-
-async function deleteRedisValue(redisClient, redisKey) {
-  return new Promise((resolve, reject) => {
-    redisClient.del(redisKey, (err) => {
-      if (err) {
-        reject(err)
-      }
-      resolve()
-    })
-  })
+async function storeTempValue (dataKey, dataValue) {
+  await FileSystemFacade.appendFile(`${tempFolder}/${dataKey}.txt`, dataValue)
 }

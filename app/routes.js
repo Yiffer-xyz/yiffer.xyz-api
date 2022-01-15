@@ -10,9 +10,9 @@ import BlogRouter from './api/blog-router.js'
 import AdvertisingRouter from './api/advertising-router.js'
 import PatreonRouter from './api/patreon-router.js'
 
-export default function (app, databaseFacade, config, redisClient) {
+export default function (app, databaseFacade, config) {
   const modLogger = new ModLogger(app, databaseFacade)
-  new ComicsRouter(app, databaseFacade, modLogger, redisClient)
+  new ComicsRouter(app, databaseFacade, modLogger)
   new MiscRouter(app, databaseFacade, modLogger)
   new KeywordsRouter(app, databaseFacade, modLogger)
   const authRouter = new AuthRouter(app, databaseFacade)

@@ -5,10 +5,13 @@ import { purgePagesFromCache } from '../cloudflareFacade.js'
 import dateFns from 'date-fns'
 const { format } = dateFns
 
+const uploadsFolder = 'uploads'
+const tempFolder = 'temp-files'
+
 import multer from 'multer'
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads')
+    cb(null, uploadsFolder)
   },
   filename: function (req, file, cb) {
     cb(null, file.fieldname + '-' + Date.now())
@@ -25,8 +28,8 @@ const addComicUploadFormat = upload.fields([
 ])
 
 const COMICS_PER_PAGE = 75
-
 const illegalComicNameChars = ['#', '/', '?', '\\']
+const legalFileEndings = ['jpg', 'png']
 
 import { dirname } from 'path';	
 import { fileURLToPath } from 'url';	
@@ -35,22 +38,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import cron from 'cron'
 const CronJob = cron.CronJob
 
+
 async function clearUploadsFolder() {
 	console.log('Cron: Cleaning up uploads folder...')
-	let uploadedFiles = await FileSystemFacade.listDir(__dirname + '/../../uploads')
+	let uploadedFiles = await FileSystemFacade.listDir(__dirname + `/../../${uploadsFolder}`)
 	console.log(`Found ${uploadedFiles.length} files`)
 	for (let file of uploadedFiles) {
 		console.log(file)
-		await FileSystemFacade.deleteFile(`${__dirname}/../../uploads/${file}`)
+		await FileSystemFacade.deleteFile(`${__dirname}/../../${uploadsFolder}/${file}`)
 	}
 	console.log(`Deleted all upload files`)
 }
 
 export default class ComicsRouter extends BaseRouter {
-	constructor (app, databaseFacade, modLogger, redisClient) {
-		super(app, databaseFacade, modLogger, redisClient)
+	constructor (app, databaseFacade, modLogger) {
+		super(app, databaseFacade, modLogger)
 		this.setupRoutes()
-		this.setupUploadsFolder()
+		this.setupTempFolders()
 		let uploadsFolderCronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
 		uploadsFolderCronJob.start()
 
@@ -83,10 +87,13 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/replacepages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true, true))
 	}
 
-	async setupUploadsFolder () {
+	async setupTempFolders () {
 		let folders = await FileSystemFacade.listDir(__dirname + '/../../')
-		if (!folders.includes('uploads')) {
-			await FileSystemFacade.createDirectory(__dirname + '/../../uploads')
+		if (!folders.includes(uploadsFolder)) {
+			await FileSystemFacade.createDirectory(__dirname + `/../../${uploadsFolder}`)
+		}
+		if (!folders.includes(tempFolder)) {
+			await FileSystemFacade.createDirectory(__dirname + `/../../${tempFolder}`)
 		}
 	}
 
@@ -328,30 +335,19 @@ export default class ComicsRouter extends BaseRouter {
 				return this.returnApiError(res, new ApiError(`Comic name cannot include any of the following: #/?\\`, 400))
 			}
 
+			let comicExistsErr = await this.checkForExistingComic(comicName)
+			if (comicExistsErr) {
+				return this.returnApiError(res, comicExistsErr)
+			}
+
 			if (isMultipart) {
-				let [multipartNumber, totalNumberOfParts, multipartKey] = 
-					[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
 				console.log(`MULTIPART upload for comic ${comicName}, uploaded by user ${username}`)
-
-				let filesWithKeys = []
-				if (newFiles) {
-					newFiles.forEach(file => {
-						filesWithKeys.push(['pageFiles', file])
-					})
-				}
-				if (thumbnailFile && thumbnailFile.length === 1) {
-					filesWithKeys.push(['thumbnailFile', thumbnailFile[0]])
-				}
-
-				await storePartialUpload(this.redisClient, filesWithKeys, multipartKey, multipartNumber)
-
-				if (multipartNumber < totalNumberOfParts) {
+				let multipartResult = await this.handleMultipartUpload(req, res, newFiles, thumbnailFile)
+				if (multipartResult.shouldReturn) {
 					return res.status(204).end()
 				}
-				
-				let allUploads = await retrieveEarlierUploads(this.redisClient, multipartKey, totalNumberOfParts)
-				newFiles = allUploads.pageFiles
-				thumbnailFile = allUploads.thumbnailFile
+				newFiles = multipartResult.newFiles
+				thumbnailFile = multipartResult.thumbnailFile
 			}
 
 			let hasThumbnail = false
@@ -369,18 +365,6 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			let fileList = newFiles.sort((f1, f2) => f1.originalName > f2.originalName ? -1 : 1)
-
-			let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
-			let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
-
-			let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
-			if (existingResults.length > 0) {
-				return this.returnApiError(res, new ApiError('Comic with this name already exists', 400))
-			}
-			let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
-			if (existingSuggestedResults.length > 0) {
-				return this.returnApiError(res, new ApiError('Comic with this name already exists, is pending', 400))
-			}
 
 			await this.processComicFiles(fileList, thumbnailFile)
 
@@ -413,6 +397,55 @@ export default class ComicsRouter extends BaseRouter {
 			return this.returnApiError(res, err)
 		}
 	}
+
+	async handleMultipartUpload (req, res, newFiles, thumbnailFile) {
+		let [multipartNumber, totalNumberOfParts, multipartKey] = 
+			[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
+
+		let filesForStorage = []
+		if (newFiles) {
+			newFiles.forEach(file => {
+				filesForStorage.push({
+					type: 'pageFile',
+					path: file.path,
+					originalname: file.originalname,
+				})
+			})
+		}
+		if (thumbnailFile && thumbnailFile.length === 1) {
+			filesForStorage.push({
+				type: 'thumbnailFile',
+				path: thumbnailFile[0].path,
+				originalname: thumbnailFile[0].originalname,
+			})
+		}
+
+		await storePartialUpload(filesForStorage, multipartKey, multipartNumber)
+
+		if (multipartNumber < totalNumberOfParts) {
+			return { shouldReturn: true }
+		}
+		
+		let allUploads = await retrieveEarlierUploads(multipartKey)
+		
+		return { newFiles: allUploads.pageFiles, thumbnailFile: allUploads.thumbnailFile }
+	}
+
+	async checkForExistingComic (comicName) {
+		let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
+		let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
+
+		let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
+		if (existingResults.length > 0) {
+			return new ApiError('Comic with this name already exists', 400)
+		}
+		let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
+		if (existingSuggestedResults.length > 0) {
+			return new ApiError('Comic with this name already exists, is pending', 400)
+		}
+
+		return null
+	}
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		let fileProcessPromises = []
@@ -422,7 +455,7 @@ export default class ComicsRouter extends BaseRouter {
 		await Promise.all(fileProcessPromises)
 
 		if (thumbnailFile) {
-			if (thumbnailFile.mimetype.endsWith('png') || thumbnailFile.mimetype.endsWith('jpeg')) {
+			if (legalFileEndings.some(legalEnding => thumbnailFile.originalname.includes('.' + legalEnding))) {
 				await convertThumbnailFile(thumbnailFile.path)
 			}
 			else {
@@ -1002,7 +1035,7 @@ export default class ComicsRouter extends BaseRouter {
 				await purgePagesFromCache(comic.Name, resizedPageNames)
 			}
 
-			FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+			FileSystemFacade.deleteDirectory(`${uploadsFolder}/${comic.Name}`)
 			
 			res.json({numberOfResizedPages: numberOfResizedPages, totalNumberOfPages: comic.NumberOfPages})
 		}
@@ -1013,10 +1046,10 @@ export default class ComicsRouter extends BaseRouter {
 
 	async downloadComicFilesTemp (comic) {
 		try {
-			await FileSystemFacade.createDirectory(`uploads/${comic.Name}`)
+			await FileSystemFacade.createDirectory(`${uploadsFolder}/${comic.Name}`)
 		}
 		catch (err) {
-			await FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+			await FileSystemFacade.deleteDirectory(`${uploadsFolder}/${comic.Name}`)
 		}
 
 		console.log(`Downloading ${comic.NumberOfPages} files for comic ${comic.Name}`)
@@ -1027,7 +1060,7 @@ export default class ComicsRouter extends BaseRouter {
 		for (let i=1; i<=comic.NumberOfPages; i++) {
 			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
 			downloadPromises.push(FileSystemFacade.downloadGoogleComicPage(comic.Name, `${pageNumberString}.jpg`))
-			filePaths.push(`uploads/${comic.Name}/${pageNumberString}.jpg`)
+			filePaths.push(`${uploadsFolder}/${comic.Name}/${pageNumberString}.jpg`)
 			pageNames.push(`${pageNumberString}.jpg`)
 		}
 

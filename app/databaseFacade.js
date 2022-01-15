@@ -11,7 +11,7 @@ export default class DatabaseFacade {
 			errorMessage = `Database error: ${errorMessage}`
 		}
 		
-		return new Promise (async (resolve, reject) => {
+		return new Promise ((resolve, reject) => {
 			this.mysqlPool.getConnection((err, connection) => {
 				if (err) {
 					reject({error: err, message: 'Error establishing database connection'})

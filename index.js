@@ -57,7 +57,7 @@ app.set('query parser', 'extended')
 
 app.use(express.static('./public'))
 
-routes(app, databaseFacade, config, redisClient)
+routes(app, databaseFacade, config)
 
 app.listen(port)
 console.log('Magic happens on port ' + port)
