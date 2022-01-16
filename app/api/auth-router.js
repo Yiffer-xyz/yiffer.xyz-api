@@ -115,7 +115,7 @@ export default class AuthenticationRouter extends BaseRouter {
     })
 
     // Regular cookie, replacing localstorage to enable sharing sessions between subdomains
-    res.cookie('yiffer_userdata', userData, {
+    res.cookie('yiffer_userdata', JSON.stringify(userData), {
       httpOnly: false,
       secure: this.config.tokenConfig.secure,
       domain: this.config.tokenConfig.domain,
@@ -123,10 +123,7 @@ export default class AuthenticationRouter extends BaseRouter {
       expires: expiresTime,
     })
 
-    res.json({
-      userData: userData,
-      ttlSeconds: this.config.tokenConfig.tokenDurationDays * 86400
-    })
+    res.json(userData)
   }
 
   getInvalidToken (disableHttpOnly=false) {
