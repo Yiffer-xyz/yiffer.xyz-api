@@ -2,8 +2,8 @@ import BaseRouter, { ApiError } from './baseRouter.js'
 import { getComics } from './comics-query-helper.js'
 
 export default class ArtistRouter extends BaseRouter {
-  constructor (app, databaseFacade, modLogger) {
-		super(app, databaseFacade, modLogger)
+  constructor (app, databaseFacade,config, modLogger) {
+		super(app, databaseFacade, config, modLogger)
 		this.setupRoutes()
   }
   
@@ -29,7 +29,6 @@ export default class ArtistRouter extends BaseRouter {
       let artistDataQuery = 'SELECT Id, E621Name, PatreonName from artist where Name = ?'
       let linksQuery = 'SELECT LinkType as linkType, LinkURL as linkUrl FROM artistlink WHERE ArtistId = ?'
 
-      let user = await this.getUser(req)
       let artistData = await this.databaseFacade.execute(artistDataQuery, [artistName], 'Error getting artist id')
       if (!artistData || artistData.length === 0) {
         return res.status(404).end()
@@ -39,7 +38,7 @@ export default class ArtistRouter extends BaseRouter {
 
       let promises = [
         this.databaseFacade.execute(linksQuery, [artistId], 'Error getting artist links'),
-        getComics(this.databaseFacade, user, 0, 0, null, null, null, null, null, artistId)
+        getComics(this.databaseFacade, req.userData?.id, 0, 0, null, null, null, null, null, artistId)
       ]
       let [links, comics] = await Promise.all(promises)
 

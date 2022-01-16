@@ -12,11 +12,11 @@ export class ApiError extends Error {
 }
 
 export default class BaseRouter {
-	constructor (app, databaseFacade, modLogger, redisClient) {
+	constructor (app, databaseFacade, config, modLogger) {
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.modLogger = modLogger
-		this.redisClient = redisClient
+		this.config = config
 	}
 
 	returnApiError(res, error) {
@@ -101,20 +101,11 @@ export default class BaseRouter {
 		}
 	}
 
-	getUserFromSession (req) {
-		if (req.session && req.session.user) {
-			return req.session.user
-		}
-		else {
-			return null
-		}
-	}
-
-	async getUser (req) {
-		if (req.session && req.session.user) {
+	async handleGetUser (req) {
+		if (req.userData) {
 			try {
 				let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType FROM user WHERE Id = ?'
-				let userResult = await this.databaseFacade.execute(query, [req.session.user.id])
+				let userResult = await this.databaseFacade.execute(query, [req.userData.id])
 				if (userResult.length === 0) {
 					return null
 				}
@@ -130,7 +121,7 @@ export default class BaseRouter {
 		}
 	}
 
-	async getUserAccount (userId) {
+	async getUserById (userId) {
     let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, CreatedTime AS createdTime FROM user WHERE id = ?'
     let queryParams = [userId]
 
@@ -138,10 +129,9 @@ export default class BaseRouter {
     return results[0]
   }
 
-	authorizeUser (req, res, next) {
-		let user = this.getUserFromSession(req)
-		if (!user) {
-			res.json({error: 'Not logged in'})
+	async authorizeUser (req, res, next) {
+		if (!req.userData) {
+			res.status(401).end('Not logged in')
 		}
 		else {
 			next()
@@ -165,11 +155,11 @@ export default class BaseRouter {
 	}
 
 	async isAdmin (req) {
-		if (!req.session || !req.session.user) {
+		if (!req.userData) {
 			return false
 		}
 		let query = 'SELECT * FROM user WHERE Username=?'
-		let userData = await this.databaseFacade.execute(query, [req.session.user.username])
+		let userData = await this.databaseFacade.execute(query, [req.userData.username])
 
 		if (userData[0].UserType === 'admin') {
 			return true
@@ -179,12 +169,12 @@ export default class BaseRouter {
 
 	async authorize(req, res, role) {
 		try {
-			if (!req.session || !req.session.user) {
+			if (!req.userData) {
 				res.status(401).json({error: 'Not logged in'})
 			}
 			else {
 				let query = 'SELECT * FROM user WHERE Username=?'
-				let userData = await this.databaseFacade.execute(query, [req.session.user.username])
+				let userData = await this.databaseFacade.execute(query, [req.userData.username])
 				if (role === 'moderator') {
 					if (userData[0].UserType === 'moderator' || userData[0].UserType === 'admin') {
 						return true

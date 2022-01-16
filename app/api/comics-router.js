@@ -51,8 +51,8 @@ async function clearUploadsFolder() {
 }
 
 export default class ComicsRouter extends BaseRouter {
-	constructor (app, databaseFacade, modLogger) {
-		super(app, databaseFacade, modLogger)
+	constructor (app, databaseFacade, config, modLogger) {
+		super(app, databaseFacade, config, modLogger)
 		this.setupRoutes()
 		this.setupTempFolders()
 		let uploadsFolderCronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
@@ -125,15 +125,17 @@ export default class ComicsRouter extends BaseRouter {
 
 			keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
-			let user = await this.getUser(req)
+			let user = req.userData
 			page = (page && !isNaN(page)) ? Number(page)-1 : 0
 			let pageOffset = page * COMICS_PER_PAGE
 
-			if (!user && order === 'yourRating') { order = 'updated' }
+			if (!user && order === 'yourRating') {
+				order = 'updated'
+			}
 
 			let comicsPromise = getComics(
 				this.databaseFacade,
-				user,
+				user?.id,
 				COMICS_PER_PAGE,
 				pageOffset,
 				categories,
@@ -233,11 +235,10 @@ export default class ComicsRouter extends BaseRouter {
 		let queryParams = []
     let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = FirstComic) WHERE LastComic = ?'
     let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = LastComic) WHERE FirstComic = ?'
-		let user = await this.getUser(req)
 
-		if (user) {
+		if (req.userData) {
 			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, comicvote.Vote AS yourRating FROM (SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, comic.Cat AS cat, comic.Tag AS tag, comic.Created, comic.Updated FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN comicvote ON (comicvote.ComicId = T1.id AND comicvote.UserId = ?)'
-			queryParams = [comicName, user.id]
+			queryParams = [comicName, req.userData.id]
 		}
 		else {
 			comicDataQuery = 'SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, comic.Cat AS cat, comic.tag AS tag, comic.Created AS created, comic.Updated AS updated, NULL AS yourRating, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id'
@@ -327,8 +328,8 @@ export default class ComicsRouter extends BaseRouter {
 			if (req.body.previousComic) { previousComic = JSON.parse(req.body.previousComic) }
 			if (req.body.keywordIds) { keywordIds = JSON.parse(req.body.keywordIds) }
 
-			let userId = req.session.user.id
-			let username = req.session.user.username
+			let userId = req.userData.id
+			let username = req.userData.username
 
 			comicName = comicName.trim()
 			if (illegalComicNameChars.some(char => comicName.includes(char))) {
@@ -747,11 +748,10 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({error: 'Rating must be an integer between 0 and 10'})
 		}
 
-		let user = await this.getUser(req)
 		let deleteQuery = 'DELETE FROM comicvote WHERE UserId = ? AND ComicId = ?'
-		let deleteQueryParams = [user.id, comicId]
+		let deleteQueryParams = [req.userData.id, comicId]
 		let insertQuery = 'INSERT INTO comicvote (UserId, ComicId, Vote) VALUES (?, ?, ?)'
-		let insertQueryParams = [user.id, comicId, rating]
+		let insertQueryParams = [req.userData.id, comicId, rating]
 		try {
 			await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'Error deleting old rating')
 			if (rating > 0) {

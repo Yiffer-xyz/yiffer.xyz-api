@@ -10,7 +10,7 @@ export default class ModLogger {
       userId = reqOrUserId
     }
     else {
-      userId = reqOrUserId.session?.user?.id
+      userId = reqOrUserId.userData.id
     }
     if (!userId) {
       return
