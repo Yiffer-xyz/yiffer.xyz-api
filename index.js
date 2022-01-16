@@ -8,7 +8,7 @@ import fs from 'fs'
 import yaml from 'js-yaml'
 import cookieParser from 'cookie-parser'
 
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 
 import mysql from 'mysql'

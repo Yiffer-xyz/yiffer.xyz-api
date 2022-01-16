@@ -4,7 +4,7 @@ const cloudinary = cdny.v2
 
 import yaml from 'js-yaml'
 import { ApiError } from './api/baseRouter.js';
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 
 cloudinary.config(config.cloudinary)

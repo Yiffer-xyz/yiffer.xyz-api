@@ -5,7 +5,7 @@ sharp.cache(false)
 
 import fs from 'fs'
 import yaml from 'js-yaml'
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const pageConfig = config.dimensions.page
 const legalFileEndings = ['jpg', 'png']

@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 
 import yaml from 'js-yaml'
 import { ApiError } from './api/baseRouter.js';
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const storage = new Storage({ credentials: config.googleServiceAccount })
 const bucket = storage.bucket(config.storage.bucketName)
