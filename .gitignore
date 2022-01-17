@@ -1,11 +1,11 @@
 .tmp/
 .env
 .vscode
-config/
+*.key
+*.key.pub
 meta_tools/
 node_modules/
 package-lock.json
 *.txt
 uploads/*
 public/*
-cfg.yml
