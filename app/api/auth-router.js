@@ -428,8 +428,8 @@ function buildUserSessionData (rawDatabaseUserRow) {
   if (rawDatabaseUserRow.PatreonTier) {
     user.patreonTier = rawDatabaseUserRow.PatreonTier
     user.hasPatreonPicture = rawDatabaseUserRow.HasPatreonPicture
-    user.patreonDisplayName = rawDatabaseUserRow.patreonDisplayName
-    user.patreonDisplayLink = rawDatabaseUserRow.patreonDisplayLink
+    user.patreonDisplayName = rawDatabaseUserRow.PatreonDisplayName
+    user.patreonDisplayLink = rawDatabaseUserRow.PatreonDisplayLink
   }
 
   return user
