@@ -19,8 +19,10 @@ var storage = multer.diskStorage({
 var upload = multer({ storage: storage })
 
 export default class PatreonRouter extends BaseRouter {
-  constructor (app, databaseFacade, patreonConfig, authRouter) {
-    super(app, databaseFacade)
+  constructor (app, databaseFacade, config, authRouter) {
+    super(app, databaseFacade, config)
+
+    let patreonConfig = config.patreon
     this.patreonConfig = patreonConfig
     this.authRouter = authRouter
     this.patreonOAuthClient = patreonOAuth(patreonConfig.clientId, patreonConfig.clientSecret)
@@ -40,18 +42,18 @@ export default class PatreonRouter extends BaseRouter {
   setupRoutes () {
     this.app.get('/api/patreon/callback', (req, res) => this.patreonCallback(req, res))
     this.app.get('/api/patreon/tiers', (req, res) => this.getTiers(req, res))
-    this.app.post('/api/patreon/unlink', (req, res) => this.handleUnlinkPatreonAccount(req, res))
-    this.app.post('/api/patreon/sync-account', (req, res) => this.handleSyncPatreonTier(req, res))
+    this.app.post('/api/patreon/unlink', this.authorizeUser.bind(this), (req, res) => this.handleUnlinkPatreonAccount(req, res))
+    this.app.post('/api/patreon/sync-account', this.authorizeUser.bind(this), (req, res) => this.handleSyncPatreonTier(req, res))
 
-    this.app.post('/api/patreon/update-name', (req, res) => this.handleUpdatePatronDisplayName(req, res))
-    this.app.post('/api/patreon/remove-name', (req, res) => this.handleRemovePatreonDisplayName(req, res))
+    this.app.post('/api/patreon/update-name', this.authorizeUser.bind(this), (req, res) => this.handleUpdatePatronDisplayName(req, res))
+    this.app.post('/api/patreon/remove-name', this.authorizeUser.bind(this), (req, res) => this.handleRemovePatreonDisplayName(req, res))
 
-    this.app.post('/api/patreon/update-link', (req, res) => this.handleUpdatePatronDisplayLink(req, res))
-    this.app.post('/api/patreon/remove-link', (req, res) => this.handleRemovePatreonDisplayLink(req, res))
+    this.app.post('/api/patreon/update-link', this.authorizeUser.bind(this), (req, res) => this.handleUpdatePatronDisplayLink(req, res))
+    this.app.post('/api/patreon/remove-link', this.authorizeUser.bind(this), (req, res) => this.handleRemovePatreonDisplayLink(req, res))
     this.app.post('/api/patreon/process-link', this.authorizeMod.bind(this), (req, res) => this.handleProcessPatronDisplayLink(req, res))
 
-    this.app.post('/api/patreon/update-picture', upload.single('file'), (req, res) => this.handleUpdatePatronPicture(req, res))
-    this.app.post('/api/patreon/remove-picture', (req, res) => this.handleRemovePatronPicture(req, res))
+    this.app.post('/api/patreon/update-picture', this.authorizeUser.bind(this), upload.single('file'), (req, res) => this.handleUpdatePatronPicture(req, res))
+    this.app.post('/api/patreon/remove-picture', this.authorizeUser.bind(this), (req, res) => this.handleRemovePatronPicture(req, res))
     
     this.app.post('/api/patreon/clear-patron-field', this.authorizeMod.bind(this), (req, res) => this.handleClearPatronField(req, res))
     
@@ -74,8 +76,7 @@ export default class PatreonRouter extends BaseRouter {
 
   async handleUnlinkPatreonAccount (req, res) {
     try {
-      let user = this.getUserFromSession(req)
-      await this.unlinkPatreonAccount(user.id)
+      await this.unlinkPatreonAccount(req.userData.id)
       await this.authRouter.refreshAuth(req, res)
     } 
 		catch (err) {
@@ -86,9 +87,8 @@ export default class PatreonRouter extends BaseRouter {
   async handleSyncPatreonTier (req, res) {
     try {
       let query = 'SELECT Id AS id, PatreonTier AS patreonTier, PatreonAccessToken AS patreonAccessToken, PatreonRefreshToken AS patreonRefreshToken FROM user WHERE Id = ?'
-      let user = this.getUserFromSession(req)
 
-      let fullUserData = await this.databaseFacade.execute(query, [user.id], 'Error fetching user data from database')
+      let fullUserData = await this.databaseFacade.execute(query, [req.userData.id], 'Error fetching user data from database')
       fullUserData = fullUserData[0]
 
       await this.syncPatronTier(fullUserData)
@@ -113,7 +113,7 @@ export default class PatreonRouter extends BaseRouter {
       let relevantTier = await this.getPatronTier(accessToken)
       if (relevantTier) {
         await this.storePatronTier(userId, relevantTier.dbTierNumber)
-        await this.updatePatronDisplayName(req, userId, null)
+        await this.updatePatronDisplayName(userId, null)
       }
 
       res.redirect('/account')
@@ -150,14 +150,14 @@ export default class PatreonRouter extends BaseRouter {
   async handleUpdatePatronDisplayName (req, res) {
     try {
       let newName = req.body.newName.trim()
-      let user = this.getUserFromSession(req)
+
       if (newName.length > 35) {
         return this.returnApiError(res, new ApiError('Name too long', 400))
       }
       if (newName.length < 1) {
         return this.returnApiError(res, new ApiError('Name too short', 400))
       }
-      await this.updatePatronDisplayName(req, user.id, newName)
+      await this.updatePatronDisplayName(req.userData.id, newName)
       await this.authRouter.refreshAuth(req, res)
     } 
 		catch (err) {
@@ -167,8 +167,7 @@ export default class PatreonRouter extends BaseRouter {
 
   async handleRemovePatreonDisplayName (req, res) {
     try {
-      let user = this.getUserFromSession(req)
-      await this.updatePatronDisplayName(req, user.id, null, true)
+      await this.updatePatronDisplayName(req.userData.id, null, true)
       await this.authRouter.refreshAuth(req, res)
     } 
 		catch (err) {
@@ -179,7 +178,7 @@ export default class PatreonRouter extends BaseRouter {
   async handleUpdatePatronDisplayLink (req, res) {
     try {
       let newLink = req.body.newLink.trim()
-      let user = this.getUserFromSession(req)
+
       if (newLink.length > 100) {
         return this.returnApiError(res, new ApiError('Link too long, max 100 characters', 400))
       }
@@ -191,7 +190,7 @@ export default class PatreonRouter extends BaseRouter {
       }
   
       let updateQuery = 'UPDATE user SET PatreonDisplayLink = ?, IsPatreonLinkApproved = 0 WHERE Id = ?'
-      let updateQueryParams = [newLink, user.id]
+      let updateQueryParams = [newLink, req.userData.id]
   
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Failed to store patron display link in database')
 
@@ -204,8 +203,7 @@ export default class PatreonRouter extends BaseRouter {
 
   async handleRemovePatreonDisplayLink (req, res) {
     try {
-      let user = this.getUserFromSession(req)
-      await this.removePatreonDisplayLink(user.id)
+      await this.removePatreonDisplayLink(req.userData.id)
       await this.authRouter.refreshAuth(req, res)
     } 
 		catch (err) {
@@ -239,9 +237,9 @@ export default class PatreonRouter extends BaseRouter {
 		}
   }
 
-  async updatePatronDisplayName (req, userId, displayName, shouldDeleteName=false) {
+  async updatePatronDisplayName (userId, displayName, shouldDeleteName=false) {
     if (!displayName && !shouldDeleteName) {
-      let user = await this.getUser(req)
+      let user = await this.getUserById(userId)
       displayName = user.username
     }
 
@@ -398,7 +396,6 @@ export default class PatreonRouter extends BaseRouter {
 	async handleUpdatePatronPicture (req, res) {
     try {
       let [imageFile] = [req.file]
-      let user = this.getUserFromSession(req)
 
       if (!imageFile) {
         return this.returnApiError(res, new ApiError('No image file provided', 400))
@@ -411,9 +408,13 @@ export default class PatreonRouter extends BaseRouter {
 
       await convertPatreonProfilePic(imageFile.path)
 
-      await FileSystemFacade.writeGooglePatronImage(user.id, imageFile.path)
+      await FileSystemFacade.writeGooglePatronImage(req.userData.id, imageFile.path)
 
-      await this.databaseFacade.execute('UPDATE user SET HasPatreonPicture=1 WHERE Id=?', [user.id], 'Database error updating user')
+      await this.databaseFacade.execute(
+        'UPDATE user SET HasPatreonPicture=1 WHERE Id=?',
+        [req.userData.id],
+        'Database error updating user'
+      )
 
       await this.authRouter.refreshAuth(req, res)
 		}
@@ -424,8 +425,7 @@ export default class PatreonRouter extends BaseRouter {
 
   async handleRemovePatronPicture (req, res) {
     try {
-      let user = this.getUserFromSession(req)
-      await this.removePatronPicture(user.id)
+      await this.removePatronPicture(req.userData.id)
       await this.authRouter.refreshAuth(req, res)
     }
     catch (err) {
@@ -441,7 +441,7 @@ export default class PatreonRouter extends BaseRouter {
         await this.removePatronPicture(userId)
       }
       else if (fieldName === 'display-name') {
-        await this.updatePatronDisplayName(req, userId, null, true)
+        await this.updatePatronDisplayName(userId, null, true)
       }
       else if (fieldName === 'display-link') {
         await this.removePatreonDisplayLink(userId)

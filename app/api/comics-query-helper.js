@@ -1,6 +1,6 @@
 import { ApiError } from './baseRouter.js'
 
-export async function getComics (databaseFacade, user, limit, offset, categories, tags, keywordIds, search, order, artistId) {
+export async function getComics (databaseFacade, userId, limit, offset, categories, tags, keywordIds, search, order, artistId) {
   let [
     filterQueryString,
     filterQueryParams,
@@ -33,11 +33,11 @@ export async function getComics (databaseFacade, user, limit, offset, categories
   let innerComicQuery = `
     SELECT 
       comic.Id AS Id, comic.Name AS Name, comic.Cat AS Cat, comic.Tag AS Tag, artist.Name AS Artist, comic.Updated AS updated, comic.State AS State, comic.Created AS Created, comic.NumberOfPages AS NumberOfPages
-      ${user ? ', VoteQuery.YourVote AS yourRating' : ''}
+      ${userId ? ', VoteQuery.YourVote AS yourRating' : ''}
     FROM comic 
     ${innerJoinKeywordString}
     INNER JOIN artist ON (artist.Id = comic.Artist) 
-    ${user ? comicVoteQuery : ''} 
+    ${userId ? comicVoteQuery : ''} 
     ${filterQueryString}
     GROUP BY comic.Name, comic.Id 
     ${keywordCountString} 
@@ -46,7 +46,7 @@ export async function getComics (databaseFacade, user, limit, offset, categories
   
   let queryParams = []
 
-  if (user) { queryParams = [user.id] }
+  if (userId) { queryParams = [userId] }
   queryParams.push(...filterQueryParams)
 
   if (limit) {
@@ -59,7 +59,7 @@ export async function getComics (databaseFacade, user, limit, offset, categories
   let query = `
     SELECT cc.Id AS id, cc.Name AS name, cc.Cat AS cat, cc.Tag AS tag, cc.Artist AS artist, 
     cc.updated AS updated, cc.State AS state, cc.Created AS created, cc.NumberOfPages AS numberOfPages, AVG(comicvote.Vote) AS userRating, 
-    ${user ? 'cc.yourRating AS yourRating' : '0 AS yourRating'}
+    ${userId ? 'cc.yourRating AS yourRating' : '0 AS yourRating'}
     FROM (
       ${innerComicQuery}
     ) AS cc 

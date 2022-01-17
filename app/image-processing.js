@@ -5,15 +5,16 @@ sharp.cache(false)
 
 import fs from 'fs'
 import yaml from 'js-yaml'
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const pageConfig = config.dimensions.page
+const legalFileEndings = ['jpg', 'png']
 
 export async function processComicPage(file) {
-  if (!file.mimetype.endsWith('png') && !file.mimetype.endsWith('jpeg')) {
+  if (!legalFileEndings.some(legalEnding => file.originalname.includes('.' + legalEnding))) {
     throw new ApiError(`File format not supported (${file.originalname})`, 400)
   }
-  let needsTypeConvert = file.mimetype.endsWith('png')
+  let needsTypeConvert = file.originalname.includes('.png')
 
   return await resizeComicPageIfNeeded(file.path, needsTypeConvert)
 }

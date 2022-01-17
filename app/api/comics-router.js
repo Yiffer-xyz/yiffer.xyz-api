@@ -5,10 +5,13 @@ import { purgePagesFromCache } from '../cloudflareFacade.js'
 import dateFns from 'date-fns'
 const { format } = dateFns
 
+const uploadsFolder = 'uploads'
+const tempFolder = 'temp-files'
+
 import multer from 'multer'
 var storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads')
+    cb(null, uploadsFolder)
   },
   filename: function (req, file, cb) {
     cb(null, file.fieldname + '-' + Date.now())
@@ -25,8 +28,8 @@ const addComicUploadFormat = upload.fields([
 ])
 
 const COMICS_PER_PAGE = 75
-
 const illegalComicNameChars = ['#', '/', '?', '\\']
+const legalFileEndings = ['jpg', 'png']
 
 import { dirname } from 'path';	
 import { fileURLToPath } from 'url';	
@@ -35,22 +38,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import cron from 'cron'
 const CronJob = cron.CronJob
 
+
 async function clearUploadsFolder() {
 	console.log('Cron: Cleaning up uploads folder...')
-	let uploadedFiles = await FileSystemFacade.listDir(__dirname + '/../../uploads')
+	let uploadedFiles = await FileSystemFacade.listDir(__dirname + `/../../${uploadsFolder}`)
 	console.log(`Found ${uploadedFiles.length} files`)
 	for (let file of uploadedFiles) {
 		console.log(file)
-		await FileSystemFacade.deleteFile(`${__dirname}/../../uploads/${file}`)
+		await FileSystemFacade.deleteFile(`${__dirname}/../../${uploadsFolder}/${file}`)
 	}
 	console.log(`Deleted all upload files`)
 }
 
 export default class ComicsRouter extends BaseRouter {
-	constructor (app, databaseFacade, modLogger, redisClient) {
-		super(app, databaseFacade, modLogger, redisClient)
+	constructor (app, databaseFacade, config, modLogger) {
+		super(app, databaseFacade, config, modLogger)
 		this.setupRoutes()
-		this.setupUploadsFolder()
+		this.setupTempFolders()
 		let uploadsFolderCronJob = new CronJob('0 0 * * *', clearUploadsFolder, null, true, 'Europe/London')
 		uploadsFolderCronJob.start()
 
@@ -83,10 +87,13 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/pendingcomics/:id/replacepages', this.authorizeMod.bind(this), upload.array('newPages'), (req, res) => this.addPagesToComic(req, res, true, true))
 	}
 
-	async setupUploadsFolder () {
+	async setupTempFolders () {
 		let folders = await FileSystemFacade.listDir(__dirname + '/../../')
-		if (!folders.includes('uploads')) {
-			await FileSystemFacade.createDirectory(__dirname + '/../../uploads')
+		if (!folders.includes(uploadsFolder)) {
+			await FileSystemFacade.createDirectory(__dirname + `/../../${uploadsFolder}`)
+		}
+		if (!folders.includes(tempFolder)) {
+			await FileSystemFacade.createDirectory(__dirname + `/../../${tempFolder}`)
 		}
 	}
 
@@ -118,15 +125,17 @@ export default class ComicsRouter extends BaseRouter {
 
 			keywordIds = keywordIds ? keywordIds.map(kw => Number(kw)) : undefined
 
-			let user = await this.getUser(req)
+			let user = req.userData
 			page = (page && !isNaN(page)) ? Number(page)-1 : 0
 			let pageOffset = page * COMICS_PER_PAGE
 
-			if (!user && order === 'yourRating') { order = 'updated' }
+			if (!user && order === 'yourRating') {
+				order = 'updated'
+			}
 
 			let comicsPromise = getComics(
 				this.databaseFacade,
-				user,
+				user?.id,
 				COMICS_PER_PAGE,
 				pageOffset,
 				categories,
@@ -226,11 +235,10 @@ export default class ComicsRouter extends BaseRouter {
 		let queryParams = []
     let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = FirstComic) WHERE LastComic = ?'
     let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = LastComic) WHERE FirstComic = ?'
-		let user = await this.getUser(req)
 
-		if (user) {
+		if (req.userData) {
 			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, comicvote.Vote AS yourRating FROM (SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, comic.Cat AS cat, comic.Tag AS tag, comic.Created, comic.Updated FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN comicvote ON (comicvote.ComicId = T1.id AND comicvote.UserId = ?)'
-			queryParams = [comicName, user.id]
+			queryParams = [comicName, req.userData.id]
 		}
 		else {
 			comicDataQuery = 'SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, comic.Cat AS cat, comic.tag AS tag, comic.Created AS created, comic.Updated AS updated, NULL AS yourRating, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id'
@@ -320,38 +328,27 @@ export default class ComicsRouter extends BaseRouter {
 			if (req.body.previousComic) { previousComic = JSON.parse(req.body.previousComic) }
 			if (req.body.keywordIds) { keywordIds = JSON.parse(req.body.keywordIds) }
 
-			let userId = req.session.user.id
-			let username = req.session.user.username
+			let userId = req.userData.id
+			let username = req.userData.username
 
 			comicName = comicName.trim()
 			if (illegalComicNameChars.some(char => comicName.includes(char))) {
 				return this.returnApiError(res, new ApiError(`Comic name cannot include any of the following: #/?\\`, 400))
 			}
 
+			let comicExistsErr = await this.checkForExistingComic(comicName)
+			if (comicExistsErr) {
+				return this.returnApiError(res, comicExistsErr)
+			}
+
 			if (isMultipart) {
-				let [multipartNumber, totalNumberOfParts, multipartKey] = 
-					[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
 				console.log(`MULTIPART upload for comic ${comicName}, uploaded by user ${username}`)
-
-				let filesWithKeys = []
-				if (newFiles) {
-					newFiles.forEach(file => {
-						filesWithKeys.push(['pageFiles', file])
-					})
-				}
-				if (thumbnailFile && thumbnailFile.length === 1) {
-					filesWithKeys.push(['thumbnailFile', thumbnailFile[0]])
-				}
-
-				await storePartialUpload(this.redisClient, filesWithKeys, multipartKey, multipartNumber)
-
-				if (multipartNumber < totalNumberOfParts) {
+				let multipartResult = await this.handleMultipartUpload(req, res, newFiles, thumbnailFile)
+				if (multipartResult.shouldReturn) {
 					return res.status(204).end()
 				}
-				
-				let allUploads = await retrieveEarlierUploads(this.redisClient, multipartKey, totalNumberOfParts)
-				newFiles = allUploads.pageFiles
-				thumbnailFile = allUploads.thumbnailFile
+				newFiles = multipartResult.newFiles
+				thumbnailFile = multipartResult.thumbnailFile
 			}
 
 			let hasThumbnail = false
@@ -369,18 +366,6 @@ export default class ComicsRouter extends BaseRouter {
 			}
 
 			let fileList = newFiles.sort((f1, f2) => f1.originalName > f2.originalName ? -1 : 1)
-
-			let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
-			let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
-
-			let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
-			if (existingResults.length > 0) {
-				return this.returnApiError(res, new ApiError('Comic with this name already exists', 400))
-			}
-			let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
-			if (existingSuggestedResults.length > 0) {
-				return this.returnApiError(res, new ApiError('Comic with this name already exists, is pending', 400))
-			}
 
 			await this.processComicFiles(fileList, thumbnailFile)
 
@@ -413,6 +398,55 @@ export default class ComicsRouter extends BaseRouter {
 			return this.returnApiError(res, err)
 		}
 	}
+
+	async handleMultipartUpload (req, res, newFiles, thumbnailFile) {
+		let [multipartNumber, totalNumberOfParts, multipartKey] = 
+			[Number(req.body.multipartNumber), Number(req.body.totalNumberOfParts), req.body.multipartKey]
+
+		let filesForStorage = []
+		if (newFiles) {
+			newFiles.forEach(file => {
+				filesForStorage.push({
+					type: 'pageFile',
+					path: file.path,
+					originalname: file.originalname,
+				})
+			})
+		}
+		if (thumbnailFile && thumbnailFile.length === 1) {
+			filesForStorage.push({
+				type: 'thumbnailFile',
+				path: thumbnailFile[0].path,
+				originalname: thumbnailFile[0].originalname,
+			})
+		}
+
+		await storePartialUpload(filesForStorage, multipartKey, multipartNumber)
+
+		if (multipartNumber < totalNumberOfParts) {
+			return { shouldReturn: true }
+		}
+		
+		let allUploads = await retrieveEarlierUploads(multipartKey)
+		
+		return { newFiles: allUploads.pageFiles, thumbnailFile: allUploads.thumbnailFile }
+	}
+
+	async checkForExistingComic (comicName) {
+		let comicExistsQuery = 'SELECT * FROM comic WHERE Name = ?'
+		let comicExistsPendingQuery = 'SELECT * FROM pendingcomic WHERE Name = ?'
+
+		let existingResults = await this.databaseFacade.execute(comicExistsQuery, [comicName])
+		if (existingResults.length > 0) {
+			return new ApiError('Comic with this name already exists', 400)
+		}
+		let existingSuggestedResults = await this.databaseFacade.execute(comicExistsPendingQuery, [comicName])
+		if (existingSuggestedResults.length > 0) {
+			return new ApiError('Comic with this name already exists, is pending', 400)
+		}
+
+		return null
+	}
 	
 	async processComicFiles (fileList, thumbnailFile) {
 		let fileProcessPromises = []
@@ -422,7 +456,7 @@ export default class ComicsRouter extends BaseRouter {
 		await Promise.all(fileProcessPromises)
 
 		if (thumbnailFile) {
-			if (thumbnailFile.mimetype.endsWith('png') || thumbnailFile.mimetype.endsWith('jpeg')) {
+			if (legalFileEndings.some(legalEnding => thumbnailFile.originalname.includes('.' + legalEnding))) {
 				await convertThumbnailFile(thumbnailFile.path)
 			}
 			else {
@@ -714,11 +748,10 @@ export default class ComicsRouter extends BaseRouter {
 			res.json({error: 'Rating must be an integer between 0 and 10'})
 		}
 
-		let user = await this.getUser(req)
 		let deleteQuery = 'DELETE FROM comicvote WHERE UserId = ? AND ComicId = ?'
-		let deleteQueryParams = [user.id, comicId]
+		let deleteQueryParams = [req.userData.id, comicId]
 		let insertQuery = 'INSERT INTO comicvote (UserId, ComicId, Vote) VALUES (?, ?, ?)'
-		let insertQueryParams = [user.id, comicId, rating]
+		let insertQueryParams = [req.userData.id, comicId, rating]
 		try {
 			await this.databaseFacade.execute(deleteQuery, deleteQueryParams, 'Error deleting old rating')
 			if (rating > 0) {
@@ -1002,7 +1035,7 @@ export default class ComicsRouter extends BaseRouter {
 				await purgePagesFromCache(comic.Name, resizedPageNames)
 			}
 
-			FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+			FileSystemFacade.deleteDirectory(`${uploadsFolder}/${comic.Name}`)
 			
 			res.json({numberOfResizedPages: numberOfResizedPages, totalNumberOfPages: comic.NumberOfPages})
 		}
@@ -1013,10 +1046,10 @@ export default class ComicsRouter extends BaseRouter {
 
 	async downloadComicFilesTemp (comic) {
 		try {
-			await FileSystemFacade.createDirectory(`uploads/${comic.Name}`)
+			await FileSystemFacade.createDirectory(`${uploadsFolder}/${comic.Name}`)
 		}
 		catch (err) {
-			await FileSystemFacade.deleteDirectory(`uploads/${comic.Name}`)
+			await FileSystemFacade.deleteDirectory(`${uploadsFolder}/${comic.Name}`)
 		}
 
 		console.log(`Downloading ${comic.NumberOfPages} files for comic ${comic.Name}`)
@@ -1027,7 +1060,7 @@ export default class ComicsRouter extends BaseRouter {
 		for (let i=1; i<=comic.NumberOfPages; i++) {
 			let pageNumberString = i<100 ? (i<10 ? '00'+i : '0'+i) : i
 			downloadPromises.push(FileSystemFacade.downloadGoogleComicPage(comic.Name, `${pageNumberString}.jpg`))
-			filePaths.push(`uploads/${comic.Name}/${pageNumberString}.jpg`)
+			filePaths.push(`${uploadsFolder}/${comic.Name}/${pageNumberString}.jpg`)
 			pageNames.push(`${pageNumberString}.jpg`)
 		}
 

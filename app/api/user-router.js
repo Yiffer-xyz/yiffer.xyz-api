@@ -1,15 +1,15 @@
 import BaseRouter from './baseRouter.js'
 
 export default class UserRouter extends BaseRouter {
-  constructor (app, databaseFacade, modLogger) {
-		super(app, databaseFacade, modLogger)
+  constructor (app, databaseFacade, config, modLogger) {
+		super(app, databaseFacade, config, modLogger)
 		this.setupRoutes()
   }
   
   setupRoutes () {
     this.app.get ('/api/users/search', this.authorizeAdmin.bind(this), (req, res) => this.searchForUser(req, res))
     this.app.get ('/api/users/moderators', this.authorizeAdmin.bind(this), (req, res) => this.getModerators(req, res))
-    this.app.get ('/api/users/:id', this.authorizeAdmin.bind(this), (req, res) => this.getUser(req, res))
+    this.app.get ('/api/users/:id', this.authorizeAdmin.bind(this), (req, res) => this.handleGetUser(req, res))
     this.app.post('/api/users/:id', this.authorizeAdmin.bind(this), (req, res) => this.updateUser(req, res))
     this.app.post('/api/users/:id/delete', this.authorizeAdmin.bind(this), (req, res) => this.deleteUser(req, res))
   }
@@ -26,7 +26,7 @@ export default class UserRouter extends BaseRouter {
 		}
   }
 
-  async getUser (req, res) {
+  async handleGetUser (req, res) {
     let query = 'SELECT comic.Name AS comicName, comicvote.Vote AS vote, comicvote.Timestamp AS timestamp FROM comicvote INNER JOIN comic ON (comicvote.ComicId = comic.Id) WHERE UserId = ? ORDER BY timestamp DESC'
     let queryParams = [Number(req.params.id)]
     try {

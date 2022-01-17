@@ -22,16 +22,11 @@ const adImageUploadFormat = upload.fields([{ name: 'file1', maxCount: 1 }, { nam
 
 const legalFiletypes = ['jpg', 'webp', 'webm', 'gif']
 const legalUploadFiletypes = ['jpg', 'png', 'gif']
-const uploadToDbFiletype = {
-  jpg: 'webp',
-  png: 'webp',
-  gif: 'webm'
-}
 
 export default class AdvertisingRouter extends BaseRouter {
-  constructor (app, databaseFacade, adPrices) {
-		super(app, databaseFacade)
-    this.adPrices = adPrices
+  constructor (app, databaseFacade, config) {
+		super(app, databaseFacade, config)
+    this.adPrices = config.ads
 		this.setupRoutes()
 		let cronJob = new CronJob('1 0 * * *', this.checkAdExpiries.bind(this), null, true, 'Europe/London')
 		cronJob.start()
@@ -112,16 +107,13 @@ export default class AdvertisingRouter extends BaseRouter {
     try {
       let [file, adType, adName, adLink, adMainText, adSecondaryText, advertiserNotes] = 
         [req.files.file1, req.body.adType, req.body.adName, req.body.adLink, req.body.adMainText, req.body.adSecondaryText, req.body.advertiserNotes]
-        let user = await this.getUser(req)
 
         if (Array.isArray(file)) { file = file[0] }
         if (adMainText === '') { adMainText = null }
         if (adSecondaryText === '') { adSecondaryText = null }
         if (advertiserNotes === '') { advertiserNotes = null }
     
-        if (!user) {
-          return this.returnApiError(res, new ApiError('Not logged in', 401))
-        }
+        let user = await this.handleGetUser(req)
         if (!user.email) {
           return this.returnApiError(res, new ApiError('You must add an email address to your account first', 403))
         }
@@ -144,7 +136,7 @@ export default class AdvertisingRouter extends BaseRouter {
           INSERT INTO advertisement (Id, AdType, AdName, Link, MainText, SecondaryText, Filetype, UserId, AdvertiserNotes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
-        let queryParams = [adId, adType, adName, adLink, adMainText, adSecondaryText, newFiletypes[0], user.id, advertiserNotes]
+        let queryParams = [adId, adType, adName, adLink, adMainText, adSecondaryText, newFiletypes[0], req.userData.id, advertiserNotes]
 
         await this.databaseFacade.execute(query, queryParams, 'Error adding application to database')
 
@@ -161,7 +153,7 @@ export default class AdvertisingRouter extends BaseRouter {
           'advertising',
           'advertising@yiffer.xyz',
           'New ad - Yiffer.xyz',
-          `An ad of type ${adType} with id ${adId} has been submitted by user ${user.username}.`
+          `An ad of type ${adType} with id ${adId} has been submitted by user ${req.userData.username}.`
         )
   
         res.status(204).end()
@@ -309,11 +301,10 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async getUserAds (req, res) {
     try {
-      let user = await this.getUser(req)
-      if (!user) {
+      if (!req.userData) {
         return res.json([])
       }
-      let results = await this.getAdsBase('WHERE UserId=?', [user.id], false)
+      let results = await this.getAdsBase('WHERE UserId=?', [req.userData.id], false)
       res.json(results)
     }
     catch (err) {
@@ -390,7 +381,6 @@ export default class AdvertisingRouter extends BaseRouter {
   }
 
   async verifyAdOwnerOrAdmin (adId, req, res) {
-    let user = await this.getUser(req)
     let adResult = await this.getAdsBase('WHERE advertisement.Id=?', [adId], true)
 
     if (adResult.length === 0) {
@@ -400,7 +390,7 @@ export default class AdvertisingRouter extends BaseRouter {
 
     let ad = adResult[0]
 
-    if (ad.userId === user.id) {
+    if (ad.userId === req.userData.id) {
       return { ad: ad, isOk: true }
     }
 
@@ -409,7 +399,7 @@ export default class AdvertisingRouter extends BaseRouter {
       return { ad: ad, isOk: true }
     }
 
-    this.returnApiError(res, new ApiError('You do not own this ad', 401))
+    this.returnApiError(res, new ApiError('You do not own this ad', 403))
     return { isOk: false }
   }
 
@@ -459,7 +449,7 @@ export default class AdvertisingRouter extends BaseRouter {
       let updatedAd = await this.getAdById(adId)
       
       if ([adStatuses.awaitingPayment, adStatuses.needsCorrection, adStatuses.activeNeedsCorrection, adStatuses.active].includes(status)) {
-        let user = await this.getUserAccount(existingAd.userId)
+        let user = await this.getUserById(existingAd.userId)
         
         if (status === adStatuses.awaitingPayment) {
           let adCosts = []

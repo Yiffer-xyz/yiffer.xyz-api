@@ -13,12 +13,9 @@ var storage = multer.diskStorage({
 })
 var upload = multer({ storage: storage })
 
-import dateFns from 'date-fns'
-const { format } = dateFns
-
 export default class MiscRouter extends BaseRouter {
-  constructor (app, databaseFacade, modLogger) {
-    super(app, databaseFacade, modLogger)
+  constructor (app, databaseFacade, config, modLogger) {
+    super(app, databaseFacade, config, modLogger)
     this.setupRoutes()
   }
 
@@ -53,7 +50,7 @@ export default class MiscRouter extends BaseRouter {
     this.app.get('/api/stats/visitors', this.authorizeMod.bind(this), (req, res) => this.getVisitorStats(req, res))
     this.app.get('/api/stats/comic-views', this.authorizeMod.bind(this), (req, res) => this.getComicViewStats(req, res))
 
-    this.app.post('/api/mod-applications', (req, res) => this.createModApplication(req, res))
+    this.app.post('/api/mod-applications', this.authorizeUser.bind(this), (req, res) => this.createModApplication(req, res))
     this.app.get ('/api/mod-applications', this.authorizeAdmin.bind(this), (req, res) => this.getModApplications(req, res))
     this.app.post('/api/mod-applications/:id', this.authorizeAdmin.bind(this), (req, res) => this.processModApplication(req, res))
     this.app.get ('/api/mod-applications/me', this.authorizeUser.bind(this), (req, res) => this.getMyModApplicationStatus(req, res))
@@ -102,9 +99,8 @@ export default class MiscRouter extends BaseRouter {
         return this.returnApiError(res, new ApiError('A comic with this name already exists!', 400))
       }
 
-      let user = await this.getUser(req)
-      let userParam = user ? user.id : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
-      let query = `INSERT INTO comicsuggestion (Name, ArtistName, Description, ${user ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
+      let userParam = req.userData?.id || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+      let query = `INSERT INTO comicsuggestion (Name, ArtistName, Description, ${req.userData ? 'User' : 'UserIP'}) VALUES (?, ?, ?, ?)`
       let queryParams = [comicName, artist, comment, userParam]
 
       await this.databaseFacade.execute(query, queryParams, 'Database error occurred when adding suggestion')
@@ -261,8 +257,7 @@ export default class MiscRouter extends BaseRouter {
       let [comicId, categoryId, description] = 
         [req.body.comicId, req.body.categoryId, req.body.description]
 
-      let user = await this.getUser(req)
-      let userParam = user ? user.username : req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+      let userParam = req.userData?.username || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
 
       let existingProblem = await this.getComicProblems(comicId, categoryId)
       if (existingProblem.length > 0 && existingProblem[0].problemCategoryName !== 'Other') {
@@ -315,14 +310,13 @@ export default class MiscRouter extends BaseRouter {
   async assignComicProblem (req, res) {
     try {
       let problemId = Number(req.params.id)
-      let user = await this.getUser(req)
       let shouldUnassign = false
 
       let existingProblemQuery = 'SELECT * FROM comicproblem WHERE Id = ?'
       let existingProblemQueryParams = [problemId]
       let existingProblem = await this.databaseFacade.execute(existingProblemQuery, existingProblemQueryParams, 'Error getting existing problem')
       if (existingProblem[0].AssignedModId) {
-        if (existingProblem[0].AssignedModId === user.id) {
+        if (existingProblem[0].AssignedModId === req.userData.id) {
           shouldUnassign = true
         }
         else {
@@ -331,7 +325,7 @@ export default class MiscRouter extends BaseRouter {
       }
 
       let updateQuery = 'UPDATE comicproblem SET AssignedModId = ? WHERE Id = ?'
-      let updateQueryParams = [shouldUnassign ? null : user.id, problemId]
+      let updateQueryParams = [shouldUnassign ? null : req.userData.id, problemId]
 
       await this.databaseFacade.execute(updateQuery, updateQueryParams, 'Error assigning problem')
 
@@ -611,114 +605,110 @@ export default class MiscRouter extends BaseRouter {
     }
   }
 
+  // TODO: Rework later
   async logRoute (req, res) {
-    try {
-      let query = 'INSERT INTO routelog (route, description, session) VALUES (?, ?, ?)'
-      let queryParams = [req.body.route, req.body.description, req.sessionID]
-
-      await this.databaseFacade.execute(query, queryParams, 'Error logging route')
-      res.status(204).end()
-    }
-    catch (err) {
-      return this.returnApiError(res, err)
-    }
+    //   let query = 'INSERT INTO routelog (route, description, session) VALUES (?, ?, ?)'
+    //   let queryParams = [req.body.route, req.body.description, req.sessionID]
+    res.status(204).end()
   }
 
+  // TODO: Rework later
   async getVisitorStats (req, res) {
-    let interval = req.query.interval
-    let query
+    res.json([])
+    // let interval = req.query.interval
+    // let query
 
-    if (interval === 'All') {
-      query = `
-        SELECT COUNT(*) AS count, yr AS year, mnth AS month
-        FROM (
-          SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
-          FROM routelog
-          GROUP BY yr, mnth, session
-          ORDER BY yr, mnth
-        ) AS T1 
-        GROUP BY yr, mnth ORDER BY year DESC, month DESC
-      `
-    }
-    else if (interval === '1Y') {
-      query = `
-        SELECT COUNT(*) AS count, yr AS year, mnth AS month
-        FROM (
-          SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
-          FROM routelog
-          WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 YEAR)
-          GROUP BY yr, mnth, session
-          ORDER BY yr, mnth
-        ) AS T1 
-        GROUP BY yr, mnth ORDER BY year DESC, month DESC
-      `
-    }
-    else if (interval === '1M') {
-      query = `
-        SELECT COUNT(*) AS count, dt AS dataKey 
-        FROM (
-          SELECT session, DATE(routelog.timestamp) AS dt 
-          FROM routelog
-          WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 MONTH)
-          GROUP BY dt, session
-          ORDER BY dt
-        ) AS T1 
-        GROUP BY dt ORDER BY dt DESC
-      `
-    }
-    else if (interval === '1W') {
-      query = `
-        SELECT COUNT(*) AS count, dt AS dataKey 
-        FROM (
-          SELECT session, DATE(routelog.timestamp) AS dt 
-          FROM routelog
-          WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 WEEK)
-          GROUP BY dt, session
-          ORDER BY dt
-        ) AS T1 
-        GROUP BY dt ORDER BY dt DESC
-      `
-    }
-    else if (interval === '24H') {
-      query = `
-        SELECT COUNT(*) AS count, dt AS date, hr AS hour 
-        FROM (
-          SELECT session, DATE(timestamp) AS dt, HOUR(routelog.timestamp) AS hr
-          FROM routelog
-          WHERE timestamp>DATE_SUB(now(), INTERVAL 1 DAY)
-          GROUP BY dt, hr, session
-          ORDER BY dt, hr
-        ) AS T1 
-        GROUP BY dt, hr ORDER BY dt DESC, hr DESC
-      `
-    }
+    // if (interval === 'All') {
+    //   query = `
+    //     SELECT COUNT(*) AS count, yr AS year, mnth AS month
+    //     FROM (
+    //       SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
+    //       FROM routelog
+    //       GROUP BY yr, mnth, session
+    //       ORDER BY yr, mnth
+    //     ) AS T1 
+    //     GROUP BY yr, mnth ORDER BY year DESC, month DESC
+    //   `
+    // }
+    // else if (interval === '1Y') {
+    //   query = `
+    //     SELECT COUNT(*) AS count, yr AS year, mnth AS month
+    //     FROM (
+    //       SELECT session, MONTH(timestamp) AS mnth, YEAR(timestamp) AS yr
+    //       FROM routelog
+    //       WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 YEAR)
+    //       GROUP BY yr, mnth, session
+    //       ORDER BY yr, mnth
+    //     ) AS T1 
+    //     GROUP BY yr, mnth ORDER BY year DESC, month DESC
+    //   `
+    // }
+    // else if (interval === '1M') {
+    //   query = `
+    //     SELECT COUNT(*) AS count, dt AS dataKey 
+    //     FROM (
+    //       SELECT session, DATE(routelog.timestamp) AS dt 
+    //       FROM routelog
+    //       WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 MONTH)
+    //       GROUP BY dt, session
+    //       ORDER BY dt
+    //     ) AS T1 
+    //     GROUP BY dt ORDER BY dt DESC
+    //   `
+    // }
+    // else if (interval === '1W') {
+    //   query = `
+    //     SELECT COUNT(*) AS count, dt AS dataKey 
+    //     FROM (
+    //       SELECT session, DATE(routelog.timestamp) AS dt 
+    //       FROM routelog
+    //       WHERE routelog.timestamp>DATE_SUB(now(), INTERVAL 1 WEEK)
+    //       GROUP BY dt, session
+    //       ORDER BY dt
+    //     ) AS T1 
+    //     GROUP BY dt ORDER BY dt DESC
+    //   `
+    // }
+    // else if (interval === '24H') {
+    //   query = `
+    //     SELECT COUNT(*) AS count, dt AS date, hr AS hour 
+    //     FROM (
+    //       SELECT session, DATE(timestamp) AS dt, HOUR(routelog.timestamp) AS hr
+    //       FROM routelog
+    //       WHERE timestamp>DATE_SUB(now(), INTERVAL 1 DAY)
+    //       GROUP BY dt, hr, session
+    //       ORDER BY dt, hr
+    //     ) AS T1 
+    //     GROUP BY dt, hr ORDER BY dt DESC, hr DESC
+    //   `
+    // }
 
-    try {
-      let results = await this.databaseFacade.execute(query, null)
+    // try {
+    //   let results = await this.databaseFacade.execute(query, null)
 
-      for (let result of results) {
-        if (interval === '1Y' || interval === 'All') {
-          result.dataKey = `${MONTH_NO_TO_STR[result.month]} ${result.year}`
-          delete result.year
-          delete result.month
-        }
-        else if (interval === '24H') {
-          let resultDate = new Date(result.date)
-          resultDate.setHours(result.hour)
-          result.dataKey = format(resultDate, 'EEE HH:00')
-        }
-        else {
-          // interval === '1M' || interval === '1W'
-          let resultDate = new Date(result.dataKey)
-          result.dataKey = format(resultDate, 'EEE d. MMM')
-        }
-      }
+    //   for (let result of results) {
+    //     if (interval === '1Y' || interval === 'All') {
+    //       result.dataKey = `${MONTH_NO_TO_STR[result.month]} ${result.year}`
+    //       delete result.year
+    //       delete result.month
+    //     }
+    //     else if (interval === '24H') {
+    //       let resultDate = new Date(result.date)
+    //       resultDate.setHours(result.hour)
+    //       result.dataKey = format(resultDate, 'EEE HH:00')
+    //     }
+    //     else {
+    //       // interval === '1M' || interval === '1W'
+    //       let resultDate = new Date(result.dataKey)
+    //       result.dataKey = format(resultDate, 'EEE d. MMM')
+    //     }
+    //   }
 
-      res.json(results)
-    }
-    catch (err) {
-      return this.returnError(err.message, res, err.error, err)
-    }
+    //   res.json(results)
+    // }
+    // catch (err) {
+    //   return this.returnError(err.message, res, err.error, err)
+    // }
   }
 
   async getComicViewStats (req, res) {
@@ -764,20 +754,15 @@ export default class MiscRouter extends BaseRouter {
   async createModApplication (req, res) {
     try {
       let [notes, telegramUsername] = [req.body.notes, req.body.telegramUsername]
-      let user = await this.getUser(req)
-
-      if (!user) {
-        return this.returnApiError(res, new ApiError('Not logged in', 401))
-      }
       
       let existingApplicationQuery = 'SELECT * FROM modapplication WHERE UserId = ?'
-      let existingApplication = await this.databaseFacade.execute(existingApplicationQuery, [user.id], 'Database error: Error listing existing applications')
+      let existingApplication = await this.databaseFacade.execute(existingApplicationQuery, [req.userData.id], 'Database error: Error listing existing applications')
       if (existingApplication.length > 0) {
         return this.returnApiError(res, new ApiError('You already have a pending application', 400))
       }
 
       let addApplicationQuery = `INSERT INTO modapplication (UserId, Notes, CompetentAnswer, TelegramUsername) VALUES (?, ?, ' ', ?)`
-      let addApplicationQueryParams = [user.id, notes, telegramUsername]
+      let addApplicationQueryParams = [req.userData.id, notes, telegramUsername]
       await this.databaseFacade.execute(addApplicationQuery, addApplicationQueryParams, 'Database error: Error adding application')
 
       res.end()
@@ -815,12 +800,9 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async getMyModApplicationStatus (req, res) {
-    let user = await this.getUser(req)
-    if (!user) { return this.returnError('Not logged in', res, null, null) }
-
     let query = 'SELECT IsProcessed AS isProcessed, IsRemoved AS isRemoved FROM modapplication WHERE UserId=?'
     try {
-      let result = await this.databaseFacade.execute(query, [user.id], 'Error getting mod application status')
+      let result = await this.databaseFacade.execute(query, [req.userData.id], 'Error getting mod application status')
       if (result.length === 0) {
         return res.json({ applicationStatus: MOD_APPLICATION_STATUSES.none })
       }
@@ -852,10 +834,9 @@ export default class MiscRouter extends BaseRouter {
   async submitFeedback (req, res) {
     try {
       let feedback = req.body.feedbackText
-      let user = await this.getUser(req)
       
       let insertQuery = 'INSERT INTO feedback (Text, UserId) VALUES (?, ?)'
-      await this.databaseFacade.execute(insertQuery, [feedback, user?.id], 'Error saving feedback')
+      await this.databaseFacade.execute(insertQuery, [feedback, req.userData?.id], 'Error saving feedback')
       res.end()
     }
     catch (err) {

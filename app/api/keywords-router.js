@@ -1,8 +1,8 @@
 import BaseRouter, { ApiError } from './baseRouter.js'
 
 export default class KeywordsRouter extends BaseRouter {
-	constructor (app, databaseFacade, modLogger) {
-		super(app, databaseFacade, modLogger)
+	constructor (app, databaseFacade, config, modLogger) {
+		super(app, databaseFacade, config, modLogger)
 		this.setupRoutes()
   }
   
@@ -108,7 +108,7 @@ export default class KeywordsRouter extends BaseRouter {
 
   async addKeywordSuggestion (req, res) {
     let [comicId, keywordId, isAddingKeyword] = [req.body.comicId, req.body.keywordId, req.body.isAdding ? 1 : 0]
-    let user = await this.getUser(req)
+    let user = await this.handleGetUser(req)
 
     if (user && (user.userType === 'moderator' || user.userType === 'admin')) {
       if (isAddingKeyword) {

@@ -1,6 +1,6 @@
 {
   "name": "yifferxyz-server",
-  "version": "3.0.0",
+  "version": "4.2.0",
   "description": "API for yiffer.xyz, rewritten yet again",
   "main": "index.js",
   "type": "module",
@@ -16,14 +16,14 @@
     "bcrypt": "^5.0.1",
     "body-parser": "^1.19.0",
     "cloudinary": "^1.28.1",
-    "connect-redis": "^3.4.2",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "cron": "^1.8.2",
     "cross-fetch": "^3.1.4",
     "date-fns": "^2.14.0",
     "express": "^4.17.1",
-    "express-session": "^1.15.6",
     "js-yaml": "^4.1.0",
+    "jsonwebtoken": "^8.5.1",
     "multer": "^1.4.2",
     "mysql": "^2.16.0",
     "patreon": "^0.4.1",
@@ -32,7 +32,6 @@
     "url": "^0.11.0"
   },
   "devDependencies": {
-    "dotenv": "^8.2.0",
     "eslint": "^7.13.0"
   }
 }

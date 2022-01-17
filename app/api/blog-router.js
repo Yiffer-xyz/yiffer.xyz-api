@@ -1,12 +1,11 @@
-import { ApiError } from './baseRouter.js'
 import BaseRouter from './baseRouter.js'
 
 import dateFns from 'date-fns'
 const { differenceInDays } = dateFns
 
 export default class MiscRouter extends BaseRouter {
-	constructor (app, databaseFacade) {
-		super(app, databaseFacade)
+	constructor (app, databaseFacade, config) {
+		super(app, databaseFacade, config)
 		this.setupRoutes()
 	}
 
@@ -58,7 +57,7 @@ export default class MiscRouter extends BaseRouter {
   async addNewBlog (req, res) {
     try {
       let [title, userId, isImportant, content, displayDays] = 
-      [req.body.title, req.session.user.id, req.body.isImportant, req.body.content, req.body.displayDays]
+      [req.body.title, req.userData.id, req.body.isImportant, req.body.content, req.body.displayDays]
 
       let query = 'INSERT INTO blog (Title, Author, IsImportant, Content, Displaydays) VALUES (?, ?, ?, ?, ?)'
       let queryParams = [title, userId, isImportant, content, displayDays]

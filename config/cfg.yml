@@ -1,0 +1,162 @@
+privateJwtKeyPath: config/token_private_key.key
+publicJwtKeyPath: config/token_public_key.key.pub
+tokenConfig:
+  tokenDurationDays: 60
+  algorithm: RS256
+  cookieName: yiffer_session
+  secure: false
+  httpOnly: true
+  domain: ""
+  path: "/"
+
+patreon:
+  clientId: ""
+  clientSecret: ""
+  campaignId: ""
+  patreonTiers:
+    -
+      amountCents: 200
+      showInPatronList: false
+      showLinkInPatronList: false
+      canVoteOnFeatures: false
+      isVIPPatron: false
+      dbTierNumber: 1
+    -
+      amountCents: 500
+      showInPatronList: true
+      showLinkInPatronList: false
+      canVoteOnFeatures: true
+      isVIPPatron: false
+      dbTierNumber: 2
+    -
+      amountCents: 1500
+      showInPatronList: true
+      showLinkInPatronList: true
+      canVoteOnFeatures: true
+      isVIPPatron: false
+      dbTierNumber: 3
+    -
+      amountCents: 5000
+      showInPatronList: true
+      showLinkInPatronList: true
+      canVoteOnFeatures: true
+      isVIPPatron: true
+      dbTierNumber: 4
+    -
+      amountCents: 10000
+      showInPatronList: true
+      showLinkInPatronList: true
+      canVoteOnFeatures: true
+      isVIPPatron: true
+      dbTierNumber: 5
+    -
+      amountCents: 20000
+      showInPatronList: true
+      showLinkInPatronList: true
+      canVoteOnFeatures: true
+      isVIPPatron: true
+      dbTierNumber: 6
+
+dimensions:
+  page:
+    maxHeight: 600
+    excludeRatioAbove: 1.75
+
+cloudinary:
+  cloud_name: ""
+  api_key: ""
+  api_secret: ""
+
+ads:
+  card:
+    - 
+      durationMonths: 1
+      price: 12
+      discountedPrice: null
+    - 
+      durationMonths: 2
+      price: 24
+      discountedPrice: null
+    - 
+      durationMonths: 4
+      price: 40
+      discountedPrice: null
+    - 
+      durationMonths: 12
+      price: 96
+      discountedPrice: null
+  banner:
+    -
+      durationMonths: 1
+      price: 20
+      discountedPrice: null
+    -
+      durationMonths: 2
+      price: 40
+      discountedPrice: null
+    -
+      durationMonths: 4
+      price: 72
+      discountedPrice: null
+    -
+      durationMonths: 12
+      price: 192
+      discountedPrice: null
+  topSmall:
+    -
+      durationMonths: 1
+      price: 16
+      discountedPrice: null
+    -
+      durationMonths: 2
+      price: 32
+      discountedPrice: null
+    -
+      durationMonths: 4
+      price: 56
+      discountedPrice: null
+    -
+      durationMonths: 12
+      price: 132
+      discountedPrice: null
+
+db:
+  connectionLimit: 100
+  host: ""
+  port: 1433
+  user: ""
+  password: ""
+  database: ""
+  charset: utf8mb4
+
+cloudflare:
+  apiKey: ""
+  originKey: ""
+  email: ""
+  zoneId: ""
+  cachePurgeToken: ""
+
+email:
+  apiKey: ""
+
+storage:
+  bucketName: ""
+  comicsBucketFolder: comics
+  paidImagesBucketFolder: pi
+  patronImagesBucketFolder: patron-images
+  staticStorageUrl: https://static.yiffer.xyz
+
+googleServiceAccount:
+  type: service_account
+  project_id: ""
+  private_key_id: ""
+  private_key: ""
+  client_email: ""
+  client_id: ""
+  auth_uri: https://accounts.google.com/o/oauth2/auth
+  token_uri: https://oauth2.googleapis.com/token
+  auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+  client_x509_cert_url: ""
+
+uploadsFolder: uploads
+tempFilesFolder: temp-files

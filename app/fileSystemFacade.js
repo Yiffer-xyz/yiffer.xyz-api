@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 
 import yaml from 'js-yaml'
 import { ApiError } from './api/baseRouter.js';
-let fileContents = fs.readFileSync('./config/cfg.yml', 'utf8');
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const storage = new Storage({ credentials: config.googleServiceAccount })
 const bucket = storage.bucket(config.storage.bucketName)
@@ -175,16 +175,16 @@ export default class FileSystemFacade {
 
 	static async readFile (filePath, errorMessage='File system error: Error reading file') {
 		return new Promise((resolve, reject) => {
-			fs.readFile(filePath, (err, fileContent) => {
+			fs.readFile(filePath, 'utf8', (err, fileContent) => {
 				if (err) { reject({error: err, message: errorMessage}) }
 				else { resolve(fileContent) }
 			})
 		})
 	}
 
-	static async writeFile (filePath, fileData, errorMessage='File system error: Error writing file') {
+	static async appendFile (filePath, fileData, errorMessage='File system error: Error writing file') {
 		return new Promise((resolve, reject) => {
-			fs.writeFile(filePath, fileData, err => {
+			fs.appendFile(filePath, fileData, err => {
 				if (err) { reject({error: err, message: errorMessage}) }
 				else { resolve({error: false}) }
 			})

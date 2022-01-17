@@ -5,10 +5,23 @@ import dateFns from 'date-fns'
 const { isAfter, addHours } = dateFns
 const { compare, hash } = bcrypt
 
+import jwt from 'jsonwebtoken'
+import fs from 'fs'
+import crypto from 'crypto'
+
 export default class AuthenticationRouter extends BaseRouter {
-  constructor (app, databaseFacade) {
-    super(app, databaseFacade)
+  constructor (app, databaseFacade, config) {
+    super(app, databaseFacade, config)
     this.setupRoutes()
+
+    let rawPrivateKey = fs.readFileSync(`${this.config.privateJwtKeyPath}`, 'utf-8')
+    let rawPublicKey = fs.readFileSync(`${this.config.publicJwtKeyPath}`, 'utf-8')
+  
+    let privateKey = crypto.createPrivateKey(rawPrivateKey)
+    let publicKey = crypto.createPublicKey(rawPublicKey)
+  
+    this.tokenPrivateKey = privateKey
+    this.tokenPublicKey = publicKey
   }
 
   setupRoutes () {
@@ -23,23 +36,48 @@ export default class AuthenticationRouter extends BaseRouter {
     this.app.post('/api/reset-password-link/:token', (req, res) => this.resetPasswordByLink(req, res))
   }
 
-  async refreshAuth (req, res) {
-    if (req.session && req.session.user) {
-      try {
-        let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, PatreonTier AS patreonTier, PatreonDisplayName AS patreonDisplayName, PatreonDisplayLink AS patreonDisplayLink, HasPatreonPicture AS hasPatreonPicture FROM user WHERE Id = ?'
-        let userResult = await this.databaseFacade.execute(query, [req.session.user.id])
-        if (userResult.length === 0) {
-          return res.json(1)
+  async signToken (tokenData) {
+    let tokenOptions = {
+      algorithm: this.config.tokenConfig.algorithm,
+      expiresIn: this.config.tokenConfig.tokenDurationDays + 'd',
+    }
+
+    return new Promise((resolve, reject) => {
+      jwt.sign(tokenData, this.tokenPrivateKey, tokenOptions, (err, token) => {
+        if (err) {
+          console.log('Token signing error: ', err)
+          reject(err)
         }
-        res.json(userResult[0])
+        resolve(token)
+      })
+    })
+  }
+
+  async refreshAuth (req, res) {
+    try {
+      if (!req.userData) {
+        return this.setInvalidTokenAndReturnForbidden(res)
       }
-      catch (err) {
-        res.json(null)
+
+      let query = `SELECT * FROM user WHERE Id = ?`
+      let userResponse = await this.databaseFacade.execute(query, [req.userData.id])
+      if (userResponse.length === 0) {
+        return this.setInvalidTokenAndReturnForbidden(res)
       }
+
+      let userData = buildUserSessionData(userResponse[0])
+      return this.setAuthCookieAndSendRes(res, userData)
     }
-    else {
-      res.json(null)
+    catch (err) {
+      console.log('Cookie error: ', err)
+      return this.setInvalidTokenAndReturnForbidden(res)
     }
+  }
+
+  async setInvalidTokenAndReturnForbidden (res) {
+    res.cookie(this.config.tokenConfig.cookieName, "invalid", this.getInvalidToken())
+    res.cookie('yiffer_userdata', 'invalid', this.getInvalidToken(true))
+    res.status(403).end()
   }
 
   async login (req, res) {
@@ -50,20 +88,8 @@ export default class AuthenticationRouter extends BaseRouter {
 				return this.returnApiError(res, new ApiError(userResponse.error, 400))
       }
       else {
-        let userData = {
-          username: userResponse.Username,
-          email: userResponse.Email,
-          id: userResponse.Id,
-          userType: userResponse.UserType,
-        }
-        if (userResponse.PatreonTier) {
-          userData.patreonTier = userResponse.PatreonTier
-          userData.hasPatreonPicture = userResponse.HasPatreonPicture
-          userData.patreonDisplayName = userResponse.patreonDisplayName
-          userData.patreonDisplayLink = userResponse.patreonDisplayLink
-        }
-        req.session.user = userData
-        return res.json(userData)
+        let userData = buildUserSessionData(userResponse)
+        this.setAuthCookieAndSendRes(res, userData)
       }
     }
     catch (err) {
@@ -71,16 +97,55 @@ export default class AuthenticationRouter extends BaseRouter {
     }
   }
 
+  async setAuthCookieAndSendRes (res, userData) {
+    let expiresTime = new Date(Date.now() + this.config.tokenConfig.tokenDurationDays * 86400 * 1000)
+    let tokenBody = {
+      id: userData.id,
+      username: userData.username,
+    }
+    let token = await this.signToken(tokenBody)
+
+    // Auth cookie, the one used to actually verify session
+    res.cookie(this.config.tokenConfig.cookieName, token, {
+      httpOnly: this.config.tokenConfig.httpOnly,
+      secure: this.config.tokenConfig.secure,
+      domain: this.config.tokenConfig.domain,
+      path: this.config.tokenConfig.path,
+      expires: expiresTime,
+    })
+
+    // Regular cookie, replacing localstorage to enable sharing sessions between subdomains
+    res.cookie('yiffer_userdata', JSON.stringify(userData), {
+      httpOnly: false,
+      secure: this.config.tokenConfig.secure,
+      domain: this.config.tokenConfig.domain,
+      path: this.config.tokenConfig.path,
+      expires: expiresTime,
+    })
+
+    res.json(userData)
+  }
+
+  getInvalidToken (disableHttpOnly=false) {
+    return {
+      httpOnly: disableHttpOnly ? false : this.config.tokenConfig.httpOnly,
+      secure: this.config.tokenConfig.secure,
+      domain: this.config.tokenConfig.domain,
+      path: this.config.tokenConfig.path,
+      expires: new Date(Date.now() - 1000000),
+    }
+  }
+
   async authenticate (usernameOrEmail, password) {
     let query = 'SELECT * FROM user WHERE Username = ? OR Email = ?'
     let userResult = await this.databaseFacade.execute(query, [usernameOrEmail, usernameOrEmail])
     if (userResult.length === 0) {
-      return {error: 'Incorrect email/username/password'}
+      return { error: 'Incorrect email/username/password' }
     }
     userResult = userResult[0]
     let passwordMatch = await compare(password, userResult.Password)
     if (!passwordMatch) {
-      return {error: 'Incorrect email/username/password'}
+      return { error: 'Incorrect email/username/password' }
     }
     return userResult
   }
@@ -117,18 +182,10 @@ export default class AuthenticationRouter extends BaseRouter {
       let insertQueryParams = [username, password, email]
       let result = await this.databaseFacade.execute(insertQuery, insertQueryParams)
 
-      let getNewUserQuery = 'SELECT * FROM user WHERE Id = ?'
-      let userResponse = await this.databaseFacade.execute(getNewUserQuery, [result.insertId])
-      userResponse = userResponse[0]
-
-      let userData = {
-        username: userResponse.Username,
-        email: userResponse.Email,
-        id: userResponse.Id,
-        userType: userResponse.UserType,
-      }
-      req.session.user = userData
-      res.status(201).json(userData)
+      let userResponse = await this.databaseFacade.execute('SELECT * FROM user WHERE Id = ?', [result.insertId])
+      
+      let userData = buildUserSessionData(userResponse[0])
+      this.setAuthCookieAndSendRes(res, userData)
 
       sendEmail(
         'account',
@@ -147,15 +204,23 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   logout (req, res) {
-    req.session.destroy()
+    res.cookie(this.config.tokenConfig.cookieName, "invalid", this.getInvalidToken())
+    res.cookie('yiffer_userdata', 'invalid', this.getInvalidToken(true))
     res.status(200).end()
   }
 
   async changePassword (req, res) {
     try {
-      let [username, oldPassword, newPassword] = 
-        [req.session.user.username, req.body.oldPassword, req.body.newPassword]
+      let [oldPassword, newPassword] = [req.body.oldPassword, req.body.newPassword]
 
+      if (!req.userData) {
+				return this.returnApiError(res, new ApiError('Login token invalid - try logging out and in again', 401))
+      }
+      let username = req.userData.username
+
+      if (!oldPassword || !newPassword) {
+				return this.returnApiError(res, new ApiError('Missing new password or old password', 400))
+      }
       if (!this.validatePassword(newPassword)) {
 				return this.returnApiError(res, new ApiError('Invalid new password, must be at least 6 characters long', 400))
       }
@@ -176,12 +241,16 @@ export default class AuthenticationRouter extends BaseRouter {
   }
 
   async changeUsername (req, res) {
-    let [currentUsername, newUsername, password] = 
-      [req.session.user.username, req.body.newUsername, req.body.password]
+    let [newUsername, password] = [req.body.newUsername, req.body.password]
     if (!this.validateUsername(newUsername)) {
       return this.returnError('New username invalid', res)
     }
     try {
+      if (!req.userData) {
+        return this.returnError('Login token invalid - try logging out and back in', res)
+      }
+      let currentUsername = req.userData.username
+
       let userResponse = await this.authenticate(currentUsername, password)
       if ('error' in userResponse) {
         return this.returnError(userResponse.error, res)
@@ -200,9 +269,13 @@ export default class AuthenticationRouter extends BaseRouter {
   async changeEmail (req, res) {
     try {
       let [currentPassword, email] = [req.body.password, req.body.email]
-      let {username, id: userId} = req.session.user
+
+      if (!req.userData) {
+        return this.returnError('Login token invalid - try logging out and back in', res)
+      }
+      let { username, id } = req.userData
     
-      if (!userId) {
+      if (!id) {
 				return this.returnApiError(res, new ApiError('Not logged in', 400))
       }
       if (!this.validateEmail(email)) {
@@ -220,15 +293,14 @@ export default class AuthenticationRouter extends BaseRouter {
       }
 
       let query = 'UPDATE user SET Email=? WHERE Id=?'
-      let queryParams = [email, userId]
+      let queryParams = [email, id]
 
       await this.databaseFacade.execute(query, queryParams, 'Error adding email to database')
-      req.session.user = {
-        ...req.session.user,
-        email,
-      }
 
-      res.status(204).end()
+      userResponse = { ...userResponse, Email: email }
+
+      let userData = buildUserSessionData(userResponse)
+      this.setAuthCookieAndSendRes(res, userData)
 
       sendEmail(
         'account',
@@ -344,6 +416,23 @@ export default class AuthenticationRouter extends BaseRouter {
       return results[0]
     }
   }
+}
+
+function buildUserSessionData (rawDatabaseUserRow) {
+  let user = {
+    username: rawDatabaseUserRow.Username,
+    email: rawDatabaseUserRow.Email,
+    id: rawDatabaseUserRow.Id,
+    userType: rawDatabaseUserRow.UserType,
+  }
+  if (rawDatabaseUserRow.PatreonTier) {
+    user.patreonTier = rawDatabaseUserRow.PatreonTier
+    user.hasPatreonPicture = rawDatabaseUserRow.HasPatreonPicture
+    user.patreonDisplayName = rawDatabaseUserRow.PatreonDisplayName
+    user.patreonDisplayLink = rawDatabaseUserRow.PatreonDisplayLink
+  }
+
+  return user
 }
 
 function generateRandomString (length) {
