@@ -567,7 +567,6 @@ export default class AdvertisingRouter extends BaseRouter {
       let { ad: existingAd, isOk } = await this.verifyAdOwnerOrAdmin(existingAdId, req, res)
       if (!isOk) { return }
 
-      // TODO: Handle file type change
       let { isValid, error } = this.checkUpdateValidity(
         file, existingAd.adType, adName, link, mainText, secondaryText, existingAd.filetype
       )

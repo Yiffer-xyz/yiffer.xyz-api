@@ -9,3 +9,4 @@ package-lock.json
 *.txt
 uploads/*
 public/*
+config/google-cloud*

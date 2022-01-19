@@ -541,6 +541,7 @@ export default class ComicsRouter extends BaseRouter {
 			if (!uploadedFiles || uploadedFiles.length === 0) {
         return this.returnApiError(res, new ApiError('No files added', 400))
 			}
+			comicName = comicName.trim()
 
 			let comic = await this.getComicById(comicId, isPendingComic)
 			let existingNumberOfPages = comic.NumberOfPages

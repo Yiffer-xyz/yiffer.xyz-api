@@ -8,7 +8,11 @@ import yaml from 'js-yaml'
 import { ApiError } from './api/baseRouter.js';
 let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
-const storage = new Storage({ credentials: config.googleServiceAccount })
+
+let googleFileContents = fs.readFileSync(config.googleCloudConfigFilePath, 'utf-8')
+const googleConfig = JSON.parse(googleFileContents)
+
+const storage = new Storage({ credentials: googleConfig })
 const bucket = storage.bucket(config.storage.bucketName)
 
 export default class FileSystemFacade {
@@ -81,9 +85,6 @@ export default class FileSystemFacade {
 		let uploadOptions = {
 			destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
 			gzip: true,
-			metadata: {
-				cacheControl: 'no-cache',
-			},
 		}
 		return new Promise((resolve, reject) => {
 			bucket.upload(localFilePath, uploadOptions, (err) => {
@@ -99,6 +100,7 @@ export default class FileSystemFacade {
 	}
 
 	static async deleteGoogleComicFile(filepath) {
+		console.log('Deleting GCP file', filepath)
 		return storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${filepath}`)
 			.delete()
