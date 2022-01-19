@@ -9,10 +9,7 @@ import { ApiError } from './api/baseRouter.js';
 let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 
-let googleFileContents = fs.readFileSync(config.googleCloudConfigFilePath, 'utf-8')
-const googleConfig = JSON.parse(googleFileContents)
-
-const storage = new Storage({ credentials: googleConfig })
+const storage = new Storage({keyFilename: config.googleCloudConfigFilePath})
 const bucket = storage.bucket(config.storage.bucketName)
 
 export default class FileSystemFacade {
