@@ -18,7 +18,6 @@ import routes from './app/routes.js'
 const isDevEnv = process.env && process.env.IS_PRODUCTION === '0'
 
 let mysqlPool = mysql.createPool(config.db)
-
 let databaseFacade = new DatabaseFacade(mysqlPool)
 
 app.use(cors())

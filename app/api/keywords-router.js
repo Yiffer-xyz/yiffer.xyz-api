@@ -16,6 +16,7 @@ export default class KeywordsRouter extends BaseRouter {
     this.app.post('/api/keywordsuggestions', (req, res) => this.addKeywordSuggestion(req, res))
     this.app.get ('/api/keywordsuggestions', this.authorizeMod.bind(this), (req, res) => this.getKeywordSuggestions(req, res))
     this.app.post('/api/keywords/log', (req, res) => this.logKeywordClick(req, res))
+    this.app.delete('/api/keywords/:id', this.authorizeMod.bind(this), (req, res) => this.deleteKeyword(req, res))
   }
 
   async getAllKeywords (req, res) {
@@ -180,6 +181,26 @@ export default class KeywordsRouter extends BaseRouter {
     }
     catch (err) {
       return this.returnError(err.message, res, err.error)
+    }
+  }
+
+  async deleteKeyword (req, res) {
+    let keywordId = req.params.id
+    let deleteSuggestionsQuery = 'DELETE FROM keywordsuggestion WHERE KeywordId = ?'
+    let deleteFromComicsQuery = 'DELETE FROM comickeyword where KeywordId = ?'
+    let deleteQuery = 'DELETE FROM keyword WHERE Id = ?'
+
+    let tx
+    try {
+      tx = await this.databaseFacade.beginTransaction()
+      await this.databaseFacade.txExecute(tx, deleteSuggestionsQuery, [keywordId], 'Could not delete tag suggestions')
+      await this.databaseFacade.txExecute(tx, deleteFromComicsQuery, [keywordId], 'Could not delete tag from comics')
+      await this.databaseFacade.txExecute(tx, deleteQuery, [keywordId], 'Could not delete the tag')
+      await tx.commit()
+    }
+    catch (err) {
+      if (tx) { tx.rollback() }
+      return this.returnApiError(res, err)
     }
   }
 }
