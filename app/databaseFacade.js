@@ -15,6 +15,10 @@ export default class DatabaseFacade {
         if (err) {
           reject({error: err, message: 'Error establishing database connection'})
         }
+        if (!connection) {
+          console.log('Could not connect to databse')
+          reject(new ApiError('Could not connect to database', 500))
+        }
         connection.query(...queryArgs, (err, results) => {
           if (err) {
             reject(processDbError(err, errorMessage, true))

@@ -17,6 +17,7 @@ export default class KeywordsRouter extends BaseRouter {
     this.app.get ('/api/keywordsuggestions', this.authorizeMod.bind(this), (req, res) => this.getKeywordSuggestions(req, res))
     this.app.post('/api/keywords/log', (req, res) => this.logKeywordClick(req, res))
     this.app.delete('/api/keywords/:id', this.authorizeMod.bind(this), (req, res) => this.deleteKeyword(req, res))
+    this.app.put ('/api/keywords/:id', this.authorizeMod.bind(this), (req, res) => this.updateKeywordName(req, res))
   }
 
   async getAllKeywords (req, res) {
@@ -188,6 +189,7 @@ export default class KeywordsRouter extends BaseRouter {
     let keywordId = req.params.id
     let deleteSuggestionsQuery = 'DELETE FROM keywordsuggestion WHERE KeywordId = ?'
     let deleteFromComicsQuery = 'DELETE FROM comickeyword where KeywordId = ?'
+    let deleteFromPendingComicsQuery = 'DELETE FROM pendingcomickeyword where KeywordId = ?'
     let deleteQuery = 'DELETE FROM keyword WHERE Id = ?'
 
     let tx
@@ -195,11 +197,27 @@ export default class KeywordsRouter extends BaseRouter {
       tx = await this.databaseFacade.beginTransaction()
       await this.databaseFacade.txExecute(tx, deleteSuggestionsQuery, [keywordId], 'Could not delete tag suggestions')
       await this.databaseFacade.txExecute(tx, deleteFromComicsQuery, [keywordId], 'Could not delete tag from comics')
+      await this.databaseFacade.txExecute(tx, deleteFromPendingComicsQuery, [keywordId], 'Could not delete tag from pending comics')
       await this.databaseFacade.txExecute(tx, deleteQuery, [keywordId], 'Could not delete the tag')
       await tx.commit()
+      res.end()
     }
     catch (err) {
       if (tx) { tx.rollback() }
+      return this.returnApiError(res, err)
+    }
+  }
+
+  async updateKeywordName (req, res) {
+    let keywordId = req.params.id
+    let newName = req.body.newName
+
+    let updateQuery = 'UPDATE keyword SET KeywordName = ? WHERE Id = ?'
+    try {
+      await this.databaseFacade.execute(updateQuery, [newName, keywordId], 'Could not rename tag')
+      res.end()
+    }
+    catch (err) {
       return this.returnApiError(res, err)
     }
   }
