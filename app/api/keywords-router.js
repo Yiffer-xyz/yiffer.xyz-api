@@ -211,6 +211,7 @@ export default class KeywordsRouter extends BaseRouter {
   async updateKeywordName (req, res) {
     let keywordId = req.params.id
     let newName = req.body.newName
+    newName = req.body.newName.toLowerCase()
 
     let updateQuery = 'UPDATE keyword SET KeywordName = ? WHERE Id = ?'
     try {

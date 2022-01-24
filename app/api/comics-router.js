@@ -747,6 +747,7 @@ export default class ComicsRouter extends BaseRouter {
 		}
 		if (rating < 0 || rating > 10 || !Number.isInteger(rating)) {
 			res.json({error: 'Rating must be an integer between 0 and 10'})
+			return
 		}
 
 		let deleteQuery = 'DELETE FROM comicvote WHERE UserId = ? AND ComicId = ?'

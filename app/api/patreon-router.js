@@ -368,6 +368,7 @@ export default class PatreonRouter extends BaseRouter {
         res.json(null)
         return
       }
+
       res.json(supporters[0])
     }
 		catch (err) {
