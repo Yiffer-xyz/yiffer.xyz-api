@@ -96,20 +96,27 @@ export default class FileSystemFacade {
 		})
 	}
 
-	static async deleteGoogleComicFile(filepath) {
+	static async deleteGoogleComicFile (filepath) {
 		console.log('Deleting GCP file', filepath)
 		return storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${filepath}`)
 			.delete()
 	}
 
-	static async downloadGoogleComicPage(comicName, filename) {
+	static async deleteGoogleComicFolder (comicName) {
+		let comicFolderPrefix = `${config.storage.comicsBucketFolder}/${comicName}/`
+		console.log('Deleting GCP folder - files with prefix', comicFolderPrefix)
+		await storage.bucket(config.storage.bucketName)
+			.deleteFiles({prefix: comicFolderPrefix})
+	}
+
+	static async downloadGoogleComicPage (comicName, filename) {
 		await storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${comicName}/${filename}`)
 			.download({destination: `uploads/${comicName}/${filename}`})
 	}
 
-	static async writeGooglePatronImage(userId, localFilePath) {
+	static async writeGooglePatronImage (userId, localFilePath) {
 		let uploadOptions = {
 			destination: `${config.storage.patronImagesBucketFolder}/${userId}.jpg`,
 			gzip: true,

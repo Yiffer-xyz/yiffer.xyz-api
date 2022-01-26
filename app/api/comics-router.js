@@ -1,7 +1,7 @@
 import { convertThumbnailFile, processComicPage, resizeComicPageIfNeeded } from '../image-processing.js'
 import { getComics, getFilterQuery } from './comics-query-helper.js'
 import { storePartialUpload, retrieveEarlierUploads } from '../multipart-fileupload.js'
-import { purgePagesFromCache } from '../cloudflareFacade.js'
+import { purgePagesFromCache, purgeWholeComicFromCache } from '../cloudflareFacade.js'
 import dateFns from 'date-fns'
 const { format } = dateFns
 
@@ -10,12 +10,12 @@ const tempFolder = 'temp-files'
 
 import multer from 'multer'
 var storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsFolder)
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.fieldname + '-' + Date.now())
-  }
+	destination: function (req, file, cb) {
+		cb(null, uploadsFolder)
+	},
+	filename: function (req, file, cb) {
+		cb(null, file.fieldname + '-' + Date.now())
+	}
 })
 var upload = multer({ storage: storage })
 
@@ -31,8 +31,8 @@ const COMICS_PER_PAGE = 75
 const illegalComicNameChars = ['#', '/', '?', '\\']
 const legalFileEndings = ['jpg', 'png']
 
-import { dirname } from 'path';	
-import { fileURLToPath } from 'url';	
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import cron from 'cron'
@@ -62,7 +62,7 @@ export default class ComicsRouter extends BaseRouter {
 		scheduledPendingCronJob.start()
 	}
 
-  setupRoutes () {
+	setupRoutes () {
 		this.app.get ('/api/all-comics', (req, res) => this.getAllComics(req, res))
 		this.app.get ('/api/comicsPaginated', (req, res) => this.getComicListPaginated(req, res))
 		this.app.get ('/api/firstComics', (req, res) => this.getFirstPageComics(req, res))
@@ -73,6 +73,7 @@ export default class ComicsRouter extends BaseRouter {
 		this.app.post('/api/comics/:id/rate', this.authorizeUser.bind(this), (req, res) => this.rateComic(req, res))
 		this.app.post('/api/comics/:id/addthumbnail', this.authorizeMod.bind(this), upload.single('thumbnailFile'), (req, res) => this.addThumbnailToComic(req, res, false))
 		this.app.post('/api/comics/:id/auto-resize', this.authorizeMod.bind(this), (req, res) => this.autoResizeComic(req, res))
+		this.app.delete('/api/comics/:id', this.authorizeAdmin.bind(this), (req, res) => this.deleteComic(req, res))
 		
 		this.app.get ('/api/pendingcomics', this.authorizeMod.bind(this), (req, res) => this.getPendingComics(req, res))
 		this.app.get ('/api/pendingcomics/:name', this.authorizeMod.bind(this), (req, res) => this.getPendingComic(req, res))
@@ -214,7 +215,7 @@ export default class ComicsRouter extends BaseRouter {
 			res.json(comics)
 		}
 		catch (err) {
-      return this.returnError(err.message, res, err.error, err)
+			return this.returnError(err.message, res, err.error, err)
 		}
 	}
 	
@@ -225,16 +226,16 @@ export default class ComicsRouter extends BaseRouter {
 			res.json(results)
 		}
 		catch (err) {
-      return this.returnError(err.message, res, err.error)
+			return this.returnError(err.message, res, err.error)
 		}
 	}
 
 	async getComicByName (req, res) {
 		let comicName = req.params.name
-    let comicDataQuery
+		let comicDataQuery
 		let queryParams = []
-    let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = FirstComic) WHERE LastComic = ?'
-    let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = LastComic) WHERE FirstComic = ?'
+		let prevLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = FirstComic) WHERE LastComic = ?'
+		let nextLinkQuery = 'SELECT Name FROM comiclink INNER JOIN comic ON (comic.Id = LastComic) WHERE FirstComic = ?'
 
 		if (req.userData) {
 			comicDataQuery = 'SELECT T1.name AS name, T1.numberOfPages AS numberOfPages, T1.artist AS artist, T1.id AS id, T1.userRating AS userRating, T1.keywords AS keywords, T1.cat, T1.tag, T1.Created AS created, T1.Updated AS updated, comicvote.Vote AS yourRating FROM (SELECT comic.Name AS name, comic.NumberOfPages as numberOfPages, artist.Name AS artist, comic.Id AS id, AVG(comicvote.Vote) AS userRating, GROUP_CONCAT(DISTINCT KeywordName SEPARATOR \',\') AS keywords, comic.Cat AS cat, comic.Tag AS tag, comic.Created, comic.Updated FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) LEFT JOIN comickeyword ON (comickeyword.ComicId = comic.Id) LEFT JOIN keyword ON (comickeyword.KeywordId = keyword.Id) LEFT JOIN comicvote ON (comic.Id = comicvote.ComicId) WHERE comic.Name = ? GROUP BY numberOfPages, artist, id, cat, tag) AS T1 LEFT JOIN comicvote ON (comicvote.ComicId = T1.id AND comicvote.UserId = ?)'
@@ -525,7 +526,7 @@ export default class ComicsRouter extends BaseRouter {
 		if (!keywordIds || keywordIds.length === 0) { return }
 		let insertKeywordsQuery = `INSERT INTO ${isPendingComic ? 'pendingcomickeyword' : 'comickeyword'} (ComicId, KeywordId) VALUES `
 
-		let insertKeywordsQueryParams  = []
+		let insertKeywordsQueryParams	= []
 		for (var keywordId of keywordIds) {
 			insertKeywordsQuery += `(?, ?), `
 			insertKeywordsQueryParams.push(comicId)
@@ -535,11 +536,47 @@ export default class ComicsRouter extends BaseRouter {
 		await this.databaseFacade.execute(insertKeywordsQuery, insertKeywordsQueryParams, 'Database error adding tags')
 	}
 
+	async deleteComic (req, res) {
+		let comicId = Number(req.params.id)
+		
+		let getComicNameAndPagesQuery = 'SELECT Name AS name, NumberOfPages AS numberOfPages FROM comic WHERE Id = ?'
+		let deleteKeywordsQuery = 'DELETE FROM comickeyword WHERE ComicId = ?'
+		let deleteSuggestedKwQuery = 'DELETE FROM keywordsuggestion WHERE ComicId = ?'
+		let deletePendingLinksQuery = 'DELETE FROM pendingcomic WHERE NextComicLink = ? OR PreviousComicLink = ?'
+		let deleteLinksQuery = 'DELETE FROM comiclink WHERE FirstComic = ? OR LastComic = ?'
+		let deleteRatingsQuery = 'DELETE FROM comicvote WHERE ComicId = ?'
+		let deleteProblemQuery = 'DELETE FROM comicproblem WHERE ComicId = ?'
+		let deleteComicQuery = 'DELETE FROM comic WHERE Id = ?'
+
+		let tx
+		try {
+			tx = await this.databaseFacade.beginTransaction()
+			let comicNameAndPagesRes = await this.databaseFacade.execute(getComicNameAndPagesQuery, [comicId])
+			let comicName = comicNameAndPagesRes[0].name
+			let numberOfPages = comicNameAndPagesRes[0].numberOfPages
+			await this.databaseFacade.txExecute(tx, deleteKeywordsQuery, [comicId], 'Could not delete keywords')
+			await this.databaseFacade.txExecute(tx, deleteSuggestedKwQuery, [comicId], 'Could not delete suggested keywords')
+			await this.databaseFacade.txExecute(tx, deleteLinksQuery, [comicId, comicId], 'Could not delete links')
+			await this.databaseFacade.txExecute(tx, deletePendingLinksQuery, [comicId, comicId], 'Could not delete pending comic links')
+			await this.databaseFacade.txExecute(tx, deleteRatingsQuery, [comicId], 'Could not delete ratings')
+			await this.databaseFacade.txExecute(tx, deleteProblemQuery, [comicId], 'Could not delete comic problem')
+			await this.databaseFacade.txExecute(tx, deleteComicQuery, [comicId], 'Could not delete the comic itself')
+			await FileSystemFacade.deleteGoogleComicFolder(comicName)
+			await tx.commit()
+			res.end()
+			await purgeWholeComicFromCache(comicName, numberOfPages)
+		}
+		catch (err) {
+			if (tx) { tx.rollback() }
+			return this.returnApiError(res, err)
+		}
+	}
+
 	async addPagesToComic (req, res, isPendingComic, deleteExistingPages) {
 		let [uploadedFiles, comicName, comicId] = [req.files, req.body.comicName, Number(req.params.id)]
 		try {
 			if (!uploadedFiles || uploadedFiles.length === 0) {
-        return this.returnApiError(res, new ApiError('No files added', 400))
+				return this.returnApiError(res, new ApiError('No files added', 400))
 			}
 			comicName = comicName.trim()
 
@@ -615,7 +652,7 @@ export default class ComicsRouter extends BaseRouter {
 
 	async writeAppendedComicPageFiles(existingNumPages, filePaths, comicName) {
 		let fileWritePromises = []
-    for (let i=0; i < filePaths.length; i++) {
+		for (let i=0; i < filePaths.length; i++) {
 			let filePath = filePaths[i]
 			let pageNo = existingNumPages + i + 1
 			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
@@ -637,7 +674,7 @@ export default class ComicsRouter extends BaseRouter {
 		await Promise.all(fileDeletePromises)
 
 		let fileWritePromises = []
-    for (let i=0; i < filePaths.length; i++) {
+		for (let i=0; i < filePaths.length; i++) {
 			let filePath = filePaths[i]
 			let pageNo = i + 1
 			let pageNumString = pageNo<100 ? (pageNo<10 ? '00'+pageNo : '0'+pageNo) : pageNo
@@ -874,7 +911,7 @@ export default class ComicsRouter extends BaseRouter {
 	}
 
 	async schedulePendingComic (req, res) {
-    try {
+		try {
 			let [comicId, scheduledTime] = [req.params.id, req.body.scheduledTime]
 			if (scheduledTime) { scheduledTime = new Date(scheduledTime) }
 
@@ -1117,9 +1154,9 @@ export default class ComicsRouter extends BaseRouter {
 			this.addModLog(req, 'Pending comic', `Add ${keywords.length} keywords to ${comicName}`, keywords.map(kw => kw.name).join(', '))
 		}
 		catch (err) {
-      if (err.error?.code === 'ER_DUP_ENTRY') {
+			if (err.error?.code === 'ER_DUP_ENTRY') {
 				return this.returnApiError(res, new ApiError('Some tags already exist on this comic', 400))
-      }
+			}
 			return this.returnApiError(res, err)
 		}
 	}

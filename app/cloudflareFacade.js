@@ -33,3 +33,21 @@ export async function purgePagesFromCache (comicName, pageNames) {
     throw new ApiError('Error clearing Cloudflare cache')
   }
 }
+
+export async function purgeWholeComicFromCache (comicName, numberOfPages, shouldExcludeThumbnails=false) {
+  let filenames = []
+  for (let i=1; i<=numberOfPages; i++) {
+    filenames.push(getPageName(i) + '.jpg')
+  }
+  if (!shouldExcludeThumbnails) {
+    filenames.push('s.jpg')
+    filenames.push('thumbnail.webp')
+    filenames.push('thumbnail-small.webp')
+  }
+
+  return purgePagesFromCache(comicName, filenames)
+}
+
+function getPageName (pageNumber) {
+  return pageNumber<100 ? (pageNumber<10 ? '00'+pageNumber : '0'+pageNumber) : pageNumber
+}
