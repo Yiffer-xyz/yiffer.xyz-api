@@ -26,7 +26,7 @@ export default class MiscRouter extends BaseRouter {
     this.app.post('/api/comicsuggestions/:id/process', this.authorizeMod.bind(this), (req, res) => this.processComicSuggestion(req, res))
 
     this.app.get   ('/api/comic-problems', this.authorizeMod.bind(this), (req, res) => this.handleGetComicProblems(req, res))
-    this.app.get   ('/api/comic-problems/:comicId', this.authorizeMod.bind(this), (req, res) => this.handleGetSingleComicProblemCategories(req, res))
+    this.app.get   ('/api/comic-problems/:comicId', (req, res) => this.handleGetSingleComicProblemCategories(req, res))
     this.app.post  ('/api/comic-problems', (req, res) => this.addComicProblem(req, res))
     this.app.delete('/api/comic-problems/:id', this.authorizeMod.bind(this), (req, res) => this.removeComicProblem(req, res))
     this.app.patch ('/api/comic-problems/:id/assign', this.authorizeMod.bind(this), (req, res) => this.assignComicProblem(req, res))
