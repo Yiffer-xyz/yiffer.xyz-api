@@ -26,8 +26,8 @@ export default class AuthenticationRouter extends BaseRouter {
     this.tokenPrivateKey = privateKey
     this.tokenPublicKey = publicKey
     
-		let clearRecentUsersCronJob = new CronJob('0 0 * * *', this.clearRecentUsers, null, true, 'Europe/London')
-		clearRecentUsersCronJob.start()
+		let clearSpammableActionsCronJob = new CronJob('0 0 * * *', this.clearSpammableActions, null, true, 'Europe/London')
+		clearSpammableActionsCronJob.start()
   }
 
   setupRoutes () {
@@ -216,7 +216,7 @@ export default class AuthenticationRouter extends BaseRouter {
     if (!newUserIp) { return }
 
     // Check IP
-    let getRecentNewUsersIpQuery = 'SELECT Ip, Email FROM recentuser'
+    let getRecentNewUsersIpQuery = `SELECT Ip, Email FROM spammableaction WHERE ActionType = 'signup'`
     let recentUserIps = await this.databaseFacade.execute(getRecentNewUsersIpQuery, null, 'Error fetching recent user signups')
     if (recentUserIps.filter(user => user.Ip === newUserIp).length >= 5) {
       console.log(`Spam IP signup detected. IP: ${newUserIp}`)
@@ -239,16 +239,16 @@ export default class AuthenticationRouter extends BaseRouter {
       throw new ApiError('Forbidden', 403)
     }
 
-    let insertIpQuery = 'INSERT INTO recentuser (Ip, Username, Email) VALUES (?, ?, ?)'
-    await this.databaseFacade.execute(insertIpQuery, [newUserIp, username, newUserEmail], 'Error storing signup IP')
+    let insertIpQuery = 'INSERT INTO spammableaction (Ip, Username, Email, ActionType) VALUES (?, ?, ?, ?)'
+    await this.databaseFacade.execute(insertIpQuery, [newUserIp, username, newUserEmail, 'signup'], 'Error storing signup IP')
 
     return
   }
 
-  async clearRecentUsers () {
+  async clearSpammableActions () {
     try {
-      console.log('Cron: Clearing recentuser DB table')
-      let clearQuery = 'DELETE FROM recentuser WHERE 1'
+      console.log('Cron: Clearing spammableaction DB table')
+      let clearQuery = 'DELETE FROM spammableaction WHERE 1'
       await this.databaseFacade.execute(clearQuery, null, 'Error deleting queries')
     }
     catch (err) {
@@ -377,6 +377,8 @@ export default class AuthenticationRouter extends BaseRouter {
 				return this.returnApiError(res, new ApiError('This is not a valid email address', 400))
       }
 
+      await this.logResetIpAndVerifyNoSpam(req, email)
+
       let user = await this.getUserByEmail(email)
       if (user) {
         let resetToken = generateRandomString(30)
@@ -400,6 +402,21 @@ export default class AuthenticationRouter extends BaseRouter {
     catch (err) {
 			this.returnApiError(res, err)
     }
+  }
+
+  async logResetIpAndVerifyNoSpam(req, email) {
+    let userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+    if (!userIp) { return }
+
+    let getRecentNewUsersIpQuery = `SELECT Ip FROM spammableaction WHERE ActionType = 'password-reset'`
+    let recentUserIps = await this.databaseFacade.execute(getRecentNewUsersIpQuery, null, 'Error fetching recent password resets')
+    if (recentUserIps.filter(user => user.Ip === userIp).length >= 8) {
+      console.log(`Spam password resets detected. IP: ${userIp}, email: ${email}`)
+      throw new ApiError('Too many recent password resets with this IP', 403)
+    }
+
+    let insertIpQuery = 'INSERT INTO spammableaction (Ip, ActionType, Email) VALUES (?, ?, ?)'
+    await this.databaseFacade.execute(insertIpQuery, [userIp, 'password-reset', email], 'Error storing user IP')
   }
 
   async resetPasswordByLink (req, res) {
