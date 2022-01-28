@@ -9,6 +9,9 @@ import jwt from 'jsonwebtoken'
 import fs from 'fs'
 import crypto from 'crypto'
 
+import cron from 'cron'
+const CronJob = cron.CronJob
+
 export default class AuthenticationRouter extends BaseRouter {
   constructor (app, databaseFacade, config) {
     super(app, databaseFacade, config)
@@ -22,6 +25,9 @@ export default class AuthenticationRouter extends BaseRouter {
   
     this.tokenPrivateKey = privateKey
     this.tokenPublicKey = publicKey
+    
+		let clearRecentUsersCronJob = new CronJob('0 0 * * *', this.clearRecentUsers, null, true, 'Europe/London')
+		clearRecentUsersCronJob.start()
   }
 
   setupRoutes () {
@@ -177,6 +183,8 @@ export default class AuthenticationRouter extends BaseRouter {
 				return this.returnApiError(res, new ApiError('Invalid username', 400))
       }
 
+      await this.logIpAndVerifyNoSpam(req, username, email)
+
       let password = await hash(password1, 8)
       let insertQuery = 'INSERT INTO user (Username, Password, Email) VALUES (?, ?, ?)'
       let insertQueryParams = [username, password, email]
@@ -200,6 +208,51 @@ export default class AuthenticationRouter extends BaseRouter {
     }
     catch (err) {
 			this.returnApiError(res, err)
+    }
+  }
+
+  async logIpAndVerifyNoSpam (req, username, newUserEmail) {
+    let newUserIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || (req.connection.socket ? req.connection.socket.remoteAddress : null)
+    if (!newUserIp) { return }
+
+    // Check IP
+    let getRecentNewUsersIpQuery = 'SELECT Ip, Email FROM recentuser'
+    let recentUserIps = await this.databaseFacade.execute(getRecentNewUsersIpQuery, null, 'Error fetching recent user signups')
+    if (recentUserIps.filter(user => user.Ip === newUserIp).length >= 5) {
+      console.log(`Spam IP signup detected. IP: ${newUserIp}`)
+      throw new ApiError('Too many recent signups with this IP', 403)
+    }
+
+    // Check similar recent emails
+    let vaguelySimilarEmails = [newUserEmail]
+    for (let recentUser of recentUserIps) {
+      let emailDistance = levenshteinDistance(recentUser.Email, newUserEmail)
+
+      if (emailDistance < 8) {
+        vaguelySimilarEmails.push(recentUser.Email)
+      }
+    }
+
+    let allSimilarEmails = getSimilarEmails(vaguelySimilarEmails)
+    if (allSimilarEmails.length >= 5) {
+      console.log(`Spam email signup detected. New email: ${newUserEmail}. Other emails:`, allSimilarEmails)
+      throw new ApiError('Forbidden', 403)
+    }
+
+    let insertIpQuery = 'INSERT INTO recentuser (Ip, Username, Email) VALUES (?, ?, ?)'
+    await this.databaseFacade.execute(insertIpQuery, [newUserIp, username, newUserEmail], 'Error storing signup IP')
+
+    return
+  }
+
+  async clearRecentUsers () {
+    try {
+      console.log('Cron: Clearing recentuser DB table')
+      let clearQuery = 'DELETE FROM recentuser WHERE 1'
+      await this.databaseFacade.execute(clearQuery, null, 'Error deleting queries')
+    }
+    catch (err) {
+      console.log('Error clearing recent users', err)
     }
   }
 
@@ -444,3 +497,41 @@ function generateRandomString (length) {
   }
   return result
 }
+
+function getSimilarEmails (emailList) {
+  let similarEmails = new Set()
+
+  for (let i = 0; i < emailList.length; i++) {
+    for (let j = 0; j < emailList.length; j++) {
+      if (i === j) { continue }
+      if (levenshteinDistance(emailList[i], emailList[j]) <= 3) {
+        similarEmails.add(emailList[i], emailList[j])
+      }
+    }
+  }
+
+  return [...similarEmails]
+}
+
+function levenshteinDistance (str1 = '', str2 = '') {
+  const track = Array(str2.length + 1).fill(null).map(() =>
+  Array(str1.length + 1).fill(null))
+  for (let i = 0; i <= str1.length; i += 1) {
+     track[0][i] = i
+  }
+  for (let j = 0; j <= str2.length; j += 1) {
+     track[j][0] = j
+  }
+  for (let j = 1; j <= str2.length; j += 1) {
+     for (let i = 1; i <= str1.length; i += 1) {
+        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1
+        track[j][i] = Math.min(
+           track[j][i - 1] + 1, // deletion
+           track[j - 1][i] + 1, // insertion
+           track[j - 1][i - 1] + indicator, // substitution
+        );
+     }
+  }
+  return track[str2.length][str1.length]
+}
+

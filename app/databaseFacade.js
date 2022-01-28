@@ -68,10 +68,11 @@ function processDbError (err, errorMessage, isOldStyle=false) {
   if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
     errorMessage = `Sorry, you can't use emojis here!`
   }
-  console.log(err)
+
+  let logMessage = `Code: ${err.code}, sqlMessage: ${err.sqlMessage}, sql: ${err.sql}`
 
   if (isOldStyle) {
-    return {error: err, message: errorMessage, customErrorMessage: errorMessage}
+    return {error: err, message: errorMessage, customErrorMessage: errorMessage, errorType: 'database-error', logMessage: logMessage}
   }
-  return new ApiError(errorMessage, 500)
+  return new ApiError(errorMessage, 500, 'database-error', logMessage)
 }

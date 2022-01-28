@@ -4,10 +4,12 @@ const { format } = dateFns
 const { nb } = locale
 
 export class ApiError extends Error {
-	constructor(message, status) {
+	constructor(message, status, errorType, logMessage) {
 		super(message)
 		this.status = status
 		this.name = 'ApiError'
+		this.errorType = errorType
+		this.logMessage = logMessage
 	}
 }
 
@@ -31,6 +33,19 @@ export default class BaseRouter {
 			console.log(`Error @ ${timeString}`)
 		}
 		
+
+		if ((error instanceof ApiError || 'errorType' in error) && error.errorType === 'database-error') {
+			let errorMessage = ''
+			if (error.customErrorMessage) {
+				errorMessage = error.customErrorMessage
+			}
+			errorMessage = error.message
+
+			console.error(`[500] Database error @ ${timeString}: ${errorMessage}. ${error.logMessage}`)
+			
+			error = new ApiError(errorMessage, 500)
+		}
+
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
