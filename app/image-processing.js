@@ -8,10 +8,10 @@ import yaml from 'js-yaml'
 let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
 const config = yaml.load(fileContents)
 const pageConfig = config.dimensions.page
-const legalFileEndings = ['jpg', 'png']
+const legalMimetypes = ['jpeg', 'png']
 
 export async function processComicPage(file) {
-  if (!legalFileEndings.some(legalEnding => file.originalname.includes('.' + legalEnding))) {
+  if (!legalMimetypes.some(legalMime => file.mimetype.endsWith(legalMime))) {
     throw new ApiError(`File format not supported (${file.originalname})`, 400)
   }
   let needsTypeConvert = file.originalname.includes('.png')

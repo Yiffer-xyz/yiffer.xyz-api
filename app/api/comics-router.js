@@ -29,7 +29,7 @@ const addComicUploadFormat = upload.fields([
 
 const COMICS_PER_PAGE = 75
 const illegalComicNameChars = ['#', '/', '?', '\\']
-const legalFileEndings = ['jpg', 'png']
+const legalMimetypes = ['jpeg', 'png']
 
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -457,7 +457,7 @@ export default class ComicsRouter extends BaseRouter {
 		await Promise.all(fileProcessPromises)
 
 		if (thumbnailFile) {
-			if (legalFileEndings.some(legalEnding => thumbnailFile.originalname.includes('.' + legalEnding))) {
+			if (legalMimetypes.some(legalMime => thumbnailFile.mimetype.endsWith(legalMime))) {
 				await convertThumbnailFile(thumbnailFile.path)
 			}
 			else {
@@ -1009,7 +1009,7 @@ export default class ComicsRouter extends BaseRouter {
 			return this.returnError('File must exist', res)
 		}
 
-		if (!thumbnailFile.mimetype.endsWith('jpeg') && !thumbnailFile.mimetype.endsWith('png')) {
+		if (!legalMimetypes.some(legalMime => thumbnailFile.mimetype.endsWith(legalMime))) {
 			await FileSystemFacade.deleteFile(thumbnailFile.path, 'Error deleting temp file')
 			return this.returnError('File must be .jpg, .jpeg, or .png', res)
 		}
