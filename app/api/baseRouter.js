@@ -14,7 +14,7 @@ export class ApiError extends Error {
 }
 
 export default class BaseRouter {
-	constructor (app, databaseFacade, config, modLogger) {
+	constructor(app, databaseFacade, config, modLogger) {
 		this.app = app
 		this.databaseFacade = databaseFacade
 		this.modLogger = modLogger
@@ -22,7 +22,7 @@ export default class BaseRouter {
 	}
 
 	returnApiError(res, error) {
-		let timeString = format(new Date(), 'PPPPppp', {locale: nb})
+		let timeString = format(new Date(), 'PPPPppp', { locale: nb })
 
 		if (error instanceof ApiError) {
 			if (error.status < 400 || error.status >= 500) {
@@ -32,7 +32,7 @@ export default class BaseRouter {
 		else {
 			console.log(`Error @ ${timeString}`)
 		}
-		
+
 
 		if ((error instanceof ApiError || 'errorType' in error) && error.errorType === 'database-error') {
 			let errorMessage = ''
@@ -42,14 +42,14 @@ export default class BaseRouter {
 			errorMessage = error.message
 
 			console.error(`[500] Database error @ ${timeString}: ${errorMessage}. ${error.logMessage}`)
-			
+
 			error = new ApiError(errorMessage, 500)
 		}
 
 		// TODO remove this once everything uses returnApiError. For now, to deal with
 		// database-returned stuff, which must support the old ways
 		if ('customErrorMessage' in error) {
-			console.error(`[500] Error (with customErrorMessage) @ ${timeString}:` ,error.error)
+			console.error(`[500] Error (with customErrorMessage) @ ${timeString}:`, error.error)
 			error = new ApiError(error.customErrorMessage, 500)
 		}
 
@@ -79,10 +79,10 @@ export default class BaseRouter {
 	}
 
 	// TODO SWAP ALL USAGES for returnStatusError
-	returnError (errorMessage, res, err, fullErr) {
+	returnError(errorMessage, res, err, fullErr) {
 		console.log('returnError: ', errorMessage)
 		console.log('returnError err and fullErr: ', err, fullErr)
-	
+
 		try {
 			if (res) { res.json({ error: errorMessage }) }
 		}
@@ -93,7 +93,7 @@ export default class BaseRouter {
 
 	returnStatusError(status, res, error) {
 		let errorToSend
-		if (typeof(error) === 'string') {
+		if (typeof (error) === 'string') {
 			console.log(`Controlled returnStatusError with status ${status}: ${error.customErrorMessage}`)
 			errorToSend = error
 		}
@@ -116,11 +116,11 @@ export default class BaseRouter {
 		}
 	}
 
-	async handleGetUser (req) {
+	async handleGetUser(req) {
 		if (req.userData) {
 			try {
 				let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType FROM user WHERE Id = ?'
-				let userResult = await this.databaseFacade.execute(query, [req.userData.id])
+				let userResult = await this.databaseFacade.execute(query, [req.userData.id], 'Error getting user data', 'Get user by req.id')
 				if (userResult.length === 0) {
 					return null
 				}
@@ -136,15 +136,15 @@ export default class BaseRouter {
 		}
 	}
 
-	async getUserById (userId) {
-    let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, CreatedTime AS createdTime FROM user WHERE id = ?'
-    let queryParams = [userId]
+	async getUserById(userId) {
+		let query = 'SELECT Id AS id, Username AS username, Email AS email, UserType AS userType, CreatedTime AS createdTime FROM user WHERE id = ?'
+		let queryParams = [userId]
 
-    let results = await this.databaseFacade.execute(query, queryParams, 'Error getting user email')
-    return results[0]
-  }
+		let results = await this.databaseFacade.execute(query, queryParams, 'Error getting user email', 'Get user by id')
+		return results[0]
+	}
 
-	async authorizeUser (req, res, next) {
+	async authorizeUser(req, res, next) {
 		if (!req.userData) {
 			res.status(401).end('Not logged in')
 		}
@@ -153,7 +153,7 @@ export default class BaseRouter {
 		}
 	}
 
-	async authorizeMod (req, res, next) {
+	async authorizeMod(req, res, next) {
 		let authorized = await this.authorize(req, res, 'moderator')
 		if (authorized === true) {
 			if (next) { next() }
@@ -161,7 +161,7 @@ export default class BaseRouter {
 		}
 	}
 
-	async authorizeAdmin (req, res, next) {
+	async authorizeAdmin(req, res, next) {
 		let authorized = await this.authorize(req, res, 'admin')
 		if (authorized === true) {
 			if (next) { next() }
@@ -169,12 +169,12 @@ export default class BaseRouter {
 		}
 	}
 
-	async isAdmin (req) {
+	async isAdmin(req) {
 		if (!req.userData) {
 			return false
 		}
 		let query = 'SELECT * FROM user WHERE Username=?'
-		let userData = await this.databaseFacade.execute(query, [req.userData.username])
+		let userData = await this.databaseFacade.execute(query, [req.userData.username], 'Failed to check if admin', 'Is admin')
 
 		if (userData[0].UserType === 'admin') {
 			return true
@@ -185,17 +185,17 @@ export default class BaseRouter {
 	async authorize(req, res, role) {
 		try {
 			if (!req.userData) {
-				res.status(401).json({error: 'Not logged in'})
+				res.status(401).json({ error: 'Not logged in' })
 			}
 			else {
 				let query = 'SELECT * FROM user WHERE Username=?'
-				let userData = await this.databaseFacade.execute(query, [req.userData.username])
+				let userData = await this.databaseFacade.execute(query, [req.userData.username], 'Auth check failed in database', 'Authorize')
 				if (role === 'moderator') {
 					if (userData[0].UserType === 'moderator' || userData[0].UserType === 'admin') {
 						return true
 					}
 					else {
-						res.status(403).json({error: 'Unauthorized'})
+						res.status(403).json({ error: 'Unauthorized' })
 					}
 				}
 				else if (role === 'admin') {
@@ -203,18 +203,18 @@ export default class BaseRouter {
 						return true
 					}
 					else {
-						res.status(403).json({error: 'Unauthorized'})
+						res.status(403).json({ error: 'Unauthorized' })
 					}
 				}
 			}
 		}
 		catch (err) {
-			res.json({error: 'Error authorizing user'})
+			res.json({ error: 'Error authorizing user' })
 			console.log(`Error authorizing user: `, err)
 		}
 	}
 
-	addModLog (reqOrUserId, actionType, ationDescription, actionDetails) {
+	addModLog(reqOrUserId, actionType, ationDescription, actionDetails) {
 		this.modLogger.addModLog(reqOrUserId, actionType, ationDescription, actionDetails)
 	}
 }

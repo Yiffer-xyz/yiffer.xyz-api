@@ -2,14 +2,14 @@ import fs from 'fs'
 import googleStorage from '@google-cloud/storage'
 const { Storage } = googleStorage
 
-import fetch from 'node-fetch';
+import fetch from 'node-fetch'
 
 import yaml from 'js-yaml'
-import { ApiError } from './api/baseRouter.js';
-let fileContents = fs.readFileSync('config/cfg.yml', 'utf8');
+import { ApiError } from './api/baseRouter.js'
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8')
 const config = yaml.load(fileContents)
 
-const storage = new Storage({keyFilename: config.googleCloudConfigFilePath})
+const storage = new Storage({ keyFilename: config.googleCloudConfigFilePath })
 const bucket = storage.bucket(config.storage.bucketName)
 
 export default class FileSystemFacade {
@@ -51,7 +51,7 @@ export default class FileSystemFacade {
 		})
 	}
 
-	static async writeGooglePaidImageFromUrl (cloudinaryId, adId, fileTypes) {
+	static async writeGooglePaidImageFromUrl(cloudinaryId, adId, fileTypes) {
 		let googleSavePromises = fileTypes.map(fileType => {
 			let qualityString = `q_100/`
 			if (fileType === 'webp') {
@@ -75,9 +75,9 @@ export default class FileSystemFacade {
 		await storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${oldFilename}`)
 			.move(`${config.storage.comicsBucketFolder}/${newFilename}`)
-		return {error: false}
+		return { error: false }
 	}
-	
+
 	static async writeGoogleComicFile(localFilePath, comicName, filename) {
 		let uploadOptions = {
 			destination: `${config.storage.comicsBucketFolder}/${comicName}/${filename}`,
@@ -96,27 +96,27 @@ export default class FileSystemFacade {
 		})
 	}
 
-	static async deleteGoogleComicFile (filepath) {
+	static async deleteGoogleComicFile(filepath) {
 		console.log('Deleting GCP file', filepath)
 		return storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${filepath}`)
 			.delete()
 	}
 
-	static async deleteGoogleComicFolder (comicName) {
+	static async deleteGoogleComicFolder(comicName) {
 		let comicFolderPrefix = `${config.storage.comicsBucketFolder}/${comicName}/`
 		console.log('Deleting GCP folder - files with prefix', comicFolderPrefix)
 		await storage.bucket(config.storage.bucketName)
-			.deleteFiles({prefix: comicFolderPrefix})
+			.deleteFiles({ prefix: comicFolderPrefix })
 	}
 
-	static async downloadGoogleComicPage (comicName, filename) {
+	static async downloadGoogleComicPage(comicName, filename) {
 		await storage.bucket(config.storage.bucketName)
 			.file(`${config.storage.comicsBucketFolder}/${comicName}/${filename}`)
-			.download({destination: `uploads/${comicName}/${filename}`})
+			.download({ destination: `uploads/${comicName}/${filename}` })
 	}
 
-	static async writeGooglePatronImage (userId, localFilePath) {
+	static async writeGooglePatronImage(userId, localFilePath) {
 		let uploadOptions = {
 			destination: `${config.storage.patronImagesBucketFolder}/${userId}.jpg`,
 			gzip: true,
@@ -143,81 +143,81 @@ export default class FileSystemFacade {
 			.delete()
 	}
 
-	static async renameFile (oldFilename, newFilename, errorMessage='File system error: Error renaming') {
+	static async renameFile(oldFilename, newFilename, errorMessage = 'File system error: Error renaming') {
 		return new Promise((resolve, reject) => {
 			fs.rename(oldFilename, newFilename, err => {
-				if (err) { reject({error: err, message: errorMessage}) }
-				else { resolve({error: false}) }
+				if (err) { reject({ error: err, message: errorMessage }) }
+				else { resolve({ error: false }) }
 			})
 		})
 	}
 
-	static async listDir (pathToDirectory, errorMessage='File system error: Error listing content') {
+	static async listDir(pathToDirectory, errorMessage = 'File system error: Error listing content') {
 		return new Promise((resolve, reject) => {
 			fs.readdir(pathToDirectory, (err, files) => {
-				if (err) { reject({error: err, message: errorMessage}) }
+				if (err) { reject({ error: err, message: errorMessage }) }
 				else { resolve(files) }
 			})
 		})
 	}
 
-	static async createDirectory (pathToDirectory, errorMessage='File system error: Error creating directory') {
+	static async createDirectory(pathToDirectory, errorMessage = 'File system error: Error creating directory') {
 		return new Promise((resolve, reject) => {
 			fs.mkdir(pathToDirectory, err => {
-				if (err) { reject({error: err, message: errorMessage}) }
-				else { resolve({error: false}) }
+				if (err) { reject({ error: err, message: errorMessage }) }
+				else { resolve({ error: false }) }
 			})
 		})
 	}
 
-	static async deleteDirectory (pathToDirectory) {
+	static async deleteDirectory(pathToDirectory) {
 		return new Promise((resolve, reject) => {
-			fs.rm(pathToDirectory, {recursive: true}, err => {
-				if (err) { reject({error: err, message: 'Error deleting directory'}) }
-				else { resolve({error: false}) }
+			fs.rm(pathToDirectory, { recursive: true }, err => {
+				if (err) { reject({ error: err, message: 'Error deleting directory' }) }
+				else { resolve({ error: false }) }
 			})
 		})
 	}
 
-	static async readFile (filePath, errorMessage='File system error: Error reading file') {
+	static async readFile(filePath, errorMessage = 'File system error: Error reading file') {
 		return new Promise((resolve, reject) => {
 			fs.readFile(filePath, 'utf8', (err, fileContent) => {
-				if (err) { reject({error: err, message: errorMessage}) }
+				if (err) { reject({ error: err, message: errorMessage }) }
 				else { resolve(fileContent) }
 			})
 		})
 	}
 
-	static async appendFile (filePath, fileData, errorMessage='File system error: Error writing file') {
+	static async appendFile(filePath, fileData, errorMessage = 'File system error: Error writing file') {
 		return new Promise((resolve, reject) => {
 			fs.appendFile(filePath, fileData, err => {
-				if (err) { reject({error: err, message: errorMessage}) }
-				else { resolve({error: false}) }
-			})
-		})
-	}	
-	
-	static async deleteFile (filePath, errorMessage='File system error: Error deleting file') {
-		return new Promise((resolve, reject) => {
-			fs.unlink(filePath, err => {
-				if (err) { reject({error: err, message: errorMessage}) }
-				else { resolve({error: false}) }
+				if (err) { reject({ error: err, message: errorMessage }) }
+				else { resolve({ error: false }) }
 			})
 		})
 	}
-		
-	static async deleteFiles (filePaths, errorMessage='File system error: Error deleting file') {
+
+	static async deleteFile(filePath, errorMessage = 'File system error: Error deleting file') {
+		return new Promise((resolve, reject) => {
+			fs.unlink(filePath, err => {
+				if (err) { reject({ error: err, message: errorMessage }) }
+				else { resolve({ error: false }) }
+			})
+		})
+	}
+
+	static async deleteFiles(filePaths, errorMessage = 'File system error: Error deleting file') {
 		return new Promise(async (resolve, reject) => {
 			let promises = []
 			for (let path of filePaths) {
 				promises.push(
 					fs.unlink(path, err => {
-						if (err) { reject({error: err, message: errorMessage}) }
+						if (err) { reject({ error: err, message: errorMessage }) }
 					})
 				)
 			}
 			await Promise.all(promises)
-			resolve({error: false})
+			resolve({ error: false })
 		})
 	}
 }

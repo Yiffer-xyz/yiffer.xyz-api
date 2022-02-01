@@ -1,6 +1,6 @@
 import { ApiError } from './baseRouter.js'
 
-export async function getComics (databaseFacade, userId, limit, offset, categories, tags, keywordIds, search, order, artistId) {
+export async function getComics(databaseFacade, userId, limit, offset, categories, tags, keywordIds, search, order, artistId) {
   let [
     filterQueryString,
     filterQueryParams,
@@ -41,9 +41,9 @@ export async function getComics (databaseFacade, userId, limit, offset, categori
     ${filterQueryString}
     GROUP BY comic.Name, comic.Id 
     ${keywordCountString} 
-    ${order==='userRating' ? '' : orderQueryString + paginationQueryString} 
+    ${order === 'userRating' ? '' : orderQueryString + paginationQueryString} 
   `
-  
+
   let queryParams = []
 
   if (userId) { queryParams = [userId] }
@@ -65,13 +65,13 @@ export async function getComics (databaseFacade, userId, limit, offset, categori
     ) AS cc 
     LEFT JOIN comicvote ON (cc.Id = comicvote.ComicId) 
     GROUP BY name, id 
-    ${order==='userRating' ? orderQueryString + paginationQueryString : ''} 
+    ${order === 'userRating' ? orderQueryString + paginationQueryString : ''} 
   `
 
-  return databaseFacade.execute(query, queryParams)
+  return databaseFacade.execute(query, queryParams, 'Get comics (query helper)')
 }
 
-export function getFilterQuery (categories, tags, keywordIds, search, artistId) {
+export function getFilterQuery(categories, tags, keywordIds, search, artistId) {
   let filterQueryString = ''
   let filterQueryParams = []
   let innerJoinKeywordString = ''
@@ -97,7 +97,7 @@ export function getFilterQuery (categories, tags, keywordIds, search, artistId) 
         filterQueryParams.push(category)
         categoryStrings.push(' Cat = ? ')
       })
-      queries.push(`(${categoryStrings.join('OR') })`)
+      queries.push(`(${categoryStrings.join('OR')})`)
     }
 
     if (tags) {
@@ -106,7 +106,7 @@ export function getFilterQuery (categories, tags, keywordIds, search, artistId) 
         filterQueryParams.push(tag)
         tagStrings.push(' Tag = ? ')
       })
-      queries.push(`(${tagStrings.join('OR') })`)
+      queries.push(`(${tagStrings.join('OR')})`)
     }
 
     if (search) {
@@ -118,7 +118,7 @@ export function getFilterQuery (categories, tags, keywordIds, search, artistId) 
       queries.push('(comic.Artist = ?)')
       filterQueryParams.push(artistId)
     }
-    
+
     filterQueryString = 'WHERE ' + queries.join(' AND ')
   }
 

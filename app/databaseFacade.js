@@ -1,18 +1,75 @@
 import { ApiError } from './api/baseRouter.js'
+import fs from 'fs'
+import yaml from 'js-yaml'
+let fileContents = fs.readFileSync('config/cfg.yml', 'utf8')
+const config = yaml.load(fileContents)
 
 export default class DatabaseFacade {
   constructor(mysqlPool) {
     this.mysqlPool = mysqlPool
+    this.queryCounts = {
+      'Other': 0,
+    }
+    this.logCounter = 0
+    this.firstLogTime = new Date()
+    this.prevLogTime = new Date()
   }
 
-  async execute(queryString, queryParams, errorMessage) {
+  logDbCall(queryName) {
+    if (!queryName) {
+      this.queryCounts['Other'] += 1
+    } else if (!(queryName in this.queryCounts)) {
+      this.queryCounts[queryName] = 1
+    } else {
+      this.queryCounts[queryName] += 1
+    }
+    this.logCounter += 1
+
+    if (this.logCounter % config.logInterval === 0) {
+      let sumOfCounts = Object.values(this.queryCounts).reduce((partialSum, count) => partialSum + count, 0)
+      let lengthOfSum = ('' + sumOfCounts).length
+
+      let lengthOfLongestQuery = Math.max(...(Object.keys(this.queryCounts).map(x => x.length)))
+
+      let secondsSincePrevLog = roundTo1Digit((new Date() - this.prevLogTime) / 1000)
+      let minutesSinceInit = roundTo1Digit((new Date() - this.firstLogTime) / (1000 * 60))
+      let hoursSinceInit = roundTo1Digit(minutesSinceInit / 60)
+      let daysSinceInit = roundTo1Digit(hoursSinceInit / 24)
+      let monthsSinceInit = daysSinceInit / 30.5
+      let avgReqPerMonth = roundTo1Digit(sumOfCounts / monthsSinceInit)
+
+      console.log(`${config.logInterval} queries made in ${secondsSincePrevLog} seconds.`)
+      console.log(`In total ${sumOfCounts} queries made in ${daysSinceInit} days / ${hoursSinceInit} hours / ${minutesSinceInit} min`)
+      console.log(`On average with these numbers, ${avgReqPerMonth} queries per month`)
+
+      let sortedCounts = Object.entries(this.queryCounts)
+        .sort((qc1, qc2) => qc1[1] > qc2[1] ? -1 : 1)
+
+      sortedCounts.forEach(queryCount => {
+        let percentage = Math.round((100 * queryCount[1]) / sumOfCounts)
+        let perMinute = Math.round(queryCount[1] / minutesSinceInit)
+
+        console.log(
+          padWithSpacesStart(queryCount[1], lengthOfSum),
+          ' ',
+          padWithSpacesStart(percentage + '%', 3),
+          ' ',
+          padWithSpacesEnd(queryCount[0], lengthOfLongestQuery),
+          padWithSpacesStart(perMinute + '/min', 10),
+        )
+      })
+
+      this.prevLogTime = new Date()
+    }
+  }
+
+  async execute(queryString, queryParams, errorMessage, queryName) {
     errorMessage = `Database error` + (errorMessage ? `: ${errorMessage}` : '')
     let queryArgs = [queryString]
     if (queryParams) { queryArgs.push(queryParams) }
 
     return new Promise((resolve, reject) => {
       this.mysqlPool.getConnection((err, connection) => {
-        logDbCall(queryString)
         if (err) {
           reject({ error: err, message: 'Error establishing database connection' })
         }
@@ -20,6 +77,9 @@ export default class DatabaseFacade {
           console.log('Could not connect to databse')
           reject(new ApiError('Could not connect to database', 500))
         }
+
+        this.logDbCall(queryName)
+
         connection.query(...queryArgs, (err, results) => {
           if (err) {
             reject(processDbError(err, errorMessage, true))
@@ -78,22 +138,14 @@ function processDbError(err, errorMessage, isOldStyle = false) {
   return new ApiError(errorMessage, 500, 'database-error', logMessage)
 }
 
-function logDbCall(sqlMessage) {
-  let startOfSql = sqlMessage.substr(0, 40)
-  if (startOfSql.includes('SELECT ')) {
-    console.log('DB >> Select')
-  }
-  else if (startOfSql.includes('INSERT')) {
-    console.log('DB >> Insert')
-  }
-  else if (startOfSql.includes('UPDATE')) {
-    console.log('DB >> Update')
-  }
-  else if (startOfSql.includes('DELETE')) {
-    console.log('DB >> Delete')
-  }
-  else {
-    console.log('DB >> Other')
-  }
-  console.log(startOfSql)
+function roundTo1Digit(num) {
+  return Math.round(num * 10) / 10
+}
+
+function padWithSpacesStart(val, len) {
+  return String(' '.repeat(len) + val).slice(-len);
+}
+
+function padWithSpacesEnd(val, len) {
+  return String(val + ' '.repeat(len)).substr(0, len);
 }
