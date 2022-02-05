@@ -957,11 +957,8 @@ export default class ComicsRouter extends BaseRouter {
 		let deletePendingComicQuery = 'DELETE FROM pendingcomic WHERE Id = ?'
 		await this.databaseFacade.execute(deletePendingComicQuery, [comicId], 'Error deleting the comic from pending in database')
 
-		if (req) {
+		if (req) { // from approve click, not cron job scheduling
 			this.addModLog(req, 'Pending comic', `Approve ${comicData.Name}`)
-		}
-		else {
-			this.addModLog(1, 'Pending comic', `Approve ${comicData.Name}`)
 		}
 
 		if (res) {

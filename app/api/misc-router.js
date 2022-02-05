@@ -388,8 +388,8 @@ export default class MiscRouter extends BaseRouter {
         userScores[log.Username] += this.getActionScore(log.ActionType, log.ActionDescription)
       }
 
-      let userScoreList = Object.keys(userScores).map(us =>
-        new Object({ 'username': us, 'score': userScores[us] }))
+      let userScoreList = Object.keys(userScores).map(user =>
+        new Object({ 'username': user, 'score': Math.round(userScores[user]) }))
 
       userScoreList.sort((a, b) => a.score > b.score ? 1 : -1)
 
@@ -443,7 +443,7 @@ export default class MiscRouter extends BaseRouter {
         return 30
       }
       if (actionDescription.includes(' keywords to ') || actionDescription.includes(' keywords from ')) {
-        return 10
+        return 5 * getNumberOfKeywordsAdded(actionDescription, true)
       }
       if (actionDescription.includes('Append ')) {
         return 30
@@ -467,24 +467,21 @@ export default class MiscRouter extends BaseRouter {
     }
     else if (actionType === 'Artist') {
       if (actionDescription.includes('Add ')) {
-        return 10
+        return 15
       }
       if (actionDescription.includes('Update ')) {
-        return 20
+        return 25
       }
     }
     else if (actionType === 'Keyword') {
-      if (actionDescription.includes('Remove') && actionDescription.includes(' from ')) {
-        return 10
-      }
-      if (actionDescription.includes('Add') && actionDescription.includes(' to ')) {
-        return 10
+      if (actionDescription.x.match(/(Add \d* to)|(Remove \d* from)/)) {
+        return 5 * getNumberOfKeywordsAdded(actionDescription, false)
       }
       if (actionDescription.includes('Add')) {
         return 20
       }
       if (actionDescription.includes('Approve') || actionDescription.includes('Reject')) {
-        return 5
+        return 2.5
       }
     }
     else if (actionType === 'Comic suggestion') {
@@ -901,6 +898,20 @@ const MOD_APPLICATION_STATUSES = {
   removed: 'removed'
 }
 
-const MONTH_NO_TO_STR = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May,', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-]
+function getNumberOfKeywordsAdded(actionDescription, isPendingComic) {
+  const isRemove = actionDescription.substr(0, 6) === 'Remove'
+  const numberStartIndex = isRemove ? 7 : 4
+  let numberStopIndex
+
+  if (isPendingComic) {
+    // "Add 99 keywords to _" and "Remove 99 keywords from _"
+    numberStopIndex = actionDescription.indexOf(' keywords')
+  }
+  else {
+    // "Add 99 to _" and "Remove 99 keywords from _"
+    numberStopIndex = isRemove ? actionDescription.indexOf(' from') : actionDescription.indexOf(' to')
+  }
+
+  const number = actionDescription.substring(numberStartIndex, numberStopIndex)
+  return Number(number)
+}
