@@ -37,7 +37,7 @@ export default function (app, databaseFacade, config) {
   new PatreonRouter(app, databaseFacade, config, authRouter)
 }
 
-async function getCookieToken (req, publicKey, tokenConfig) {
+async function getCookieToken(req, publicKey, tokenConfig) {
   if (!req.cookies) {
     return null
   }
@@ -56,7 +56,7 @@ async function getCookieToken (req, publicKey, tokenConfig) {
   }
 }
 
-async function verifyToken (token, publicKey, tokenConfig) {
+async function verifyToken(token, publicKey, tokenConfig) {
   let tokenOptions = {
     algorithms: [tokenConfig.algorithm]
   }

@@ -36,7 +36,7 @@ export default class MiscRouter extends BaseRouter {
     this.app.post('/api/comic-problem-categories', (req, res) => this.createProblemCategory(req, res))
     this.app.delete('/api/comic-problem-categories/:id', (req, res) => this.deleteProblemCategory(req, res))
 
-    this.app.get('/api/modlog', this.authorizeMod.bind(this), (req, res) => this.getModLog(req, res))
+    this.app.get('/api/modlog', this.authorizeAdmin.bind(this), (req, res) => this.getModLog(req, res))
     this.app.get('/api/modscores', this.authorizeMod.bind(this), (req, res) => this.getModScores(req, res))
 
     this.app.post('/api/swapcomicpages', this.authorizeMod.bind(this), (req, res) => this.swapComicPages(req, res))
