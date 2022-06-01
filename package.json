@@ -28,7 +28,7 @@
     "mysql": "^2.16.0",
     "patreon": "^0.4.1",
     "postmark": "^2.7.4",
-    "sharp": "^0.29.3",
+    "sharp": "^0.30.5",
     "url": "^0.11.0"
   },
   "devDependencies": {
