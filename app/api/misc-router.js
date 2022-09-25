@@ -1240,29 +1240,37 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async getSimilarComics(req, res) {
-    let newComicName = req.params.comicName.toLowerCase();
-    let distanceThreshold = 4;
-    if (newComicName.length < 14) {
-      distanceThreshold = 3;
-    }
-    if (newComicName.length < 5) {
-      distanceThreshold = 2;
-    }
+    try {
+      let newComicName = req.query.comicName;
+      if (!newComicName || newComicName.length < 2) {
+        return this.returnApiError(
+          res,
+          new ApiError("ComicName must be at least 2 characters", 400)
+        );
+      }
+      newComicName = newComicName.toLowerCase();
 
-    let allComicsQuery = "SELECT Name AS name FROM comic";
-    let pendingComicsQuery =
-      "SELECT Name AS name FROM pendingcomic WHERE processed=0";
-    let uploadComicsQuery = `SELECT ComicName AS name, Status AS status FROM comicupload 
+      let distanceThreshold = 4;
+      if (newComicName.length < 14) {
+        distanceThreshold = 3;
+      }
+      if (newComicName.length < 5) {
+        distanceThreshold = 2;
+      }
+
+      let allComicsQuery = "SELECT Name AS name FROM comic";
+      let pendingComicsQuery =
+        "SELECT Name AS name FROM pendingcomic WHERE processed=0";
+      let uploadComicsQuery = `SELECT ComicName AS name, Status AS status FROM comicupload 
       WHERE Status = 'pending' OR Status = 'rejected-list'`;
 
-    let response = {
-      similarComics: [],
-      exactMatchComic: null,
-      similarRejectedComics: [],
-      exactMatchRejectedComic: null,
-    };
+      let response = {
+        similarComics: [],
+        exactMatchComic: null,
+        similarRejectedComics: [],
+        exactMatchRejectedComic: null,
+      };
 
-    try {
       let [allComics, pendingComics, uploadComics] = await Promise.all([
         this.databaseFacade.execute(
           allComicsQuery,
@@ -1283,7 +1291,7 @@ export default class MiscRouter extends BaseRouter {
 
       let allComicsArray = [...allComics, ...pendingComics, ...uploadComics];
       for (let comic of allComicsArray) {
-        let distance = levenshteinDistance(newComicName, comic);
+        let distance = levenshteinDistance(newComicName, comic.name);
         if (distance === 0) {
           if (comic.status === "rejected-list") {
             response.exactMatchRejectedComic = comic.name;
