@@ -1,15 +1,15 @@
 googleCloudConfigFilePath: config/google-cloud-sql-storage-config.json
 
-privateJwtKeyPath: config/token_private_key.key
-publicJwtKeyPath: config/token_public_key.key.pub
+tokenSecret: _
+
 tokenConfig:
   tokenDurationDays: 60
   algorithm: RS256
   cookieName: yiffer_session
   secure: false
   httpOnly: true
-  domain: ""
-  path: "/"
+  domain: ''
+  path: '/'
 
 dimensions:
   page:
@@ -17,28 +17,28 @@ dimensions:
     excludeRatioAbove: 1.75
 
 cloudinary:
-  cloud_name: yiffer-xyz
-  api_key: "517986223891262"
-  api_secret: C96C6DS7_gkWoHHCbJV8Mq9BCTQ
+  cloud_name: _
+  api_key: _
+  api_secret: _
 
 db:
   connectionLimit: 100
   host: 127.0.0.1
   port: 3306
-  user: yiffer
-  password: ufuk98765
+  user: _
+  password: _
   database: yiffertest
   charset: utf8mb4
 
 cloudflare:
-  apiKey: c41c60314a08971e4c22a57ff6641283932f9
-  originKey: v1.0-14356f856b9e65ba7393ac7c-01f092046190e69bcf39da413ac38a3e0da14d06f1e2debb669b8925c7c1ed230c9ed3989e92a3a42135db85027f5cbdeaaf98ffabe14d76adc9ddd71ccd097c72581cdae2b71ee8
-  email: malann.sjakk@gmail.com
-  zoneId: 7c794f4451641c924574734314ae088a
-  cachePurgeToken: EgyxqovgThKTrwKc7Wp70AiuqAkk0hpqmxARAeHU
+  apiKey: _
+  originKey: _
+  email: _
+  zoneId: _
+  cachePurgeToken: _
 
 email:
-  apiKey: 3778f05d-2b66-4c86-9c71-d22e0bba543e
+  apiKey: _
 
 storage:
   bucketName: yiffer2
@@ -92,9 +92,9 @@ ads:
       discountedPrice: null
 
 patreon:
-  clientId: pAEni59hDLoaMS_wCiqOCNOEf2dXh63ff3QE2U9Wm-9YJKsFcaJuKCL04en3Br4g
-  clientSecret: KVM37kxKjMVF5BuYyqR0HSslIDmztHweCENS3Qc4QJnqvMKqNPRwjL3MTxpkWhoY
-  campaignId: "7415033"
+  clientId: _
+  clientSecret: _
+  campaignId: _
   patreonTiers:
     - amountCents: 200
       showInPatronList: false
