@@ -166,7 +166,7 @@ export default class ArtistRouter extends BaseRouter {
       exactMatchArtist: null,
     };
 
-    let bannedArtistsQuery = 'SELECT ArtistName AS name from bannedartist';
+    let bannedArtistsQuery = 'SELECT Name AS name from artist WHERE IsBanned = 1';
     try {
       let bannedArtists = await this.databaseFacade.execute(bannedArtistsQuery, null, 'Error getting banned artists');
       for (var bannedArtist of bannedArtists) {
