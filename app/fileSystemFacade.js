@@ -62,7 +62,7 @@ export default class FileSystemFacade {
 			}
 
 			return this.saveUrlToGoogleStorage(
-				`http://res.cloudinary.com/yiffer-xyz/image/upload/${qualityString}${cloudinaryId}.${fileType}`,
+				`http://res.cloudinary.com/${config.cloudinary.cloud_name}/image/upload/${qualityString}${cloudinaryId}.${fileType}`,
 				`${config.storage.paidImagesBucketFolder}/${adId}.${fileType}`
 			)
 		})

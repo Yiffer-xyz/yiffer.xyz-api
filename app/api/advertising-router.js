@@ -6,7 +6,7 @@ import dateFns from 'date-fns'
 const { addMonths, addDays, isPast } = dateFns
 
 import cron from 'cron'
-import { uploadCloudinaryMedia } from '../cloudinary-service.js'
+import { deleteCloudinaryMedia, uploadCloudinaryMedia } from '../cloudinary-service.js'
 const CronJob = cron.CronJob
 
 var storage = multer.diskStorage({
@@ -173,7 +173,8 @@ export default class AdvertisingRouter extends BaseRouter {
 
   async convertAndSaveAdFile(filepath, newFiletypes, adId) {
     let cloudinaryId = await uploadCloudinaryMedia(filepath)
-    FileSystemFacade.writeGooglePaidImageFromUrl(cloudinaryId, adId, newFiletypes)
+    await FileSystemFacade.writeGooglePaidImageFromUrl(cloudinaryId, adId, newFiletypes)
+    deleteCloudinaryMedia(cloudinaryId)
   }
 
   checkUpdateValidity(file1, adType, adName, adLink, adMainText, adSecondaryText) {
