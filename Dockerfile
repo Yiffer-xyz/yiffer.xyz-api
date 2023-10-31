@@ -1,4 +1,6 @@
-FROM node:14.17.3-alpine AS base
+FROM node:14.17.3-alpine as base
+
+RUN apk add g++ make python
 
 COPY package*.json ./
 
