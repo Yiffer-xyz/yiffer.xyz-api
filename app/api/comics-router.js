@@ -207,17 +207,24 @@ export default class ComicsRouter extends BaseRouter {
 		return newComics
 	}
 
-	async getAllComics(req, res) {
-		let innerComicQuery = `SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) ORDER BY name ASC`
+  async getAllComics(req, res) {
+    let offset = Math.max(Number(req.query.offset || 0) || 0, 0);
+    let limit = Math.max(Number(req.query.limit || 800) || 800, 0);
 
-		try {
-			let comics = await this.databaseFacade.execute(innerComicQuery, null, 'Error getting comics from database', 'Get comics (all)')
-			res.json(comics)
-		}
-		catch (err) {
-			return this.returnError(err.message, res, err.error, err)
-		}
-	}
+    let innerComicQuery = `SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) ORDER BY name ASC LIMIT ${limit} OFFSET ${offset}`;
+
+    try {
+      let comics = await this.databaseFacade.execute(
+        innerComicQuery,
+        null,
+        'Error getting comics from database',
+        'Get comics (all)'
+      );
+      res.json(comics);
+    } catch (err) {
+      return this.returnError(err.message, res, err.error, err);
+    }
+  }
 
 	async getFirstPageComics(req, res) {
 		let query = 'SELECT comic.Id AS id, comic.Name AS name, comic.Cat AS cat, comic.Tag AS tag, artist.Name AS artist, comic.Updated AS updated, comic.State AS state, comic.Created AS created, comic.NumberOfPages AS numberOfPages FROM comic INNER JOIN artist ON (artist.Id = comic.Artist) GROUP BY name, id ORDER BY id LIMIT 50'
