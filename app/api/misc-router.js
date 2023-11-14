@@ -523,17 +523,23 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async insertComicPage(req, res) {
-    let [comicName, comicId, newPageFile, insertAfterPageNumber] =
-      [req.body.comicName, req.body.comicId, req.file, Number(req.body.insertAfterPageNumber)]
+    let [comicName, comicId, newPageFile, insertAfterPageNumber] = [
+      req.body.comicName,
+      req.body.comicId,
+      req.file,
+      Number(req.body.insertAfterPageNumber),
+      req.body.isPendingComic,
+    ];
 
     try {
       if (!newPageFile) {
         return this.returnApiError('Uploaded file not found', 400)
       }
 
-      let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id=?'
-      let numberOfPagesRes = await this.databaseFacade.execute(numberOfPagesQuery, [comicId])
-      let numberOfPages = numberOfPagesRes[0].NumberOfPages
+      let comicTable = req.body.isPendingComic ? 'pendingcomic' : 'comic';
+      let numberOfPagesQuery = `SELECT NumberOfPages FROM ${comicTable} WHERE Id = ?`;
+      let numberOfPagesRes = await this.databaseFacade.execute(numberOfPagesQuery, [comicId]);
+      let numberOfPages = numberOfPagesRes[0].NumberOfPages;
 
       await processComicPage(newPageFile)
 
@@ -550,9 +556,9 @@ export default class MiscRouter extends BaseRouter {
         `${this.getPageName(insertAfterPageNumber + 1)}.jpg`,
       )
 
-      let query = 'UPDATE comic SET NumberOfPages=? WHERE Id=?'
-      let queryParams = [numberOfPages + 1, comicId]
-      await this.databaseFacade.execute(query, queryParams, 'Error updating number of pages')
+      let query = `UPDATE ${comicTable} SET NumberOfPages = ? WHERE Id = ?`;
+      let queryParams = [numberOfPages + 1, comicId];
+      await this.databaseFacade.execute(query, queryParams, 'Error updating number of pages');
 
       res.status(204).end()
       FileSystemFacade.deleteFile(newPageFile.path)
@@ -564,9 +570,15 @@ export default class MiscRouter extends BaseRouter {
   }
 
   async deletecomicpage(req, res) {
-    let [comicName, comicId, pageNumber] = [req.body.comicName, req.body.comicId, req.body.pageNumber]
-    let numberOfPagesQuery = 'SELECT NumberOfPages FROM comic WHERE Id = ?'
-    let updateQuery = 'UPDATE comic SET NumberOfPages = ? WHERE Id = ?'
+    let [comicName, comicId, pageNumber] = [
+      req.body.comicName,
+      req.body.comicId,
+      req.body.pageNumber,
+      req.body.isPendingComic,
+    ];
+    let comicTable = req.body.isPendingComic ? 'pendingcomic' : 'comic';
+    let numberOfPagesQuery = `SELECT NumberOfPages FROM ${comicTable} WHERE Id = ?`;
+    let updateQuery = `UPDATE ${comicTable} SET NumberOfPages = ? WHERE Id = ?`;
     try {
       let numberOfPages = (await this.databaseFacade.execute(numberOfPagesQuery, [comicId]))[0].NumberOfPages
       let queryParams = [numberOfPages - 1, comicId]
